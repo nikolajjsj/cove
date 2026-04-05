@@ -79,6 +79,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
         // Step 5: Store client for subsequent requests
         client.setAccessToken(token)
+        client.setUserId(userId)
         state.set(client: client, connection: connection)
 
         logger.info("Successfully connected to \(serverName) as user \(userId)")
@@ -102,6 +103,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
         }
         let client = JellyfinAPIClient(baseURL: connection.url)
         client.setAccessToken(token)
+        client.setUserId(connection.userId)
         state.set(client: client, connection: connection)
         logger.info("Restored connection to \(connection.name)")
         return true
