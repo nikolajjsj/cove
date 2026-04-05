@@ -1,4 +1,3 @@
-import ImageService
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -99,29 +98,8 @@ private struct ArtistCard: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            LazyImage(url: imageURL) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(1, contentMode: .fill)
-                } else if state.isLoading {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay { ProgressView() }
-                } else {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay {
-                            Image(systemName: "music.mic")
-                                .font(.largeTitle)
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .clipShape(Circle())
-            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+            MediaImage.artwork(url: imageURL, cornerRadius: 8)
+                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
 
             Text(name)
                 .font(.caption)

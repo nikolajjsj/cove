@@ -1,8 +1,8 @@
-import ImageService
+import JellyfinProvider
 import Models
 import PlaybackEngine
 import SwiftUI
-import JellyfinProvider
+import MediaServerKit
 
 struct AudioPlayerView: View {
     @Environment(AppState.self) private var appState
@@ -87,31 +87,10 @@ struct AudioPlayerView: View {
 
     @ViewBuilder
     private func artworkView(for track: Track) -> some View {
-        LazyImage(url: artworkURL(for: track)) { state in
-            if let image = state.image {
-                image
-                    .resizable()
-                    .aspectRatio(1, contentMode: .fit)
-            } else if state.isLoading {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.quaternary)
-                    .aspectRatio(1, contentMode: .fit)
-                    .overlay { ProgressView() }
-            } else {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.quaternary)
-                    .aspectRatio(1, contentMode: .fit)
-                    .overlay {
-                        Image(systemName: "music.note")
-                            .font(.system(size: 64))
-                            .foregroundStyle(.secondary)
-                    }
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
-        .padding(.horizontal, 8)
-        .animation(.easeInOut(duration: 0.3), value: track.id)
+        MediaImage.artwork(url: artworkURL(for: track), cornerRadius: 12)
+            .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
+            .padding(.horizontal, 8)
+            .animation(.easeInOut(duration: 0.3), value: track.id)
     }
 
     // MARK: - Track Info
@@ -173,13 +152,13 @@ struct AudioPlayerView: View {
             .tint(.primary)
 
             HStack {
-                Text(formatTime(displayTime))
+                Text(TimeFormatting.playbackPosition(displayTime))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
-                Text("-\(formatTime(max(totalDuration - displayTime, 0)))")
+                Text("-\(TimeFormatting.playbackPosition(max(totalDuration - displayTime, 0)))")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
@@ -278,24 +257,8 @@ struct AudioPlayerView: View {
 
     private func artworkURL(for track: Track) -> URL? {
         guard let albumId = track.albumId else { return nil }
-        let item = MediaItem(
-            id: albumId,
-            title: "",
-            mediaType: .album
-        )
         return appState.provider.imageURL(
-            for: item,
-            type: .primary,
-            maxSize: CGSize(width: 600, height: 600)
-        )
-    }
-
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite && seconds >= 0 else { return "0:00" }
-        let totalSeconds = Int(seconds)
-        let mins = totalSeconds / 60
-        let secs = totalSeconds % 60
-        return "\(mins):\(String(format: "%02d", secs))"
+            for: albumId, type: .primary, maxSize: CGSize(width: 600, height: 600))
     }
 
     private func repeatIconName(for mode: RepeatMode) -> String {

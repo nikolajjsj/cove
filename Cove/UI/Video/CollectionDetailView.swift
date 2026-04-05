@@ -1,3 +1,4 @@
+import CoveUI
 import ImageService
 import JellyfinProvider
 import Models
@@ -58,143 +59,43 @@ struct CollectionDetailView: View {
     // MARK: - Hero Section
 
     private var heroSection: some View {
-        Color.clear
-            .aspectRatio(16.0 / 9.0, contentMode: .fit)
-            .overlay {
-                LazyImage(url: backdropURL) { state in
-                    if let image = state.image {
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } else if state.isLoading {
-                        Rectangle()
-                            .fill(.black)
-                            .overlay {
-                                ProgressView()
-                                    .tint(.white)
-                            }
-                    } else {
-                        // Fallback: try primary image
-                        LazyImage(url: primaryURL) { primaryState in
-                            if let image = primaryState.image {
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } else {
-                                LinearGradient(
-                                    colors: [
-                                        .blue.opacity(0.3),
-                                        .purple.opacity(0.2),
-                                        .black.opacity(0.8),
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            .clipped()
-            .overlay(alignment: .bottom) {
-                // Gradient scrim at the bottom for text legibility
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .clear, location: 0.2),
-                        .init(color: Color(.systemBackground).opacity(0.6), location: 0.65),
-                        .init(color: Color(.systemBackground), location: 1.0),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-            .overlay(alignment: .bottomLeading) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(item.title)
-                        .font(.system(.title, design: .default, weight: .bold))
-                        .foregroundStyle(.primary)
+        HeroSection(imageURL: backdropURL, fallbackImageURL: primaryURL, aspectRatio: 16.0 / 9.0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item.title)
+                    .font(.system(.title, design: .default, weight: .bold))
+                    .foregroundStyle(.primary)
 
-                    if !collectionItems.isEmpty {
-                        Text(
-                            "\(collectionItems.count) \(collectionItems.count == 1 ? "item" : "items")"
-                        )
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    }
+                if !collectionItems.isEmpty {
+                    Text(
+                        "\(collectionItems.count) \(collectionItems.count == 1 ? "item" : "items")"
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 4)
             }
+        }
     }
 
     // MARK: - Metadata Pills
 
     @ViewBuilder
     private var metadataPills: some View {
-        let pills = buildMetadataPills()
-        if !pills.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(pills, id: \.label) { pill in
-                        HStack(spacing: 4) {
-                            if let icon = pill.icon {
-                                Image(systemName: icon)
-                                    .font(.caption2.weight(.semibold))
-                            }
-                            Text(pill.label)
-                                .font(.caption.weight(.medium))
-                        }
-                        .foregroundStyle(pill.tint ?? .secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(Color(.secondarySystemFill))
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private struct MetadataPill: Hashable {
-        let icon: String?
-        let label: String
-        let tint: Color?
-
-        func hash(into hasher: inout Hasher) {
-            hasher.combine(label)
-        }
+        MetadataPillsView(buildMetadataPills())
     }
 
     private func buildMetadataPills() -> [MetadataPill] {
         var pills: [MetadataPill] = []
 
-        if let rating = item.communityRating, rating > 0 {
-            let formatted =
-                rating.truncatingRemainder(dividingBy: 1) == 0
-                ? String(format: "%.0f", rating)
-                : String(format: "%.1f", rating)
-            pills.append(MetadataPill(icon: "star.fill", label: formatted, tint: .yellow))
+        if let pill = MetadataPill.communityRating(item.communityRating ?? 0) {
+            pills.append(pill)
         }
 
-        if let critic = item.criticRating, critic > 0 {
-            pills.append(
-                MetadataPill(
-                    icon: "heart.fill", label: "\(Int(critic))%",
-                    tint: critic >= 60 ? .green : .red))
+        if let pill = MetadataPill.criticRating(item.criticRating ?? 0) {
+            pills.append(pill)
         }
 
         if !collectionItems.isEmpty {
-            pills.append(
-                MetadataPill(
-                    icon: "rectangle.stack.fill",
-                    label:
-                        "\(collectionItems.count) \(collectionItems.count == 1 ? "item" : "items")",
-                    tint: nil
-                )
-            )
+            pills.append(.itemCount(collectionItems.count))
         }
 
         return pills

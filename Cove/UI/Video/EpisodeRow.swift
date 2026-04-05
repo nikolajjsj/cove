@@ -1,4 +1,3 @@
-import ImageService
 import Models
 import SwiftUI
 
@@ -53,7 +52,7 @@ struct EpisodeRow: View {
 
                     // Runtime
                     if let runtime = episode.runtime, runtime > 0 {
-                        Text(formatRuntime(runtime))
+                        Text(TimeFormatting.longDuration(runtime))
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
@@ -70,27 +69,7 @@ struct EpisodeRow: View {
     @ViewBuilder
     private var thumbnailView: some View {
         ZStack(alignment: .bottom) {
-            LazyImage(url: thumbnailURL) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(16.0 / 9.0, contentMode: .fill)
-                } else if state.isLoading {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(16.0 / 9.0, contentMode: .fill)
-                        .overlay { ProgressView().controlSize(.small) }
-                } else {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(16.0 / 9.0, contentMode: .fill)
-                        .overlay {
-                            Image(systemName: "play.rectangle")
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
+            MediaImage.videoThumbnail(url: thumbnailURL)
 
             // Progress bar overlay at bottom of thumbnail
             if let progress, progress > 0 {
@@ -109,20 +88,6 @@ struct EpisodeRow: View {
                     }
                 }
             }
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func formatRuntime(_ seconds: TimeInterval) -> String {
-        let totalSeconds = Int(seconds)
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        } else {
-            return "\(minutes) min"
         }
     }
 }

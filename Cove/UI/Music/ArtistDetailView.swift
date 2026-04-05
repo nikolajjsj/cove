@@ -1,5 +1,5 @@
-import ImageService
 import JellyfinProvider
+import NukeUI
 import MediaServerKit
 import Models
 import SwiftUI
@@ -154,12 +154,8 @@ struct ArtistDetailView: View {
     }
 
     private func albumImageURL(for itemId: ItemID) -> URL? {
-        let tempItem = MediaItem(id: itemId, title: "", mediaType: .album)
-        return appState.provider.imageURL(
-            for: tempItem,
-            type: .primary,
-            maxSize: CGSize(width: 300, height: 300)
-        )
+        appState.provider.imageURL(
+            for: itemId, type: .primary, maxSize: CGSize(width: 300, height: 300))
     }
 }
 
@@ -171,29 +167,8 @@ private struct ArtistAlbumCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            LazyImage(url: imageURL) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(1, contentMode: .fill)
-                } else if state.isLoading {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay { ProgressView() }
-                } else {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay {
-                            Image(systemName: "music.note")
-                                .font(.largeTitle)
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+            MediaImage.artwork(url: imageURL, cornerRadius: 8)
+                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
 
             Text(album.title)
                 .font(.caption)

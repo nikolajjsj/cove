@@ -1,5 +1,4 @@
 import DownloadManager
-import ImageService
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -45,11 +44,11 @@ struct AlbumDetailView: View {
         }
         .navigationTitle(albumItem.title)
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
             //ToolbarItem(placement: .topBarTrailing) {
-            ToolbarItem() {
+            ToolbarItem {
                 if let downloadManager = appState.downloadManager {
                     DownloadButton(
                         item: albumItem,
@@ -71,30 +70,9 @@ struct AlbumDetailView: View {
     private var albumHeader: some View {
         VStack(spacing: 16) {
             // Album artwork
-            LazyImage(url: albumImageURL) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(1, contentMode: .fill)
-                } else if state.isLoading {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay { ProgressView() }
-                } else {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay {
-                            Image(systemName: "music.note")
-                                .font(.system(size: 56))
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .frame(width: 280, height: 280)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
+            MediaImage.artwork(url: albumImageURL, cornerRadius: 12)
+                .frame(width: 280, height: 280)
+                .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
 
             // Album title
             Text(albumItem.title)
@@ -141,7 +119,7 @@ struct AlbumDetailView: View {
 
         let totalDuration = tracks.compactMap(\.duration).reduce(0, +)
         if totalDuration > 0 {
-            parts.append(formatAlbumDuration(totalDuration))
+            parts.append(TimeFormatting.longDuration(totalDuration))
         }
 
         return parts
@@ -282,19 +260,6 @@ struct AlbumDetailView: View {
         tracks.first?.artistName
     }
 
-    // MARK: - Duration Formatting
-
-    private func formatAlbumDuration(_ seconds: TimeInterval) -> String {
-        let totalSeconds = Int(seconds)
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-
-        if hours > 0 {
-            return "\(hours) hr \(minutes) min"
-        } else {
-            return "\(minutes) min"
-        }
-    }
 }
 
 // MARK: - Track Row
@@ -341,7 +306,7 @@ private struct TrackRow: View {
 
                 // Duration
                 if let duration = track.duration, duration > 0 {
-                    Text(formatTrackDuration(duration))
+                    Text(TimeFormatting.trackTime(duration))
                         .font(.subheadline)
                         .foregroundStyle(.tertiary)
                         .monospacedDigit()
@@ -363,12 +328,6 @@ private struct TrackRow: View {
         return ""
     }
 
-    private func formatTrackDuration(_ seconds: TimeInterval) -> String {
-        guard seconds > 0 else { return "" }
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return "\(mins):\(String(format: "%02d", secs))"
-    }
 }
 
 // MARK: - Preview

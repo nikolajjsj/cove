@@ -1,8 +1,8 @@
-import ImageService
+import JellyfinProvider
 import Models
 import PlaybackEngine
 import SwiftUI
-import JellyfinProvider
+import MediaServerKit
 
 struct QueueView: View {
     @Environment(AppState.self) private var appState
@@ -25,7 +25,7 @@ struct QueueView: View {
             }
             .navigationTitle("Queue")
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
+                .navigationBarTitleDisplayMode(.inline)
             #endif
         }
     }
@@ -83,7 +83,7 @@ struct QueueView: View {
         }
         .listStyle(.plain)
         #if os(iOS)
-        .environment(\.editMode, .constant(.active))
+            .environment(\.editMode, .constant(.active))
         #endif
     }
 
@@ -93,23 +93,8 @@ struct QueueView: View {
     private func nowPlayingRow(track: Track, isPlaying: Bool) -> some View {
         HStack(spacing: 12) {
             // Animated indicator or artwork thumbnail
-            LazyImage(url: artworkURL(for: track)) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(1, contentMode: .fill)
-                } else {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(.quaternary)
-                        .overlay {
-                            Image(systemName: "music.note")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .frame(width: 44, height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            MediaImage.trackThumbnail(url: artworkURL(for: track))
+                .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.title)
@@ -145,23 +130,8 @@ struct QueueView: View {
     private func trackRow(track: Track, index: Int) -> some View {
         HStack(spacing: 12) {
             // Small artwork thumbnail
-            LazyImage(url: artworkURL(for: track)) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(1, contentMode: .fill)
-                } else {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(.quaternary)
-                        .overlay {
-                            Image(systemName: "music.note")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .frame(width: 40, height: 40)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            MediaImage.trackThumbnail(url: artworkURL(for: track))
+                .frame(width: 40, height: 40)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.title)
@@ -180,7 +150,7 @@ struct QueueView: View {
             Spacer()
 
             if let duration = track.duration {
-                Text(formatTime(duration))
+                Text(TimeFormatting.playbackPosition(duration))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.tertiary)
             }
@@ -214,24 +184,8 @@ struct QueueView: View {
 
     private func artworkURL(for track: Track) -> URL? {
         guard let albumId = track.albumId else { return nil }
-        let item = MediaItem(
-            id: albumId,
-            title: "",
-            mediaType: .album
-        )
         return appState.provider.imageURL(
-            for: item,
-            type: .primary,
-            maxSize: CGSize(width: 96, height: 96)
-        )
-    }
-
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite && seconds >= 0 else { return "0:00" }
-        let totalSeconds = Int(seconds)
-        let mins = totalSeconds / 60
-        let secs = totalSeconds % 60
-        return "\(mins):\(String(format: "%02d", secs))"
+            for: albumId, type: .primary, maxSize: CGSize(width: 96, height: 96))
     }
 }
 

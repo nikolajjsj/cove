@@ -1,4 +1,3 @@
-import ImageService
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -61,8 +60,7 @@ struct PlaylistListView: View {
     private func imageURL(for itemId: ItemID, maxSize: CGSize? = CGSize(width: 120, height: 120))
         -> URL?
     {
-        let tempItem = MediaItem(id: itemId, title: "", mediaType: .playlist)
-        return appState.provider.imageURL(for: tempItem, type: .primary, maxSize: maxSize)
+        appState.provider.imageURL(for: itemId, type: .primary, maxSize: maxSize)
     }
 }
 
@@ -74,29 +72,8 @@ private struct PlaylistRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            LazyImage(url: imageURL) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(1, contentMode: .fill)
-                } else if state.isLoading {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay { ProgressView().controlSize(.small) }
-                } else {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay {
-                            Image(systemName: "music.note.list")
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .frame(width: 56, height: 56)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            MediaImage.artwork(url: imageURL, cornerRadius: 8)
+                .frame(width: 56, height: 56)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(playlist.name)
@@ -113,7 +90,7 @@ private struct PlaylistRow: View {
                     }
 
                     if let duration = playlist.duration {
-                        Text(formatDuration(duration))
+                        Text(TimeFormatting.longDuration(duration))
                     }
                 }
                 .font(.subheadline)
@@ -132,19 +109,6 @@ private struct PlaylistRow: View {
         .padding(.vertical, 4)
     }
 
-    // MARK: - Helpers
-
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        let totalSeconds = Int(seconds)
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
-
-        if hours > 0 {
-            return "\(hours) hr \(minutes) min"
-        } else {
-            return "\(minutes) min"
-        }
-    }
 }
 
 #Preview {

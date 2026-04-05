@@ -1,5 +1,4 @@
 import AVKit
-import ImageService
 import JellyfinProvider
 import Models
 import PlaybackEngine
@@ -118,12 +117,12 @@ struct VideoPlayerView: View {
                     .padding(.top, 8)
 
                 Spacer()
-                
+
                 // Center: skip back, play/pause, skip forward
                 centerControls
-                
+
                 Spacer()
-                
+
                 // Bottom: seek bar, time, subtitle/pip buttons
                 bottomBar
                     .padding(.horizontal)
@@ -230,7 +229,7 @@ struct VideoPlayerView: View {
 
             HStack(spacing: 16) {
                 // Time labels
-                Text(formatTime(displayTime))
+                Text(TimeFormatting.playbackPosition(displayTime))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.white.opacity(0.8))
 
@@ -238,7 +237,7 @@ struct VideoPlayerView: View {
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.5))
 
-                Text(formatTime(videoManager.duration))
+                Text(TimeFormatting.playbackPosition(videoManager.duration))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.white.opacity(0.8))
 
@@ -367,23 +366,8 @@ struct VideoPlayerView: View {
 
                     HStack(spacing: 12) {
                         // Next episode thumbnail
-                        LazyImage(url: thumbnailURL(for: next)) { state in
-                            if let image = state.image {
-                                image
-                                    .resizable()
-                                    .aspectRatio(16.0 / 9.0, contentMode: .fill)
-                            } else {
-                                Rectangle()
-                                    .fill(.white.opacity(0.1))
-                                    .aspectRatio(16.0 / 9.0, contentMode: .fill)
-                                    .overlay {
-                                        Image(systemName: "play.rectangle")
-                                            .foregroundStyle(.white.opacity(0.5))
-                                    }
-                            }
-                        }
-                        .frame(width: 100)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        MediaImage.videoThumbnail(url: thumbnailURL(for: next), cornerRadius: 6)
+                            .frame(width: 100)
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(next.title)
@@ -474,19 +458,6 @@ struct VideoPlayerView: View {
     }
 
     // MARK: - Helpers
-
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite && seconds >= 0 else { return "0:00" }
-        let totalSeconds = Int(seconds)
-        let hours = totalSeconds / 3600
-        let mins = (totalSeconds % 3600) / 60
-        let secs = totalSeconds % 60
-        if hours > 0 {
-            return "\(hours):\(String(format: "%02d", mins)):\(String(format: "%02d", secs))"
-        } else {
-            return "\(mins):\(String(format: "%02d", secs))"
-        }
-    }
 
     private func thumbnailURL(for item: MediaItem) -> URL? {
         appState.provider.imageURL(

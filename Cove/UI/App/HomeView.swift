@@ -1,7 +1,6 @@
 import JellyfinProvider
 import MediaServerKit
 import Models
-import NukeUI
 import PlaybackEngine
 import SwiftUI
 
@@ -87,29 +86,8 @@ private struct ContinueWatchingCard: View {
         VStack(alignment: .leading, spacing: 6) {
             ZStack(alignment: .bottomLeading) {
                 // Backdrop/thumbnail image (landscape)
-                LazyImage(url: thumbnailURL) { state in
-                    if let image = state.image {
-                        image
-                            .resizable()
-                            .aspectRatio(16.0 / 9.0, contentMode: .fill)
-                    } else if state.isLoading {
-                        Rectangle()
-                            .fill(.quaternary)
-                            .aspectRatio(16.0 / 9.0, contentMode: .fill)
-                            .overlay { ProgressView() }
-                    } else {
-                        Rectangle()
-                            .fill(.quaternary)
-                            .aspectRatio(16.0 / 9.0, contentMode: .fill)
-                            .overlay {
-                                Image(systemName: placeholderIcon)
-                                    .font(.largeTitle)
-                                    .foregroundStyle(.secondary)
-                            }
-                    }
-                }
-                .frame(width: 240)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                MediaImage.videoThumbnail(url: thumbnailURL, cornerRadius: 8)
+                    .frame(width: 240)
 
                 // Progress bar
                 if let progress = watchProgress, progress > 0 {

@@ -1,3 +1,4 @@
+import CoveUI
 import ImageService
 import JellyfinProvider
 import MediaServerKit
@@ -98,62 +99,14 @@ struct SeriesDetailView: View {
     // MARK: - Hero Section
 
     private var heroSection: some View {
-        // Color.clear defines the layout size; the image fills it as
-        // an overlay so its layout frame never exceeds the container.
-        Color.clear
-            .aspectRatio(4.0 / 5.0, contentMode: .fit)
-            .overlay {
-                LazyImage(url: backdropURL(for: item)) { state in
-                    if let image = state.image {
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } else if state.isLoading {
-                        Rectangle()
-                            .fill(.black)
-                            .overlay {
-                                ProgressView()
-                                    .tint(.white)
-                            }
-                    } else {
-                        LinearGradient(
-                            colors: [
-                                .blue.opacity(0.3),
-                                .purple.opacity(0.2),
-                                .black.opacity(0.8),
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    }
-                }
+        HeroSection(imageURL: backdropURL(for: item)) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item.title)
+                    .font(.system(.title, design: .default, weight: .bold))
+                    .foregroundStyle(.primary)
+                heroSubtitleLine
             }
-            .clipped()
-            .overlay(alignment: .bottom) {
-                // Gradient scrim at the bottom for text legibility
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .clear, location: 0.3),
-                        .init(color: Color(.systemBackground).opacity(0.6), location: 0.7),
-                        .init(color: Color(.systemBackground), location: 1.0),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-            .overlay(alignment: .bottomLeading) {
-                // Title + subtitle overlaid on the gradient
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(item.title)
-                        .font(.system(.title, design: .default, weight: .bold))
-                        .foregroundStyle(.primary)
-
-                    heroSubtitleLine
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 4)
-            }
+        }
     }
 
     // MARK: - Hero Subtitle (year · rating · seasons count)
@@ -200,62 +153,22 @@ struct SeriesDetailView: View {
 
     @ViewBuilder
     private var metadataPills: some View {
-        let pills = buildMetadataPills()
-        if !pills.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(pills, id: \.label) { pill in
-                        HStack(spacing: 4) {
-                            if let icon = pill.icon {
-                                Image(systemName: icon)
-                                    .font(.caption2.weight(.semibold))
-                            }
-                            Text(pill.label)
-                                .font(.caption.weight(.medium))
-                        }
-                        .foregroundStyle(pill.tint ?? .secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(Color(.secondarySystemFill))
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private struct MetadataPill: Hashable {
-        let icon: String?
-        let label: String
-        let tint: Color?
-
-        func hash(into hasher: inout Hasher) {
-            hasher.combine(label)
-        }
+        MetadataPillsView(buildMetadataPills())
     }
 
     private func buildMetadataPills() -> [MetadataPill] {
         var pills: [MetadataPill] = []
 
-        if let rating = item.communityRating, rating > 0 {
-            let formatted =
-                rating.truncatingRemainder(dividingBy: 1) == 0
-                ? String(format: "%.0f", rating)
-                : String(format: "%.1f", rating)
-            pills.append(MetadataPill(icon: "star.fill", label: formatted, tint: .yellow))
+        if let pill = MetadataPill.communityRating(item.communityRating ?? 0) {
+            pills.append(pill)
         }
 
-        if let critic = item.criticRating, critic > 0 {
-            pills.append(
-                MetadataPill(
-                    icon: "heart.fill", label: "\(Int(critic))%",
-                    tint: critic >= 60 ? .green : .red))
+        if let pill = MetadataPill.criticRating(item.criticRating ?? 0) {
+            pills.append(pill)
         }
 
         if let genres = item.genres, let first = genres.first {
-            pills.append(MetadataPill(icon: nil, label: first, tint: nil))
+            pills.append(.genre(first))
         }
 
         return pills

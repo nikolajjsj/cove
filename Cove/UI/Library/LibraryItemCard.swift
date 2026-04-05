@@ -1,4 +1,3 @@
-import ImageService
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -11,27 +10,12 @@ struct LibraryItemCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             // Poster image
-            LazyImage(url: posterURL) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else if state.isLoading {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .overlay { ProgressView() }
-                } else {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .overlay {
-                            Image(systemName: placeholderIcon)
-                                .font(.largeTitle)
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .aspectRatio(posterAspectRatio, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            MediaImage.poster(
+                url: posterURL,
+                aspectRatio: posterAspectRatio,
+                icon: placeholderIcon,
+                cornerRadius: 8
+            )
 
             // Title
             Text(item.title)

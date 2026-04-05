@@ -1,8 +1,8 @@
-import ImageService
 import JellyfinProvider
 import Models
 import PlaybackEngine
 import SwiftUI
+import MediaServerKit
 
 struct NowPlayingBar: View {
     @Environment(AppState.self) private var appState
@@ -17,23 +17,8 @@ struct NowPlayingBar: View {
             HStack(spacing: 12) {
                 // MARK: - Album Artwork
 
-                LazyImage(url: artworkURL(for: track)) { state in
-                    if let image = state.image {
-                        image
-                            .resizable()
-                            .aspectRatio(1, contentMode: .fill)
-                    } else {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(.quaternary)
-                            .overlay {
-                                Image(systemName: "music.note")
-                                    .font(.title3)
-                                    .foregroundStyle(.secondary)
-                            }
-                    }
-                }
-                .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                MediaImage.trackThumbnail(url: artworkURL(for: track), cornerRadius: 8)
+                    .frame(width: 48, height: 48)
 
                 // MARK: - Track Info
 
@@ -76,15 +61,7 @@ struct NowPlayingBar: View {
 
     private func artworkURL(for track: Track) -> URL? {
         guard let albumId = track.albumId else { return nil }
-        let item = MediaItem(
-            id: albumId,
-            title: "",
-            mediaType: .album
-        )
         return appState.provider.imageURL(
-            for: item,
-            type: .primary,
-            maxSize: CGSize(width: 96, height: 96)
-        )
+            for: albumId, type: .primary, maxSize: CGSize(width: 96, height: 96))
     }
 }

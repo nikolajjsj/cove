@@ -1,4 +1,3 @@
-import ImageService
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -99,29 +98,8 @@ private struct AlbumCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            LazyImage(url: imageURL) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(1, contentMode: .fill)
-                } else if state.isLoading {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay { ProgressView() }
-                } else {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay {
-                            Image(systemName: "music.note")
-                                .font(.largeTitle)
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+            MediaImage.artwork(url: imageURL, cornerRadius: 8)
+                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
 
             Text(title)
                 .font(.caption)
