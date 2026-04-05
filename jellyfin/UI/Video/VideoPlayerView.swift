@@ -1,9 +1,9 @@
 import AVKit
 import ImageService
+import JellyfinProvider
 import Models
 import PlaybackEngine
 import SwiftUI
-import JellyfinProvider
 
 struct VideoPlayerView: View {
     let item: MediaItem
@@ -11,7 +11,10 @@ struct VideoPlayerView: View {
     let startPosition: TimeInterval
 
     @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
+
+    private var coordinator: VideoPlayerCoordinator {
+        appState.videoPlayerCoordinator
+    }
 
     @State private var videoManager = VideoPlaybackManager()
     @State private var showControls = true
@@ -54,7 +57,6 @@ struct VideoPlayerView: View {
         .animation(.easeInOut(duration: 0.25), value: showControls)
         .animation(.easeInOut(duration: 0.3), value: videoManager.showNextEpisodeCountdown)
         .background(Color.black)
-        .ignoresSafeArea()
         #if os(iOS)
             .statusBarHidden(!showControls)
             .persistentSystemOverlays(showControls ? .automatic : .hidden)
@@ -78,7 +80,17 @@ struct VideoPlayerView: View {
     @ViewBuilder
     private var controlsOverlay: some View {
         ZStack {
-            // Gradient backgrounds (top and bottom)
+            // Tap-to-dismiss layer — sits behind all interactive controls.
+            // Using Color.clear + contentShape so it fills the screen but
+            // doesn't block buttons/sliders that are placed on top of it.
+            Color.black.opacity(0.001)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    toggleControls()
+                }
+
+            // Gradient backgrounds (top and bottom) — purely decorative
             VStack(spacing: 0) {
                 LinearGradient(
                     colors: [.black.opacity(0.7), .black.opacity(0.3), .clear],
@@ -106,21 +118,17 @@ struct VideoPlayerView: View {
                     .padding(.top, 8)
 
                 Spacer()
-
+                
                 // Center: skip back, play/pause, skip forward
                 centerControls
-
+                
                 Spacer()
-
+                
                 // Bottom: seek bar, time, subtitle/pip buttons
                 bottomBar
                     .padding(.horizontal)
                     .padding(.bottom, 8)
             }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            toggleControls()
         }
     }
 
@@ -129,7 +137,7 @@ struct VideoPlayerView: View {
     private var topBar: some View {
         HStack(alignment: .center, spacing: 12) {
             Button {
-                dismiss()
+                coordinator.dismiss()
             } label: {
                 Image(systemName: "xmark")
                     .font(.title3.bold())
@@ -313,35 +321,10 @@ struct VideoPlayerView: View {
                         }
                     }
                 }
-
-//                ForEach(videoManager.subtitleTracks, id: \.id) { track in
-//                    Button {
-//                        videoManager.selectedSubtitleIndex = track.id
-//                        showSubtitlePicker = false
-//                    } label: {
-//                        HStack {
-//                            VStack(alignment: .leading, spacing: 2) {
-//                                Text(track.title)
-//                                    .foregroundStyle(.primary)
-//                                if let language = track.language {
-//                                    Text(language.uppercased())
-//                                        .font(.caption)
-//                                        .foregroundStyle(.secondary)
-//                                }
-//                            }
-//                            Spacer()
-//                            if videoManager.selectedSubtitleIndex == track.id {
-//                                Image(systemName: "checkmark")
-//                                    .foregroundStyle(.accent)
-//                                    .fontWeight(.semibold)
-//                            }
-//                        }
-//                    }
-//                }
             }
             .navigationTitle("Subtitles")
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
+                .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -371,7 +354,7 @@ struct VideoPlayerView: View {
                         Spacer()
 
                         Button {
-//                            videoManager.showNextEpisodeCountdown = false
+                            //                            videoManager.showNextEpisodeCountdown = false
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.caption.bold())
@@ -441,6 +424,7 @@ struct VideoPlayerView: View {
     private func setupAndPlay() {
         // Wire playback reporting callbacks
         nonisolated(unsafe) let provider = appState.provider
+        let coordinator = self.coordinator
 
         videoManager.onPlaybackStart = { item, position in
             try? await provider.reportPlaybackStart(item: item, position: position)
@@ -451,9 +435,9 @@ struct VideoPlayerView: View {
         videoManager.onPlaybackStopped = { item, position in
             try? await provider.reportPlaybackStopped(item: item, position: position)
         }
-        videoManager.onPlayNextEpisode = { [dismiss] _ in
+        videoManager.onPlayNextEpisode = { _ in
             // Dismiss and let the parent handle navigation to the next episode
-            dismiss()
+            coordinator.dismiss()
         }
 
         videoManager.loadAndPlay(

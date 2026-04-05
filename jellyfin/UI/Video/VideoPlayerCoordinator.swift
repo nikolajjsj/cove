@@ -10,9 +10,12 @@ import SwiftUI
 /// managing stream resolution, error alerts, and player presentation via their own
 /// `@State` properties, this coordinator owns all of that state in one place.
 ///
-/// The `fullScreenCover` (iOS) or `sheet` (macOS) is attached once at the app shell level,
-/// and any view in the hierarchy can trigger playback by calling `play(item:using:)`.
+/// The video player is presented as a fullscreen ZStack overlay in `RootView`,
+/// covering everything (tab bars, navigation bars, sheets) with a cinematic
+/// fade+scale transition. This avoids the modal sheet/fullScreenCover mechanics
+/// that cause dismiss-gesture conflicts with player controls on iOS.
 ///
+/// Any view in the hierarchy can trigger playback by calling `play(item:using:)`.
 /// This matches how Netflix, Apple TV+, Disney+, etc. handle video playback:
 /// — A single full-screen player presented from the root of the app.
 /// — Detail views simply request "play this"; they don't own the player lifecycle.
@@ -129,9 +132,9 @@ final class VideoPlayerCoordinator {
     /// Dismiss the video player and clear playback state.
     func dismiss() {
         isPresented = false
-        // Delay clearing data slightly so the dismiss animation can use the current item info
+        // Delay clearing data so the fade-out animation can still reference the current item
         Task {
-            try? await Task.sleep(for: .milliseconds(400))
+            try? await Task.sleep(for: .milliseconds(500))
             currentItem = nil
             streamInfo = nil
             startPosition = 0
@@ -157,65 +160,5 @@ extension VideoPlayerCoordinator {
         var localizedDescription: String {
             underlyingError.localizedDescription
         }
-    }
-}
-
-// MARK: - View Modifier for Attaching the Player
-
-/// A view modifier that attaches the video player presentation to any view.
-/// Intended to be used once, at the app's root (e.g., `AppShellView`).
-struct VideoPlayerPresentation: ViewModifier {
-    @Bindable var coordinator: VideoPlayerCoordinator
-
-    func body(content: Content) -> some View {
-        content
-            #if os(iOS)
-                .fullScreenCover(isPresented: $coordinator.isPresented) {
-                    if let item = coordinator.currentItem,
-                        let streamInfo = coordinator.streamInfo
-                    {
-                        VideoPlayerView(
-                            item: item,
-                            streamInfo: streamInfo,
-                            startPosition: coordinator.startPosition
-                        )
-                    }
-                }
-            #else
-                .sheet(isPresented: $coordinator.isPresented) {
-                    if let item = coordinator.currentItem,
-                        let streamInfo = coordinator.streamInfo
-                    {
-                        VideoPlayerView(
-                            item: item,
-                            streamInfo: streamInfo,
-                            startPosition: coordinator.startPosition
-                        )
-                        .frame(minWidth: 800, minHeight: 500)
-                    }
-                }
-            #endif
-            .alert(
-                "Playback Error",
-                isPresented: $coordinator.showError
-            ) {
-                Button("OK", role: .cancel) {
-                    coordinator.error = nil
-                }
-            } message: {
-                if let error = coordinator.error {
-                    Text(
-                        "Could not play \"\(error.itemTitle)\".\n\(error.localizedDescription)"
-                    )
-                }
-            }
-    }
-}
-
-extension View {
-    /// Attach the centralized video player presentation to this view.
-    /// Should be called once at the app root level.
-    func videoPlayerPresentation(coordinator: VideoPlayerCoordinator) -> some View {
-        modifier(VideoPlayerPresentation(coordinator: coordinator))
     }
 }
