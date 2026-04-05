@@ -246,5 +246,5 @@ Download an album and a movie → go airplane mode → everything still plays wi
 - [x] **Phase 2** — Networking + Jellyfin Auth
 - [x] **Phase 3** — Login UI + Library Browsing
 - [x] **Phase 4** — Music Playback
-- [ ] **Phase 5** — Video Playback
+- [x] **Phase 5** — Video Playback
 - [ ] **Phase 6** — Downloads & Offline
