@@ -6,6 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C0000001AAAAAAAAAAAA0001 /* Models in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0001 /* Models */; };
+		C0000001AAAAAAAAAAAA0002 /* MediaServerKit in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0002 /* MediaServerKit */; };
+		C0000001AAAAAAAAAAAA0003 /* JellyfinAPI in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0003 /* JellyfinAPI */; };
+		C0000001AAAAAAAAAAAA0004 /* JellyfinProvider in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0004 /* JellyfinProvider */; };
+		C0000001AAAAAAAAAAAA0005 /* PlaybackEngine in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0005 /* PlaybackEngine */; };
+		C0000001AAAAAAAAAAAA0006 /* DownloadManager in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0006 /* DownloadManager */; };
+		C0000001AAAAAAAAAAAA0007 /* Persistence in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0007 /* Persistence */; };
+		C0000001AAAAAAAAAAAA0008 /* Networking in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0008 /* Networking */; };
+		C0000001AAAAAAAAAAAA0009 /* ImageService in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0009 /* ImageService */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		B53D7B9F2F823DC20023368C /* jellyfin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = jellyfin.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +35,15 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0000001AAAAAAAAAAAA0001 /* Models in Frameworks */,
+				C0000001AAAAAAAAAAAA0002 /* MediaServerKit in Frameworks */,
+				C0000001AAAAAAAAAAAA0003 /* JellyfinAPI in Frameworks */,
+				C0000001AAAAAAAAAAAA0004 /* JellyfinProvider in Frameworks */,
+				C0000001AAAAAAAAAAAA0005 /* PlaybackEngine in Frameworks */,
+				C0000001AAAAAAAAAAAA0006 /* DownloadManager in Frameworks */,
+				C0000001AAAAAAAAAAAA0007 /* Persistence in Frameworks */,
+				C0000001AAAAAAAAAAAA0008 /* Networking in Frameworks */,
+				C0000001AAAAAAAAAAAA0009 /* ImageService in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -33,6 +54,7 @@
 			isa = PBXGroup;
 			children = (
 				B53D7BA12F823DC20023368C /* jellyfin */,
+				C0000003AAAAAAAAAAAA0001 /* Packages */,
 				B53D7BA02F823DC20023368C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +65,13 @@
 				B53D7B9F2F823DC20023368C /* jellyfin.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		C0000003AAAAAAAAAAAA0001 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Packages;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -65,6 +94,15 @@
 			);
 			name = jellyfin;
 			packageProductDependencies = (
+				C0000002AAAAAAAAAAAA0001 /* Models */,
+				C0000002AAAAAAAAAAAA0002 /* MediaServerKit */,
+				C0000002AAAAAAAAAAAA0003 /* JellyfinAPI */,
+				C0000002AAAAAAAAAAAA0004 /* JellyfinProvider */,
+				C0000002AAAAAAAAAAAA0005 /* PlaybackEngine */,
+				C0000002AAAAAAAAAAAA0006 /* DownloadManager */,
+				C0000002AAAAAAAAAAAA0007 /* Persistence */,
+				C0000002AAAAAAAAAAAA0008 /* Networking */,
+				C0000002AAAAAAAAAAAA0009 /* ImageService */,
 			);
 			productName = jellyfin;
 			productReference = B53D7B9F2F823DC20023368C /* jellyfin.app */;
@@ -94,6 +132,9 @@
 			);
 			mainGroup = B53D7B962F823DC20023368C;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C0000004AAAAAAAAAAAA0001 /* XCLocalSwiftPackageReference "Packages/CoveKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B53D7BA02F823DC20023368C /* Products */;
 			projectDirPath = "";
@@ -351,6 +392,52 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		C0000004AAAAAAAAAAAA0001 /* XCLocalSwiftPackageReference "Packages/CoveKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/CoveKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C0000002AAAAAAAAAAAA0001 /* Models */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Models;
+		};
+		C0000002AAAAAAAAAAAA0002 /* MediaServerKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MediaServerKit;
+		};
+		C0000002AAAAAAAAAAAA0003 /* JellyfinAPI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JellyfinAPI;
+		};
+		C0000002AAAAAAAAAAAA0004 /* JellyfinProvider */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JellyfinProvider;
+		};
+		C0000002AAAAAAAAAAAA0005 /* PlaybackEngine */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PlaybackEngine;
+		};
+		C0000002AAAAAAAAAAAA0006 /* DownloadManager */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DownloadManager;
+		};
+		C0000002AAAAAAAAAAAA0007 /* Persistence */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Persistence;
+		};
+		C0000002AAAAAAAAAAAA0008 /* Networking */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Networking;
+		};
+		C0000002AAAAAAAAAAAA0009 /* ImageService */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ImageService;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B53D7B972F823DC20023368C /* Project object */;
 }

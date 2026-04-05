@@ -113,5 +113,5 @@ let package = Package(
             path: "Tests/DownloadManagerTests"
         ),
     ],
-    swiftLanguageVersions: [.v6]
+    swiftLanguageModes: [.v6]
 )
