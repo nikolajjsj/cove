@@ -10,6 +10,7 @@ import PlaybackEngine
 @Observable
 final class AppState {
     var isAuthenticated = false
+    var isRestoringSession = true
     var activeConnection: ServerConnection?
     var libraries: [MediaLibrary] = []
     var isLoading = false
@@ -53,6 +54,8 @@ final class AppState {
     }
 
     func restoreSession() async {
+        defer { isRestoringSession = false }
+
         guard let repo = serverRepository else { return }
 
         // Restore incomplete downloads
