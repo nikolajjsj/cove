@@ -96,6 +96,71 @@ enum JellyfinMapper {
         }
     }
 
+    // MARK: - Music Mapping
+
+    /// Map BaseItemDto to Artist.
+    static func mapArtist(_ dto: BaseItemDto) -> Artist? {
+        guard let id = dto.id, let name = dto.name else { return nil }
+        return Artist(
+            id: ArtistID(id),
+            name: name,
+            overview: dto.overview,
+            sortName: dto.name,
+            albumCount: nil
+        )
+    }
+
+    /// Map BaseItemDto to Album.
+    static func mapAlbum(_ dto: BaseItemDto) -> Album? {
+        guard let id = dto.id, let name = dto.name else { return nil }
+        let artistId = dto.artistItems?.first?.id.map { ArtistID($0) }
+        let duration: TimeInterval? = dto.runTimeTicks.map { TimeInterval($0) / 10_000_000.0 }
+        return Album(
+            id: AlbumID(id),
+            title: name,
+            artistId: artistId,
+            artistName: dto.albumArtist,
+            year: dto.productionYear,
+            genre: dto.genres?.first,
+            trackCount: nil,
+            duration: duration
+        )
+    }
+
+    /// Map BaseItemDto to Track.
+    static func mapTrack(_ dto: BaseItemDto) -> Track? {
+        guard let id = dto.id, let name = dto.name else { return nil }
+        let artistId = dto.artistItems?.first?.id.map { ArtistID($0) }
+        let artistName = dto.albumArtist ?? dto.artistItems?.first?.name
+        let albumId = dto.albumId.map { AlbumID($0) }
+        let duration: TimeInterval? = dto.runTimeTicks.map { TimeInterval($0) / 10_000_000.0 }
+        return Track(
+            id: TrackID(id),
+            title: name,
+            albumId: albumId,
+            albumName: dto.album,
+            artistId: artistId,
+            artistName: artistName,
+            trackNumber: dto.indexNumber,
+            discNumber: dto.parentIndexNumber,
+            duration: duration,
+            codec: nil
+        )
+    }
+
+    /// Map BaseItemDto to Playlist.
+    static func mapPlaylist(_ dto: BaseItemDto) -> Playlist? {
+        guard let id = dto.id, let name = dto.name else { return nil }
+        let duration: TimeInterval? = dto.runTimeTicks.map { TimeInterval($0) / 10_000_000.0 }
+        return Playlist(
+            id: PlaylistID(id),
+            name: name,
+            overview: dto.overview,
+            itemCount: nil,
+            duration: duration
+        )
+    }
+
     // MARK: - Helpers
 
     private static let dateFormatters: [DateFormatter] = {

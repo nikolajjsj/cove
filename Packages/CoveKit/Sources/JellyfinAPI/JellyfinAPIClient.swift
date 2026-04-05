@@ -189,6 +189,148 @@ public final class JellyfinAPIClient: Sendable {
         if !queryItems.isEmpty { urlComponents?.queryItems = queryItems }
         return urlComponents?.url
     }
+
+    // MARK: - Artists
+
+    /// List album artists.
+    /// `GET /Artists/AlbumArtists`
+    public func getAlbumArtists(
+        userId: String,
+        parentId: String? = nil,
+        sortBy: String? = nil,
+        sortOrder: String? = nil,
+        limit: Int? = nil,
+        startIndex: Int? = nil,
+        searchTerm: String? = nil
+    ) async throws -> ItemsResult {
+        let url = baseURL.appendingPathComponent("Artists/AlbumArtists")
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "UserId", value: userId),
+            URLQueryItem(name: "Fields", value: "Overview,Genres,DateCreated,UserData,SortName"),
+        ]
+        if let parentId { queryItems.append(URLQueryItem(name: "ParentId", value: parentId)) }
+        if let sortBy { queryItems.append(URLQueryItem(name: "SortBy", value: sortBy)) }
+        if let sortOrder { queryItems.append(URLQueryItem(name: "SortOrder", value: sortOrder)) }
+        if let limit { queryItems.append(URLQueryItem(name: "Limit", value: String(limit))) }
+        if let startIndex {
+            queryItems.append(URLQueryItem(name: "StartIndex", value: String(startIndex)))
+        }
+        if let searchTerm {
+            queryItems.append(URLQueryItem(name: "SearchTerm", value: searchTerm))
+        }
+        logger.debug("Fetching album artists for user \(userId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+    }
+
+    /// List all artists.
+    /// `GET /Artists`
+    public func getArtists(
+        userId: String,
+        parentId: String? = nil,
+        sortBy: String? = nil,
+        sortOrder: String? = nil,
+        limit: Int? = nil,
+        startIndex: Int? = nil,
+        searchTerm: String? = nil
+    ) async throws -> ItemsResult {
+        let url = baseURL.appendingPathComponent("Artists")
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "UserId", value: userId),
+            URLQueryItem(name: "Fields", value: "Overview,Genres,DateCreated,UserData,SortName"),
+        ]
+        if let parentId { queryItems.append(URLQueryItem(name: "ParentId", value: parentId)) }
+        if let sortBy { queryItems.append(URLQueryItem(name: "SortBy", value: sortBy)) }
+        if let sortOrder { queryItems.append(URLQueryItem(name: "SortOrder", value: sortOrder)) }
+        if let limit { queryItems.append(URLQueryItem(name: "Limit", value: String(limit))) }
+        if let startIndex {
+            queryItems.append(URLQueryItem(name: "StartIndex", value: String(startIndex)))
+        }
+        if let searchTerm {
+            queryItems.append(URLQueryItem(name: "SearchTerm", value: searchTerm))
+        }
+        logger.debug("Fetching artists for user \(userId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+    }
+
+    // MARK: - Audio Streaming
+
+    /// Build a universal audio stream URL for a track. This is synchronous — no network call.
+    /// `GET /Audio/{id}/universal`
+    public func audioStreamURL(
+        itemId: String,
+        container: String = "opus,mp3|mp3,aac,m4a|aac,m4b|aac,flac,webma,webm|webma,wav,ogg",
+        maxStreamingBitrate: Int = 140_000_000,
+        audioBitRate: Int? = nil,
+        transcodingContainer: String = "mp3",
+        transcodingProtocol: String = "http"
+    ) -> URL? {
+        guard let currentUserId = userId else { return nil }
+        guard let token = accessToken else { return nil }
+        var urlComponents = URLComponents(
+            url: baseURL.appendingPathComponent("Audio/\(itemId)/universal"),
+            resolvingAgainstBaseURL: false)
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "UserId", value: currentUserId),
+            URLQueryItem(name: "Container", value: container),
+            URLQueryItem(name: "MaxStreamingBitrate", value: String(maxStreamingBitrate)),
+            URLQueryItem(name: "TranscodingContainer", value: transcodingContainer),
+            URLQueryItem(name: "TranscodingProtocol", value: transcodingProtocol),
+            URLQueryItem(name: "api_key", value: token),
+        ]
+        if let audioBitRate {
+            queryItems.append(URLQueryItem(name: "AudioBitRate", value: String(audioBitRate)))
+        }
+        urlComponents?.queryItems = queryItems
+        return urlComponents?.url
+    }
+
+    // MARK: - Playback Reporting
+
+    /// Report playback start.
+    /// `POST /Sessions/Playing`
+    public func reportPlaybackStart(
+        itemId: String,
+        positionTicks: Int64,
+        mediaSourceId: String? = nil
+    ) async throws {
+        let url = baseURL.appendingPathComponent("Sessions/Playing")
+        let body = PlaybackStartInfo(
+            itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId)
+        logger.debug("Reporting playback start for item \(itemId)")
+        try await httpClient.request(url: url, method: .post, headers: authHeaders, body: body)
+    }
+
+    /// Report playback progress.
+    /// `POST /Sessions/Playing/Progress`
+    public func reportPlaybackProgress(
+        itemId: String,
+        positionTicks: Int64,
+        isPaused: Bool,
+        mediaSourceId: String? = nil
+    ) async throws {
+        let url = baseURL.appendingPathComponent("Sessions/Playing/Progress")
+        let body = PlaybackProgressInfo(
+            itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId,
+            isPaused: isPaused)
+        logger.debug("Reporting playback progress for item \(itemId)")
+        try await httpClient.request(url: url, method: .post, headers: authHeaders, body: body)
+    }
+
+    /// Report playback stopped.
+    /// `POST /Sessions/Playing/Stopped`
+    public func reportPlaybackStopped(
+        itemId: String,
+        positionTicks: Int64,
+        mediaSourceId: String? = nil
+    ) async throws {
+        let url = baseURL.appendingPathComponent("Sessions/Playing/Stopped")
+        let body = PlaybackStopInfo(
+            itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId)
+        logger.debug("Reporting playback stopped for item \(itemId)")
+        try await httpClient.request(url: url, method: .post, headers: authHeaders, body: body)
+    }
 }
 
 // MARK: - Thread-safe token storage
@@ -208,5 +350,79 @@ private final class TokenStore: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         _token = token
+    }
+}
+
+// MARK: - Playback Reporting DTOs
+
+/// Body for `POST /Sessions/Playing`.
+private struct PlaybackStartInfo: Encodable, Sendable {
+    let itemId: String
+    let positionTicks: Int64
+    let mediaSourceId: String?
+    let playMethod: String
+
+    init(itemId: String, positionTicks: Int64, mediaSourceId: String?) {
+        self.itemId = itemId
+        self.positionTicks = positionTicks
+        self.mediaSourceId = mediaSourceId
+        self.playMethod = "DirectPlay"
+    }
+
+    // All-lowercase string values so that the HTTPClient's convertToSnakeCase
+    // encoder strategy passes them through unchanged. Jellyfin's server uses
+    // case-insensitive JSON deserialization, so "itemid" matches "ItemId".
+    enum CodingKeys: String, CodingKey {
+        case itemId = "itemid"
+        case positionTicks = "positionticks"
+        case mediaSourceId = "mediasourceid"
+        case playMethod = "playmethod"
+    }
+}
+
+/// Body for `POST /Sessions/Playing/Progress`.
+private struct PlaybackProgressInfo: Encodable, Sendable {
+    let itemId: String
+    let positionTicks: Int64
+    let mediaSourceId: String?
+    let playMethod: String
+    let isPaused: Bool
+
+    init(itemId: String, positionTicks: Int64, mediaSourceId: String?, isPaused: Bool) {
+        self.itemId = itemId
+        self.positionTicks = positionTicks
+        self.mediaSourceId = mediaSourceId
+        self.playMethod = "DirectPlay"
+        self.isPaused = isPaused
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case itemId = "itemid"
+        case positionTicks = "positionticks"
+        case mediaSourceId = "mediasourceid"
+        case playMethod = "playmethod"
+        case isPaused = "ispaused"
+    }
+}
+
+/// Body for `POST /Sessions/Playing/Stopped`.
+private struct PlaybackStopInfo: Encodable, Sendable {
+    let itemId: String
+    let positionTicks: Int64
+    let mediaSourceId: String?
+    let playMethod: String
+
+    init(itemId: String, positionTicks: Int64, mediaSourceId: String?) {
+        self.itemId = itemId
+        self.positionTicks = positionTicks
+        self.mediaSourceId = mediaSourceId
+        self.playMethod = "DirectPlay"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case itemId = "itemid"
+        case positionTicks = "positionticks"
+        case mediaSourceId = "mediasourceid"
+        case playMethod = "playmethod"
     }
 }

@@ -158,19 +158,59 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - MusicProvider (Phase 4)
 
     public func albums(artist: ArtistID) async throws -> [Album] {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let result = try await client.getItems(
+            userId: userId,
+            parentId: artist.rawValue,
+            includeItemTypes: ["MusicAlbum"],
+            sortBy: "ProductionYear,SortName",
+            sortOrder: "Descending"
+        )
+        return (result.items ?? []).compactMap { JellyfinMapper.mapAlbum($0) }
     }
 
     public func tracks(album: AlbumID) async throws -> [Track] {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let result = try await client.getItems(
+            userId: userId,
+            parentId: album.rawValue,
+            includeItemTypes: ["Audio"],
+            sortBy: "SortName",
+            sortOrder: "Ascending"
+        )
+        return (result.items ?? []).compactMap { JellyfinMapper.mapTrack($0) }
     }
 
     public func playlists() async throws -> [Playlist] {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let result = try await client.getItems(
+            userId: userId,
+            includeItemTypes: ["Playlist"],
+            sortBy: "SortName"
+        )
+        return (result.items ?? []).compactMap { JellyfinMapper.mapPlaylist($0) }
     }
 
     public func lyrics(track: TrackID) async throws -> Lyrics? {
-        throw AppError.unknown(underlying: NotImplementedError())
+        // Lyrics endpoint is complex; returning nil for now.
+        return nil
+    }
+
+    // MARK: - Audio Streaming
+
+    /// Build a universal audio stream URL for a track.
+    public func audioStreamURL(for track: Track) -> URL? {
+        guard let client = state.client else { return nil }
+        return client.audioStreamURL(itemId: track.id.rawValue)
     }
 
     // MARK: - VideoProvider (Phase 5)
@@ -205,15 +245,37 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - PlaybackReportingProvider (Phase 4/5)
 
     public func reportPlaybackStart(item: MediaItem, position: TimeInterval) async throws {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let positionTicks = Int64(position * 10_000_000)
+        try await client.reportPlaybackStart(
+            itemId: item.id.rawValue,
+            positionTicks: positionTicks
+        )
     }
 
     public func reportPlaybackProgress(item: MediaItem, position: TimeInterval) async throws {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let positionTicks = Int64(position * 10_000_000)
+        try await client.reportPlaybackProgress(
+            itemId: item.id.rawValue,
+            positionTicks: positionTicks,
+            isPaused: false
+        )
     }
 
     public func reportPlaybackStopped(item: MediaItem, position: TimeInterval) async throws {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let positionTicks = Int64(position * 10_000_000)
+        try await client.reportPlaybackStopped(
+            itemId: item.id.rawValue,
+            positionTicks: positionTicks
+        )
     }
 
     // MARK: - DownloadableProvider (Phase 6)
