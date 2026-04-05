@@ -247,4 +247,4 @@ Download an album and a movie → go airplane mode → everything still plays wi
 - [x] **Phase 3** — Login UI + Library Browsing
 - [x] **Phase 4** — Music Playback
 - [x] **Phase 5** — Video Playback
-- [ ] **Phase 6** — Downloads & Offline
+- [x] **Phase 6** — Downloads & Offline
