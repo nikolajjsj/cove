@@ -26,6 +26,12 @@ enum JellyfinMapper {
             overview: dto.overview,
             mediaType: mediaType,
             dateAdded: dateAdded,
+            productionYear: dto.productionYear,
+            genres: dto.genres,
+            runTimeTicks: dto.runTimeTicks,
+            communityRating: dto.communityRating,
+            officialRating: dto.officialRating,
+            criticRating: dto.criticRating,
             userData: userData
         )
     }
