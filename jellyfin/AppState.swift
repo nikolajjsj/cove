@@ -4,6 +4,7 @@ import MediaServerKit
 import Models
 import Networking
 import Persistence
+import PlaybackEngine
 
 @Observable
 final class AppState {
@@ -14,6 +15,7 @@ final class AppState {
     var error: AppError?
 
     let provider = JellyfinServerProvider()
+    let audioPlayer = AudioPlaybackManager()
     let serverRepository: ServerRepository?
 
     init() {
@@ -33,6 +35,7 @@ final class AppState {
                 if provider.restore(connection: last) {
                     activeConnection = last
                     isAuthenticated = true
+                    wireUpPlayer()
                     await loadLibraries()
                 }
             }
@@ -53,6 +56,7 @@ final class AppState {
 
         activeConnection = connection
         isAuthenticated = true
+        wireUpPlayer()
         await loadLibraries()
     }
 
@@ -65,6 +69,8 @@ final class AppState {
     }
 
     func disconnect() async {
+        audioPlayer.stop()
+
         if let connection = activeConnection {
             try? await serverRepository?.delete(id: connection.id)
         }
@@ -72,5 +78,30 @@ final class AppState {
         activeConnection = nil
         libraries = []
         isAuthenticated = false
+    }
+
+    // MARK: - Player Wiring
+
+    /// Configure the audio player's URL resolvers to use the current server provider.
+    /// Called after a successful connection or session restore.
+    private func wireUpPlayer() {
+        // Use nonisolated(unsafe) because JellyfinServerProvider is thread-safe internally
+        // (uses NSLock-protected state) but doesn't formally declare Sendable conformance.
+        // These closures are only ever called from @MainActor context within AudioPlaybackManager.
+        nonisolated(unsafe) let provider = self.provider
+
+        audioPlayer.streamURLResolver = { track in
+            provider.audioStreamURL(for: track)
+        }
+
+        audioPlayer.artworkURLResolver = { track in
+            guard let albumId = track.albumId else { return nil }
+            let item = MediaItem(id: albumId, title: "", mediaType: .album)
+            return provider.imageURL(
+                for: item,
+                type: .primary,
+                maxSize: CGSize(width: 600, height: 600)
+            )
+        }
     }
 }

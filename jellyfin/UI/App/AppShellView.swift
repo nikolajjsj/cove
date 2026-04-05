@@ -1,16 +1,27 @@
 import Models
+import PlaybackEngine
 import SwiftUI
 
 struct AppShellView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var selectedTab: AppTab = .home
+    @State private var showFullPlayer = false
 
     var body: some View {
-        if sizeClass == .compact {
-            compactLayout
-        } else {
-            regularLayout
+        ZStack(alignment: .bottom) {
+            Group {
+                if sizeClass == .compact {
+                    compactLayout
+                } else {
+                    regularLayout
+                }
+            }
+
+            NowPlayingBar(showFullPlayer: $showFullPlayer)
+        }
+        .sheet(isPresented: $showFullPlayer) {
+            AudioPlayerView()
         }
     }
 
@@ -50,9 +61,9 @@ struct AppShellView: View {
     private var availableTabs: [AppTab] {
         var tabs: [AppTab] = [.home]
         let types = Set(appState.libraries.compactMap(\.collectionType))
+        if types.contains(.music) { tabs.append(.music) }
         if types.contains(.movies) { tabs.append(.movies) }
         if types.contains(.tvshows) { tabs.append(.tvShows) }
-        if types.contains(.music) { tabs.append(.music) }
         tabs.append(.settings)
         return tabs
     }
@@ -93,7 +104,7 @@ enum AppTab: Hashable {
         case .home:
             HomeView()
         case .music:
-            LibraryGridView(library: appState.libraries.first { $0.collectionType == .music })
+            MusicLibraryView(library: appState.libraries.first { $0.collectionType == .music })
         case .movies:
             LibraryGridView(library: appState.libraries.first { $0.collectionType == .movies })
         case .tvShows:
