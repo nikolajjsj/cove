@@ -18,6 +18,7 @@ let package = Package(
         .library(name: "Persistence", targets: ["Persistence"]),
         .library(name: "Networking", targets: ["Networking"]),
         .library(name: "ImageService", targets: ["ImageService"]),
+        .library(name: "CoveUI", targets: ["CoveUI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
@@ -26,6 +27,10 @@ let package = Package(
     targets: [
         // MARK: - Source Targets
 
+        .target(
+            name: "CoveUI",
+            path: "Sources/CoveUI"
+        ),
         .target(
             name: "Models",
             path: "Sources/Models"
@@ -112,6 +117,11 @@ let package = Package(
             name: "DownloadManagerTests",
             dependencies: ["DownloadManager"],
             path: "Tests/DownloadManagerTests"
+        ),
+        .testTarget(
+            name: "CoveUITests",
+            dependencies: ["CoveUI"],
+            path: "Tests/CoveUITests"
         ),
     ],
     swiftLanguageModes: [.v6]
