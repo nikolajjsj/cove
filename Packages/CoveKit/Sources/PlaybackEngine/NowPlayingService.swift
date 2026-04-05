@@ -176,11 +176,7 @@ final class NowPlayingService {
                 guard let image = NSImage(data: data) else { return }
             #endif
 
-            let artwork = MPMediaItemArtwork(
-                boundsSize: CGSize(width: 600, height: 600)
-            ) { _ in
-                image
-            }
+            let artwork = MPMediaItemArtwork(image: image)
 
             guard var info = self.infoCenter.nowPlayingInfo else { return }
             info[MPMediaItemPropertyArtwork] = artwork
