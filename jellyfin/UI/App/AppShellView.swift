@@ -1,3 +1,4 @@
+import DownloadManager
 import Models
 import PlaybackEngine
 import SwiftUI
@@ -20,6 +21,14 @@ struct AppShellView: View {
 
             NowPlayingBar(showFullPlayer: $showFullPlayer)
         }
+        .overlay(alignment: .top) {
+            if appState.isOffline {
+                OfflineIndicatorView()
+                    .padding(.top, 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: appState.isOffline)
         .sheet(isPresented: $showFullPlayer) {
             AudioPlayerView()
         }
@@ -64,6 +73,7 @@ struct AppShellView: View {
         if types.contains(.music) { tabs.append(.music) }
         if types.contains(.movies) { tabs.append(.movies) }
         if types.contains(.tvshows) { tabs.append(.tvShows) }
+        tabs.append(.downloads)
         tabs.append(.settings)
         return tabs
     }
@@ -76,6 +86,7 @@ enum AppTab: Hashable {
     case music
     case movies
     case tvShows
+    case downloads
     case settings
 
     var title: String {
@@ -84,6 +95,7 @@ enum AppTab: Hashable {
         case .music: "Music"
         case .movies: "Movies"
         case .tvShows: "TV Shows"
+        case .downloads: "Downloads"
         case .settings: "Settings"
         }
     }
@@ -94,6 +106,7 @@ enum AppTab: Hashable {
         case .music: "music.note"
         case .movies: "film"
         case .tvShows: "tv"
+        case .downloads: "arrow.down.circle"
         case .settings: "gear"
         }
     }
@@ -109,6 +122,17 @@ enum AppTab: Hashable {
             LibraryGridView(library: appState.libraries.first { $0.collectionType == .movies })
         case .tvShows:
             LibraryGridView(library: appState.libraries.first { $0.collectionType == .tvshows })
+        case .downloads:
+            if let downloadManager = appState.downloadManager {
+                DownloadsView(downloadManager: downloadManager)
+            } else {
+                ContentUnavailableView(
+                    "Downloads Unavailable",
+                    systemImage: "arrow.down.circle.dotted",
+                    description: Text(
+                        "Download functionality requires local storage to be available.")
+                )
+            }
         case .settings:
             SettingsView()
         }

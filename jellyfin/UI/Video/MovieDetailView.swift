@@ -1,3 +1,4 @@
+import DownloadManager
 import ImageService
 import Models
 import PlaybackEngine
@@ -51,6 +52,19 @@ struct MovieDetailView: View {
         }
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if let downloadManager = appState.downloadManager {
+                    DownloadButton(
+                        item: item,
+                        serverId: appState.activeConnection?.id.uuidString ?? "",
+                        downloadManager: downloadManager
+                    ) {
+                        try await appState.provider.downloadURL(for: item, profile: nil)
+                    }
+                }
+            }
+        }
         .fullScreenCover(isPresented: $showPlayer) {
             if let streamInfo {
                 VideoPlayerView(

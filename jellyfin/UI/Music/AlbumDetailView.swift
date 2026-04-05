@@ -1,3 +1,4 @@
+import DownloadManager
 import ImageService
 import JellyfinProvider
 import MediaServerKit
@@ -44,6 +45,19 @@ struct AlbumDetailView: View {
         }
         .navigationTitle(albumItem.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if let downloadManager = appState.downloadManager {
+                    DownloadButton(
+                        item: albumItem,
+                        serverId: appState.activeConnection?.id.uuidString ?? "",
+                        downloadManager: downloadManager
+                    ) {
+                        try await appState.provider.downloadURL(for: albumItem, profile: nil)
+                    }
+                }
+            }
+        }
         .task {
             await loadTracks()
         }
