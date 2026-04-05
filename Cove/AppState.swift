@@ -186,7 +186,7 @@ final class AppState {
         // Use nonisolated(unsafe) because JellyfinServerProvider is thread-safe internally
         // (uses NSLock-protected state) but doesn't formally declare Sendable conformance.
         // These closures are only ever called from @MainActor context within AudioPlaybackManager.
-        nonisolated(unsafe) let provider = self.provider
+        let provider = self.provider
 
         audioPlayer.streamURLResolver = { track in
             provider.audioStreamURL(for: track)
@@ -226,7 +226,7 @@ final class AppState {
         guard let offlineSyncManager, let connection = activeConnection else { return }
         guard networkMonitor.isConnected else { return }
 
-        nonisolated(unsafe) let provider = self.provider
+        let provider = self.provider
 
         await offlineSyncManager.syncPendingReports(
             serverId: connection.id.uuidString

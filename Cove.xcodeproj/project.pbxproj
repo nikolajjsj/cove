@@ -16,6 +16,7 @@
 		C0000001AAAAAAAAAAAA0007 /* Persistence in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0007 /* Persistence */; };
 		C0000001AAAAAAAAAAAA0008 /* Networking in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0008 /* Networking */; };
 		C0000001AAAAAAAAAAAA0009 /* ImageService in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0009 /* ImageService */; };
+		C0000001AAAAAAAAAAAA000A /* CoveUI in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA000A /* CoveUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,6 +45,7 @@
 				C0000001AAAAAAAAAAAA0007 /* Persistence in Frameworks */,
 				C0000001AAAAAAAAAAAA0008 /* Networking in Frameworks */,
 				C0000001AAAAAAAAAAAA0009 /* ImageService in Frameworks */,
+				C0000001AAAAAAAAAAAA000A /* CoveUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -103,6 +105,7 @@
 				C0000002AAAAAAAAAAAA0007 /* Persistence */,
 				C0000002AAAAAAAAAAAA0008 /* Networking */,
 				C0000002AAAAAAAAAAAA0009 /* ImageService */,
+				C0000002AAAAAAAAAAAA000A /* CoveUI */,
 			);
 			productName = Cove;
 			productReference = B53D7B9F2F823DC20023368C /* Cove.app */;
@@ -442,6 +445,10 @@
 		C0000002AAAAAAAAAAAA0009 /* ImageService */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = ImageService;
+		};
+		C0000002AAAAAAAAAAAA000A /* CoveUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CoveUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
