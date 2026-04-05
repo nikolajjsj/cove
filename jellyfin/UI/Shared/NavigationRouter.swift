@@ -22,6 +22,46 @@ enum NavigationRouter {
                 .navigationTitle(item.title)
         }
     }
+
+    /// Returns the appropriate detail view for a given media library.
+    @ViewBuilder
+    static func destination(for library: MediaLibrary) -> some View {
+        switch library.collectionType {
+        case .music:
+            MusicLibraryView(library: library)
+        default:
+            LibraryGridView(library: library)
+        }
+    }
+
+    /// Returns the detail view for a given album.
+    @ViewBuilder
+    static func destination(for album: Album) -> some View {
+        AlbumDetailView(albumItem: MediaItem(id: album.id, title: album.title, mediaType: .album))
+    }
+}
+
+// MARK: - Navigation Destinations Modifier
+
+private struct NavigationDestinations: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .navigationDestination(for: MediaItem.self) { item in
+                NavigationRouter.destination(for: item)
+            }
+            .navigationDestination(for: MediaLibrary.self) { library in
+                NavigationRouter.destination(for: library)
+            }
+            .navigationDestination(for: Album.self) { album in
+                NavigationRouter.destination(for: album)
+            }
+    }
+}
+
+extension View {
+    func withNavigationDestinations() -> some View {
+        modifier(NavigationDestinations())
+    }
 }
 
 // MARK: - Library Type Helpers

@@ -44,6 +44,7 @@ struct AppShellView: View {
                     NavigationStack {
                         tab.destination(appState: appState)
                             .navigationTitle(tab.title)
+                            .withNavigationDestinations()
                     }
                 }
             }
@@ -54,14 +55,17 @@ struct AppShellView: View {
 
     private var regularLayout: some View {
         NavigationSplitView {
-            List(availableTabs, id: \.self, selection: $selectedTab) { tab in
-                Label(tab.title, systemImage: tab.icon)
-            }
-            .navigationTitle("Cove")
+            #if !os(iOS)
+                List(availableTabs, id: \.self, selection: $selectedTab) { tab in
+                    Label(tab.title, systemImage: tab.icon)
+                }
+                .navigationTitle("Cove")
+            #endif
         } detail: {
             NavigationStack {
                 selectedTab.destination(appState: appState)
                     .navigationTitle(selectedTab.title)
+                    .withNavigationDestinations()
             }
         }
     }
@@ -70,10 +74,14 @@ struct AppShellView: View {
 
     private var availableTabs: [AppTab] {
         var tabs: [AppTab] = [.home]
-        let types = Set(appState.libraries.compactMap(\.collectionType))
-        if types.contains(.music) { tabs.append(.music) }
-        if types.contains(.movies) { tabs.append(.movies) }
-        if types.contains(.tvshows) { tabs.append(.tvShows) }
+        // On compact (iPhone), only show Home / Downloads / Settings.
+        // Library sections are reachable by tapping their header on the Home view.
+        if sizeClass != .compact {
+            let types = Set(appState.libraries.compactMap(\.collectionType))
+            if types.contains(.music) { tabs.append(.music) }
+            if types.contains(.movies) { tabs.append(.movies) }
+            if types.contains(.tvshows) { tabs.append(.tvShows) }
+        }
         tabs.append(.downloads)
         tabs.append(.settings)
         return tabs

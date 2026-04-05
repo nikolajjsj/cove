@@ -28,7 +28,7 @@ struct HomeView: View {
             }
             .padding()
         }
-        .navigationDestination(for: MediaItem.self) { NavigationRouter.destination(for: $0) }
+
     }
 
 }

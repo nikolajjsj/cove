@@ -41,7 +41,6 @@ struct LibraryGridView: View {
                 scrollContent
             }
         }
-        .navigationDestination(for: MediaItem.self) { NavigationRouter.destination(for: $0) }
         .task(id: library?.id) {
             await loadFirstPage()
         }

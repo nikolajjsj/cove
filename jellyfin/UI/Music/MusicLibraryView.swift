@@ -35,16 +35,6 @@ struct MusicLibraryView: View {
             }
         }
         .navigationTitle("Music")
-        .navigationDestination(for: MediaItem.self) { item in
-            switch item.mediaType {
-            case .artist:
-                ArtistDetailView(artistItem: item)
-            case .album:
-                AlbumDetailView(albumItem: item)
-            default:
-                Text(item.title)
-            }
-        }
     }
 }
 
