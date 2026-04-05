@@ -1,17 +1,18 @@
-//
-//  jellyfinApp.swift
-//  jellyfin
-//
-//  Created by neo on 05/04/2026.
-//
-
+import ImageService
 import SwiftUI
 
 @main
-struct jellyfinApp: App {
+struct CoveApp: App {
+    @State private var appState = AppState()
+
+    init() {
+        ImageService.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
+                .environment(appState)
         }
     }
 }
