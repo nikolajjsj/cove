@@ -210,9 +210,18 @@ private struct LibrarySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(library.name)
-                .font(.title2)
-                .fontWeight(.bold)
+            NavigationLink(value: library) {
+                HStack {
+                    Text(library.name)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
 
             if isLoading {
                 ProgressView()
