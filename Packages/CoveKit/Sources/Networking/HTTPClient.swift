@@ -2,14 +2,16 @@ import Foundation
 import Models
 
 /// A lightweight async/await wrapper around URLSession.
-/// Handles request building, JSON decoding, auth header injection, and error mapping.
+/// Handles request building, JSON decoding, auth header injection, error mapping,
+/// and response caching.
 public final class HTTPClient: Sendable {
     private let session: URLSession
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
+    private let responseCache: ResponseCache
 
     public init(
-        session: URLSession = .shared,
+        session: URLSession = HTTPClient.makeDefaultSession(),
         decoder: JSONDecoder = {
             let d = JSONDecoder()
             d.keyDecodingStrategy = .convertFromSnakeCase
@@ -21,11 +23,27 @@ public final class HTTPClient: Sendable {
             e.keyEncodingStrategy = .convertToSnakeCase
             e.dateEncodingStrategy = .iso8601
             return e
-        }()
+        }(),
+        responseCache: ResponseCache = ResponseCache()
     ) {
         self.session = session
         self.decoder = decoder
         self.encoder = encoder
+        self.responseCache = responseCache
+    }
+
+    // MARK: - Default Session Factory
+
+    /// Creates a `URLSession` with a generously-sized `URLCache` so that
+    /// HTTP-level caching (ETag / Cache-Control) works out of the box.
+    public static func makeDefaultSession() -> URLSession {
+        let config = URLSessionConfiguration.default
+        config.urlCache = URLCache(
+            memoryCapacity: 50 * 1024 * 1024,  // 50 MB in memory
+            diskCapacity: 200 * 1024 * 1024  // 200 MB on disk
+        )
+        config.requestCachePolicy = .useProtocolCachePolicy
+        return URLSession(configuration: config)
     }
 
     // MARK: - Request Execution
@@ -36,10 +54,12 @@ public final class HTTPClient: Sendable {
         method: HTTPMethod = .get,
         headers: [String: String] = [:],
         body: (any Encodable & Sendable)? = nil,
-        queryItems: [URLQueryItem]? = nil
+        queryItems: [URLQueryItem]? = nil,
+        cachePolicy: CachePolicy = .networkOnly
     ) async throws -> T {
         let data = try await execute(
-            url: url, method: method, headers: headers, body: body, queryItems: queryItems)
+            url: url, method: method, headers: headers, body: body,
+            queryItems: queryItems, cachePolicy: cachePolicy)
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
@@ -53,10 +73,12 @@ public final class HTTPClient: Sendable {
         method: HTTPMethod = .get,
         headers: [String: String] = [:],
         body: (any Encodable & Sendable)? = nil,
-        queryItems: [URLQueryItem]? = nil
+        queryItems: [URLQueryItem]? = nil,
+        cachePolicy: CachePolicy = .networkOnly
     ) async throws {
         _ = try await execute(
-            url: url, method: method, headers: headers, body: body, queryItems: queryItems)
+            url: url, method: method, headers: headers, body: body,
+            queryItems: queryItems, cachePolicy: cachePolicy)
     }
 
     /// Execute a request and return raw Data.
@@ -65,10 +87,27 @@ public final class HTTPClient: Sendable {
         method: HTTPMethod = .get,
         headers: [String: String] = [:],
         body: (any Encodable & Sendable)? = nil,
-        queryItems: [URLQueryItem]? = nil
+        queryItems: [URLQueryItem]? = nil,
+        cachePolicy: CachePolicy = .networkOnly
     ) async throws -> Data {
         try await execute(
-            url: url, method: method, headers: headers, body: body, queryItems: queryItems)
+            url: url, method: method, headers: headers, body: body,
+            queryItems: queryItems, cachePolicy: cachePolicy)
+    }
+
+    // MARK: - Cache Management
+
+    /// The underlying response cache, exposed for targeted invalidation.
+    ///
+    /// Example:
+    /// ```
+    /// await httpClient.cache.removeAll(matching: "Items")
+    /// ```
+    public var cache: ResponseCache { responseCache }
+
+    /// Convenience: clear every cached response.
+    public func clearCache() async {
+        await responseCache.removeAll()
     }
 
     // MARK: - Private
@@ -78,7 +117,8 @@ public final class HTTPClient: Sendable {
         method: HTTPMethod,
         headers: [String: String],
         body: (any Encodable & Sendable)?,
-        queryItems: [URLQueryItem]?
+        queryItems: [URLQueryItem]?,
+        cachePolicy: CachePolicy
     ) async throws -> Data {
         var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)
         if let queryItems, !queryItems.isEmpty {
@@ -90,6 +130,16 @@ public final class HTTPClient: Sendable {
             throw AppError.serverUnreachable(url: url)
         }
 
+        // --- In-memory cache: check for a hit ---
+        let cacheKey = finalURL.absoluteString
+
+        if case .cacheFirst(let maxAge) = cachePolicy, method == .get {
+            if let cached = await responseCache.get(forKey: cacheKey, maxAge: maxAge) {
+                return cached
+            }
+        }
+
+        // --- Build the URLRequest ---
         var urlRequest = URLRequest(url: finalURL)
         urlRequest.httpMethod = method.rawValue
         urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -103,6 +153,7 @@ public final class HTTPClient: Sendable {
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
 
+        // --- Perform the network request ---
         let data: Data
         let response: URLResponse
         do {
@@ -124,6 +175,10 @@ public final class HTTPClient: Sendable {
 
         switch httpResponse.statusCode {
         case 200...299:
+            // --- In-memory cache: store successful GET responses ---
+            if case .cacheFirst = cachePolicy, method == .get {
+                await responseCache.set(data, forKey: cacheKey)
+            }
             return data
         case 401:
             throw AppError.authExpired(serverName: url.host ?? url.absoluteString)

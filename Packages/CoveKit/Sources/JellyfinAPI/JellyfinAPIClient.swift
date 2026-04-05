@@ -6,7 +6,7 @@ import os
 /// Lean, hand-rolled Jellyfin API client.
 /// Only implements the endpoints we actually use.
 public final class JellyfinAPIClient: Sendable {
-    private let httpClient: HTTPClient
+    public let httpClient: HTTPClient
     private let baseURL: URL
     private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "JellyfinAPI")
 
@@ -101,7 +101,9 @@ public final class JellyfinAPIClient: Sendable {
     public func getVirtualFolders() async throws -> [VirtualFolderInfo] {
         let url = baseURL.appendingPathComponent("Library/VirtualFolders")
         logger.debug("Fetching virtual folders")
-        return try await httpClient.request(url: url, method: .get, headers: authHeaders)
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders,
+            cachePolicy: .cacheFirst(maxAge: 300))
     }
 
     // MARK: - Items
@@ -151,7 +153,8 @@ public final class JellyfinAPIClient: Sendable {
 
         logger.debug("Fetching items for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 120))
     }
 
     /// Get a single item's full details.
@@ -165,7 +168,8 @@ public final class JellyfinAPIClient: Sendable {
         let queryItems = [URLQueryItem(name: "Fields", value: fields.joined(separator: ","))]
         logger.debug("Fetching item \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 120))
     }
 
     // MARK: - Image URLs
@@ -220,7 +224,8 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching album artists for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 120))
     }
 
     /// List all artists.
@@ -251,7 +256,8 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching artists for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 120))
     }
 
     // MARK: - Audio Streaming
@@ -420,7 +426,8 @@ public final class JellyfinAPIClient: Sendable {
         ]
         logger.debug("Fetching seasons for series \(seriesId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 120))
     }
 
     /// Get episodes for a series, optionally filtered by season.
@@ -438,7 +445,8 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching episodes for series \(seriesId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 120))
     }
 
     /// Get "next up" episodes to watch.
@@ -457,7 +465,8 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching next up episodes")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Get items to resume (continue watching).
@@ -476,7 +485,8 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching resume items for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 }
 
