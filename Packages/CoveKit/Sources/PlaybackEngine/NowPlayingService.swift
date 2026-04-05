@@ -10,7 +10,7 @@ import Models
 
 /// Manages MPNowPlayingInfoCenter and MPRemoteCommandCenter for lock screen / Control Center integration.
 @MainActor
-final class NowPlayingService {
+final class NowPlayingService: NowPlayingProvider {
     private var commandCenter: MPRemoteCommandCenter { MPRemoteCommandCenter.shared() }
     private var infoCenter: MPNowPlayingInfoCenter { MPNowPlayingInfoCenter.default() }
 

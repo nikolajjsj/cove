@@ -3,8 +3,8 @@ import Foundation
 import Models
 import os
 
-/// Manages audio playback using AVQueuePlayer with gapless transitions, queue management,
-/// and lock screen integration via NowPlayingService.
+/// Manages audio playback using an injectable ``AudioPlayerBackend`` with gapless transitions,
+/// queue management, and lock screen integration via ``NowPlayingProvider``.
 @Observable
 @MainActor
 public final class AudioPlaybackManager {
@@ -23,35 +23,25 @@ public final class AudioPlaybackManager {
 
     // MARK: - Internal
 
-    private let player: AVQueuePlayer = AVQueuePlayer()
-    @ObservationIgnored private nonisolated(unsafe) var timeObserver: Any?
-    @ObservationIgnored private nonisolated(unsafe) var itemObservers: [NSKeyValueObservation] = []
-    private let nowPlayingService = NowPlayingService()
+    private let playerBackend: any AudioPlayerBackend
+    private let nowPlaying: any NowPlayingProvider
     private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "AudioPlayback")
 
-    /// Maps AVPlayerItem instances to their corresponding Track for identification.
-    @ObservationIgnored private var playerItemToTrack: [AVPlayerItem: Track] = [:]
+    /// Maps backend item tokens to their corresponding Track for identification.
+    @ObservationIgnored private var tokenToTrack: [AnyHashable: Track] = [:]
 
-    /// Task observing AVPlayerItemDidPlayToEndTime for automatic track advancement.
-    @ObservationIgnored private nonisolated(unsafe) var endOfTrackTask: Task<Void, Never>?
+    // MARK: - Init
 
-    // MARK: - Init / Deinit
-
-    public init() {
+    public init(
+        playerBackend: (any AudioPlayerBackend)? = nil,
+        nowPlayingProvider: (any NowPlayingProvider)? = nil
+    ) {
+        self.playerBackend = playerBackend ?? AVQueuePlayerBackend()
+        self.nowPlaying = nowPlayingProvider ?? NowPlayingService()
         setupAudioSession()
-        setupPlayer()
-        nowPlayingService.setup()
+        setupPlayerCallbacks()
+        nowPlaying.setup()
         setupRemoteCommandHandlers()
-    }
-
-    deinit {
-        if let observer = timeObserver {
-            player.removeTimeObserver(observer)
-        }
-        endOfTrackTask?.cancel()
-        for observation in itemObservers {
-            observation.invalidate()
-        }
     }
 
     // MARK: - Public API
@@ -60,7 +50,7 @@ public final class AudioPlaybackManager {
     public func play(tracks: [Track], startingAt index: Int = 0) {
         queue.load(tracks: tracks, startingAt: index)
         rebuildPlayerQueue()
-        player.play()
+        playerBackend.play()
         isPlaying = true
         currentTime = 0
         updateDuration()
@@ -71,7 +61,7 @@ public final class AudioPlaybackManager {
     /// Resume playback.
     public func resume() {
         guard queue.currentTrack != nil else { return }
-        player.play()
+        playerBackend.play()
         isPlaying = true
         updateNowPlaying()
         logger.debug("Resumed playback")
@@ -79,7 +69,7 @@ public final class AudioPlaybackManager {
 
     /// Pause playback.
     public func pause() {
-        player.pause()
+        playerBackend.pause()
         isPlaying = false
         updateNowPlaying()
         logger.debug("Paused playback")
@@ -103,7 +93,7 @@ public final class AudioPlaybackManager {
         }
 
         rebuildPlayerQueue()
-        player.play()
+        playerBackend.play()
         isPlaying = true
         currentTime = 0
         updateDuration()
@@ -125,7 +115,7 @@ public final class AudioPlaybackManager {
         }
 
         rebuildPlayerQueue()
-        player.play()
+        playerBackend.play()
         isPlaying = true
         currentTime = 0
         updateDuration()
@@ -135,13 +125,12 @@ public final class AudioPlaybackManager {
 
     /// Seek to a specific position in the current track.
     public func seek(to time: TimeInterval) {
-        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
-        player.seek(to: cmTime) { [weak self] finished in
+        playerBackend.seek(to: time) { [weak self] finished in
             guard finished else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.currentTime = time
-                self.nowPlayingService.updatePlaybackState(
+                self.nowPlaying.updatePlaybackState(
                     isPlaying: self.isPlaying,
                     currentTime: self.currentTime,
                     duration: self.duration
@@ -152,14 +141,14 @@ public final class AudioPlaybackManager {
 
     /// Stop playback entirely and clear the queue.
     public func stop() {
-        player.pause()
-        player.removeAllItems()
-        playerItemToTrack.removeAll()
+        playerBackend.pause()
+        playerBackend.clearQueue()
+        tokenToTrack.removeAll()
         queue.clear()
         isPlaying = false
         currentTime = 0
         duration = 0
-        nowPlayingService.teardown()
+        nowPlaying.teardown()
         logger.info("Stopped playback")
     }
 
@@ -178,99 +167,75 @@ public final class AudioPlaybackManager {
         #endif
     }
 
-    // MARK: - Player Setup
+    // MARK: - Player Callbacks
 
-    private func setupPlayer() {
-        // Periodic time observer — updates currentTime and duration every 0.5s
-        timeObserver = player.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
-            queue: .main
-        ) { [weak self] time in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.currentTime = time.seconds
-
-                if let currentDuration = self.player.currentItem?.duration,
-                    currentDuration.isNumeric, !currentDuration.isIndefinite
-                {
-                    self.duration = currentDuration.seconds
-                }
-
-                self.nowPlayingService.updatePlaybackState(
-                    isPlaying: self.isPlaying,
-                    currentTime: self.currentTime,
-                    duration: self.duration
-                )
+    private func setupPlayerCallbacks() {
+        playerBackend.onTimeUpdate = { [weak self] time in
+            guard let self else { return }
+            self.currentTime = time
+            if let backendDuration = self.playerBackend.currentItemDuration {
+                self.duration = backendDuration
             }
+            self.nowPlaying.updatePlaybackState(
+                isPlaying: self.isPlaying,
+                currentTime: self.currentTime,
+                duration: self.duration
+            )
         }
 
-        // Observe player rate changes for external play/pause (e.g. stalling)
-        let rateObservation = player.observe(\.rate, options: [.new]) { [weak self] _, change in
-            guard let newRate = change.newValue else { return }
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                let playing = newRate > 0
-                if self.isPlaying != playing {
-                    self.isPlaying = playing
-                }
-            }
+        playerBackend.onPlayingChanged = { [weak self] playing in
+            guard let self, self.isPlaying != playing else { return }
+            self.isPlaying = playing
         }
-        itemObservers.append(rateObservation)
 
-        // Observe track ending for automatic advancement via async notification stream
-        endOfTrackTask = Task { [weak self] in
-            for await notification in NotificationCenter.default.notifications(
-                named: .AVPlayerItemDidPlayToEndTime
-            ) {
-                guard let self else { break }
-                guard let item = notification.object as? AVPlayerItem else { continue }
-                self.handleTrackEnd(for: item)
-            }
+        playerBackend.onItemDidFinish = { [weak self] token in
+            self?.handleTrackEnd(for: token)
         }
     }
 
     // MARK: - Remote Command Handlers
 
     private func setupRemoteCommandHandlers() {
-        nowPlayingService.onPlay = { [weak self] in self?.resume() }
-        nowPlayingService.onPause = { [weak self] in self?.pause() }
-        nowPlayingService.onNext = { [weak self] in self?.next() }
-        nowPlayingService.onPrevious = { [weak self] in self?.previous() }
-        nowPlayingService.onTogglePlayPause = { [weak self] in self?.togglePlayPause() }
-        nowPlayingService.onSeek = { [weak self] time in self?.seek(to: time) }
+        nowPlaying.onPlay = { [weak self] in self?.resume() }
+        nowPlaying.onPause = { [weak self] in self?.pause() }
+        nowPlaying.onNext = { [weak self] in self?.next() }
+        nowPlaying.onPrevious = { [weak self] in self?.previous() }
+        nowPlaying.onTogglePlayPause = { [weak self] in self?.togglePlayPause() }
+        nowPlaying.onSeek = { [weak self] time in self?.seek(to: time) }
     }
 
-    // MARK: - Player Item Management
+    // MARK: - Stream URL Resolution
 
-    /// Create an AVPlayerItem for the given track using the stream URL resolver.
-    private func makePlayerItem(for track: Track) -> AVPlayerItem? {
-        guard let resolver = streamURLResolver, let url = resolver(track) else {
-            logger.warning("No stream URL available for track: \(track.title)")
+    /// Resolve a streaming URL for the given track using the stream URL resolver.
+    private func resolveStreamURL(for track: Track) -> URL? {
+        guard let resolver = streamURLResolver else {
+            logger.warning("No stream URL resolver set")
             return nil
         }
-        let item = AVPlayerItem(url: url)
-        playerItemToTrack[item] = track
-        return item
+        return resolver(track)
     }
 
-    /// Rebuild the AVQueuePlayer's item queue from the current queue state.
+    // MARK: - Queue Management
+
+    /// Rebuild the backend's item queue from the current queue state.
     private func rebuildPlayerQueue() {
-        player.removeAllItems()
-        playerItemToTrack.removeAll()
+        playerBackend.clearQueue()
+        tokenToTrack.removeAll()
 
         guard let currentTrack = queue.currentTrack else { return }
 
-        if let item = makePlayerItem(for: currentTrack) {
-            player.insert(item, after: nil)
+        if let url = resolveStreamURL(for: currentTrack) {
+            let token = playerBackend.enqueue(url: url)
+            tokenToTrack[token] = currentTrack
         } else {
-            logger.error("Failed to create player item for current track: \(currentTrack.title)")
+            logger.error("Failed to resolve stream URL for current track: \(currentTrack.title)")
         }
 
         // Preload upcoming tracks for gapless playback
         preloadNextTracks()
     }
 
-    /// Preload the next 1-2 tracks into AVQueuePlayer for gapless transitions.
+    /// Preload the next 1-2 tracks into the backend for gapless transitions.
     private func preloadNextTracks() {
         // Don't preload for repeat-one (same track will replay)
         guard queue.repeatMode != .one else { return }
@@ -281,8 +246,9 @@ public final class AudioPlaybackManager {
 
         for i in nextIndex..<endIndex {
             let track = queue.tracks[i]
-            if let item = makePlayerItem(for: track) {
-                player.insert(item, after: player.items().last)
+            if let url = resolveStreamURL(for: track) {
+                let token = playerBackend.enqueue(url: url)
+                tokenToTrack[token] = track
             }
         }
     }
@@ -290,17 +256,17 @@ public final class AudioPlaybackManager {
     // MARK: - Track Advancement
 
     /// Handle the end of a track, advancing the queue or repeating as needed.
-    private func handleTrackEnd(for item: AVPlayerItem) {
-        // Verify this item belongs to us
-        guard playerItemToTrack[item] != nil else { return }
-        playerItemToTrack.removeValue(forKey: item)
+    private func handleTrackEnd(for token: AnyHashable) {
+        // Verify this token belongs to us
+        guard tokenToTrack[token] != nil else { return }
+        tokenToTrack.removeValue(forKey: token)
 
         logger.debug("Track ended, handling advancement")
 
         // Repeat-one: replay the same track by rebuilding
         if queue.repeatMode == .one {
             rebuildPlayerQueue()
-            player.play()
+            playerBackend.play()
             isPlaying = true
             currentTime = 0
             updateNowPlaying()
@@ -318,14 +284,14 @@ public final class AudioPlaybackManager {
             return
         }
 
-        // Check if the player already has the next track loaded (gapless transition)
-        if let nextItem = player.currentItem, playerItemToTrack[nextItem] != nil {
+        // Check if the backend already has the next track loaded (gapless transition)
+        if let currentToken = playerBackend.currentItemToken, tokenToTrack[currentToken] != nil {
             // Gapless transition occurred — just preload more tracks
             preloadNextTracks()
         } else {
-            // Player doesn't have the next track (e.g., repeat-all wrap-around)
+            // Backend doesn't have the next track (e.g., repeat-all wrap-around)
             rebuildPlayerQueue()
-            player.play()
+            playerBackend.play()
         }
 
         isPlaying = true
@@ -340,7 +306,7 @@ public final class AudioPlaybackManager {
     private func updateNowPlaying() {
         guard let track = queue.currentTrack else { return }
         let artworkURL = artworkURLResolver?(track)
-        nowPlayingService.updateNowPlaying(
+        nowPlaying.updateNowPlaying(
             track: track,
             isPlaying: isPlaying,
             currentTime: currentTime,
@@ -349,12 +315,10 @@ public final class AudioPlaybackManager {
         )
     }
 
-    /// Update duration from the current player item, falling back to track metadata.
+    /// Update duration from the backend, falling back to track metadata.
     private func updateDuration() {
-        if let currentDuration = player.currentItem?.duration,
-            currentDuration.isNumeric, !currentDuration.isIndefinite
-        {
-            duration = currentDuration.seconds
+        if let backendDuration = playerBackend.currentItemDuration {
+            duration = backendDuration
         } else if let trackDuration = queue.currentTrack?.duration {
             duration = trackDuration
         } else {
