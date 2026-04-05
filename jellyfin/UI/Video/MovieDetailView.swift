@@ -11,14 +11,14 @@ struct MovieDetailView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
-    @State private var showPlayer = false
-    @State private var streamInfo: StreamInfo?
-    @State private var isLoadingStream = false
-    @State private var errorMessage: String?
     @State private var isOverviewExpanded = false
 
     // How many lines before we truncate and show "Show More"
     private let overviewLineLimit = 4
+
+    private var coordinator: VideoPlayerCoordinator {
+        appState.videoPlayerCoordinator
+    }
 
     var body: some View {
         ScrollView {
@@ -54,18 +54,8 @@ struct MovieDetailView: View {
         .navigationTitle(item.title)
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            .fullScreenCover(isPresented: $showPlayer) {
-                if let streamInfo {
-                    VideoPlayerView(
-                        item: item,
-                        streamInfo: streamInfo,
-                        startPosition: item.userData?.playbackPosition ?? 0
-                    )
-                }
-            }
         #endif
         .toolbar {
-            //ToolbarItem(placement: .topBarTrailing) {
             ToolbarItem {
                 if let downloadManager = appState.downloadManager {
                     DownloadButton(
@@ -76,19 +66,6 @@ struct MovieDetailView: View {
                         try await appState.provider.downloadURL(for: item, profile: nil)
                     }
                 }
-            }
-        }
-        .alert(
-            "Playback Error",
-            isPresented: .init(
-                get: { errorMessage != nil },
-                set: { if !$0 { errorMessage = nil } }
-            )
-        ) {
-            Button("OK", role: .cancel) { errorMessage = nil }
-        } message: {
-            if let errorMessage {
-                Text(errorMessage)
             }
         }
     }
@@ -129,34 +106,6 @@ struct MovieDetailView: View {
             )
             .frame(height: 120)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-
-            // Poster overlay
-            LazyImage(url: posterURL) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(2 / 3, contentMode: .fill)
-                } else if state.isLoading {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(.ultraThinMaterial)
-                        .aspectRatio(2 / 3, contentMode: .fill)
-                        .overlay { ProgressView() }
-                } else {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(.ultraThinMaterial)
-                        .aspectRatio(2 / 3, contentMode: .fill)
-                        .overlay {
-                            Image(systemName: "film")
-                                .font(.title2)
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .frame(width: 100)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
-            .padding(.leading, 16)
-            .padding(.bottom, -40)  // Overlap below the backdrop
         }
         .padding(.bottom, 40)  // Account for poster overflow
     }
@@ -198,10 +147,10 @@ struct MovieDetailView: View {
     @ViewBuilder
     private var playButton: some View {
         Button {
-            playMovie()
+            coordinator.play(item: item, using: appState.provider)
         } label: {
             HStack(spacing: 8) {
-                if isLoadingStream {
+                if coordinator.isLoadingItem(item.id) {
                     ProgressView()
                         .tint(.white)
                 } else {
@@ -214,7 +163,7 @@ struct MovieDetailView: View {
             .padding(.vertical, 14)
         }
         .buttonStyle(.borderedProminent)
-        .disabled(isLoadingStream)
+        .disabled(coordinator.isLoadingItem(item.id))
     }
 
     private var playButtonLabel: String {
@@ -248,21 +197,6 @@ struct MovieDetailView: View {
         }
     }
 
-    // MARK: - Actions
-
-    private func playMovie() {
-        Task {
-            isLoadingStream = true
-            defer { isLoadingStream = false }
-            do {
-                streamInfo = try await appState.provider.streamURL(for: item, profile: nil)
-                showPlayer = true
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-        }
-    }
-
     // MARK: - Image Helpers
 
     private var backdropURL: URL? {
@@ -280,5 +214,4 @@ struct MovieDetailView: View {
             maxSize: CGSize(width: 300, height: 450)
         )
     }
-
 }

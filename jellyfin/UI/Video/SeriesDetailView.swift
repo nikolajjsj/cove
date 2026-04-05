@@ -1,9 +1,9 @@
 import ImageService
 import JellyfinProvider
+import MediaServerKit
 import Models
 import PlaybackEngine
 import SwiftUI
-import MediaServerKit
 
 struct SeriesDetailView: View {
     let item: MediaItem
@@ -19,15 +19,12 @@ struct SeriesDetailView: View {
     @State private var seasonsError: String?
     @State private var episodesError: String?
 
-    // Playback
-    @State private var showPlayer = false
-    @State private var selectedEpisodeItem: MediaItem?
-    @State private var streamInfo: StreamInfo?
-    @State private var isLoadingStream = false
-    @State private var playbackStartPosition: TimeInterval = 0
-
     // Overview expansion
     @State private var isOverviewExpanded = false
+
+    private var coordinator: VideoPlayerCoordinator {
+        appState.videoPlayerCoordinator
+    }
 
     var body: some View {
         ScrollView {
@@ -95,15 +92,6 @@ struct SeriesDetailView: View {
         }
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            .fullScreenCover(isPresented: $showPlayer) {
-                if let streamInfo, let episodeItem = selectedEpisodeItem {
-                    VideoPlayerView(
-                        item: episodeItem,
-                        streamInfo: streamInfo,
-                        startPosition: playbackStartPosition
-                    )
-                }
-            }
         #endif
     }
 
@@ -142,30 +130,6 @@ struct SeriesDetailView: View {
             }
         }
         .clipShape(Rectangle())
-        .overlay(alignment: .bottomLeading) {
-            // Poster overlay
-            LazyImage(url: posterURL(for: item)) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(2.0 / 3.0, contentMode: .fill)
-                } else {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(.ultraThinMaterial)
-                        .aspectRatio(2.0 / 3.0, contentMode: .fill)
-                        .overlay {
-                            Image(systemName: "tv")
-                                .font(.title2)
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .frame(width: 100)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
-            .padding(.leading, 16)
-            .padding(.bottom, -30)
-        }
         .overlay(alignment: .bottom) {
             LinearGradient(
                 colors: [.clear, Color.primary.opacity(0.8)],
@@ -264,9 +228,20 @@ struct SeriesDetailView: View {
                         thumbnailURL: episodeThumbnailURL(for: episode),
                         progress: episodeProgress(for: episode),
                         onPlay: {
-                            playEpisode(episode)
+                            coordinator.playEpisode(
+                                id: episode.id,
+                                title: episode.title,
+                                using: appState.provider
+                            )
                         }
                     )
+                    .overlay {
+                        if coordinator.isLoadingItem(episode.id) {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(.ultraThinMaterial)
+                                .overlay { ProgressView() }
+                        }
+                    }
 
                     if index < episodes.count - 1 {
                         Divider()
@@ -314,27 +289,6 @@ struct SeriesDetailView: View {
         selectedSeason = season
         Task {
             await loadEpisodes(for: season)
-        }
-    }
-
-    // MARK: - Playback
-
-    private func playEpisode(_ episode: Episode) {
-        guard !isLoadingStream else { return }
-        Task {
-            isLoadingStream = true
-            defer { isLoadingStream = false }
-            do {
-                let episodeMediaItem = try await appState.provider.item(id: episode.id)
-                let info = try await appState.provider.streamURL(
-                    for: episodeMediaItem, profile: nil)
-                selectedEpisodeItem = episodeMediaItem
-                streamInfo = info
-                playbackStartPosition = episodeMediaItem.userData?.playbackPosition ?? 0
-                showPlayer = true
-            } catch {
-                // Could show an alert here in the future
-            }
         }
     }
 

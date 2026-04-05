@@ -32,6 +32,7 @@ struct AppShellView: View {
         .sheet(isPresented: $showFullPlayer) {
             AudioPlayerView()
         }
+        .videoPlayerPresentation(coordinator: appState.videoPlayerCoordinator)
     }
 
     // MARK: - iPhone (compact) — TabView

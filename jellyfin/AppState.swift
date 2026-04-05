@@ -18,6 +18,7 @@ final class AppState {
 
     let provider = JellyfinServerProvider()
     let audioPlayer = AudioPlaybackManager()
+    let videoPlayerCoordinator = VideoPlayerCoordinator()
     let serverRepository: ServerRepository?
     let downloadManager: DownloadManagerService?
     let offlineSyncManager: OfflineSyncManager?
