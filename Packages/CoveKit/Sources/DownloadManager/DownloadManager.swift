@@ -542,18 +542,43 @@ public final class DownloadManagerService: @unchecked Sendable {
             return
         }
 
-        // We need the DownloadItem from the DB to figure out the storage path.
-        // The delegate callback is on the serial delegate queue, so we bridge
-        // to async via an unstructured Task.
+        // IMPORTANT: The temporary file at `location` is deleted by the system
+        // as soon as this delegate callback returns. We MUST move it to a
+        // location we control *synchronously*, before returning.
+        let fm = FileManager.default
+        let stagingDir = storage.downloadsDirectory.appendingPathComponent(
+            ".staging", isDirectory: true)
+        let stagedFile = stagingDir.appendingPathComponent(downloadID)
+
+        do {
+            try fm.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+            if fm.fileExists(atPath: stagedFile.path) {
+                try fm.removeItem(at: stagedFile)
+            }
+            try fm.moveItem(at: location, to: stagedFile)
+        } catch {
+            logger.error(
+                "Failed to stage downloaded file for \(downloadID): \(error.localizedDescription)")
+            Task { [downloadRepository] in
+                try? await downloadRepository.updateState(
+                    id: downloadID, state: .failed,
+                    errorMessage: "File staging failed: \(error.localizedDescription)")
+            }
+            return
+        }
+
+        // Now that the file is safely staged, perform the async DB lookup
+        // and final move to permanent storage.
         Task { [downloadRepository, storage, logger] in
             guard let item = try? await downloadRepository.fetch(id: downloadID) else {
                 logger.error("No DB record for completed download \(downloadID)")
+                try? fm.removeItem(at: stagedFile)
                 return
             }
 
             do {
                 let relativePath = try storage.moveToPermamentStorage(
-                    from: location, for: item)
+                    from: stagedFile, for: item)
                 try await downloadRepository.markCompleted(
                     id: downloadID, localFilePath: relativePath)
                 logger.info("Download completed: \(item.title) → \(relativePath)")
