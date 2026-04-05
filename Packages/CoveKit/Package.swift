@@ -42,7 +42,7 @@ let package = Package(
         ),
         .target(
             name: "JellyfinProvider",
-            dependencies: ["JellyfinAPI", "MediaServerKit"],
+            dependencies: ["JellyfinAPI", "MediaServerKit", "Networking"],
             path: "Sources/JellyfinProvider"
         ),
         .target(
