@@ -88,28 +88,71 @@ public final class JellyfinServerProvider: MediaServerProvider,
         return true
     }
 
-    // MARK: - Library Browsing (Phase 3)
+    // MARK: - Library Browsing
 
     public func libraries() async throws -> [MediaLibrary] {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let folders = try await client.getVirtualFolders()
+        return folders.compactMap { JellyfinMapper.mapLibrary($0) }
     }
 
     public func items(in library: MediaLibrary, sort: SortOptions, filter: FilterOptions)
         async throws -> [MediaItem]
     {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let result = try await client.getItems(
+            userId: userId,
+            parentId: library.id.rawValue,
+            sortBy: JellyfinMapper.sortByString(sort.field),
+            sortOrder: JellyfinMapper.sortOrderString(sort.order),
+            limit: filter.limit,
+            startIndex: filter.startIndex,
+            searchTerm: filter.searchTerm,
+            isFavorite: filter.isFavorite
+        )
+        return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
     }
 
     public func item(id: ItemID) async throws -> MediaItem {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let dto = try await client.getItem(userId: userId, itemId: id.rawValue)
+        guard let item = JellyfinMapper.mapItem(dto) else {
+            throw AppError.itemNotFound(id: id)
+        }
+        return item
     }
 
     public func imageURL(for item: MediaItem, type: ImageType, maxSize: CGSize?) -> URL? {
-        return nil  // Phase 3
+        guard let client = state.client else { return nil }
+        let maxWidth = maxSize.map { Int($0.width) }
+        let maxHeight = maxSize.map { Int($0.height) }
+        return client.imageURL(
+            itemId: item.id.rawValue,
+            imageType: JellyfinMapper.imageTypeString(type),
+            maxWidth: maxWidth,
+            maxHeight: maxHeight
+        )
     }
 
     public func search(query: String, mediaTypes: [MediaType]) async throws -> SearchResults {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let result = try await client.getItems(
+            userId: userId,
+            searchTerm: query
+        )
+        let items = (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+        return SearchResults(items: items)
     }
 
     // MARK: - MusicProvider (Phase 4)

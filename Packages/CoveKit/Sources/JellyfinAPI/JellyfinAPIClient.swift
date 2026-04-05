@@ -13,11 +13,13 @@ public final class JellyfinAPIClient: Sendable {
     /// The current access token, set after successful authentication.
     /// Thread-safe via nonisolated(unsafe) + Sendable container.
     private let tokenStore: TokenStore
+    private let userIdStore: TokenStore
 
     public init(baseURL: URL, httpClient: HTTPClient = HTTPClient()) {
         self.baseURL = baseURL
         self.httpClient = httpClient
         self.tokenStore = TokenStore()
+        self.userIdStore = TokenStore()
     }
 
     /// Set the access token for authenticated requests.
@@ -28,6 +30,16 @@ public final class JellyfinAPIClient: Sendable {
     /// The current access token, if any.
     public var accessToken: String? {
         tokenStore.get()
+    }
+
+    /// Set the user ID for authenticated requests.
+    public func setUserId(_ userId: String?) {
+        userIdStore.set(userId)
+    }
+
+    /// The current user ID, if any.
+    public var userId: String? {
+        userIdStore.get()
     }
 
     // MARK: - Auth Headers
@@ -74,7 +86,108 @@ public final class JellyfinAPIClient: Sendable {
             logger.info("Authentication successful, token stored")
         }
 
+        // Store the user ID for subsequent requests
+        if let userId = result.user?.id {
+            userIdStore.set(userId)
+        }
+
         return result
+    }
+
+    // MARK: - Libraries
+
+    /// List virtual folders (libraries).
+    /// `GET /Library/VirtualFolders`
+    public func getVirtualFolders() async throws -> [VirtualFolderInfo] {
+        let url = baseURL.appendingPathComponent("Library/VirtualFolders")
+        logger.debug("Fetching virtual folders")
+        return try await httpClient.request(url: url, method: .get, headers: authHeaders)
+    }
+
+    // MARK: - Items
+
+    /// Browse items with filtering and sorting.
+    /// `GET /Users/{userId}/Items`
+    public func getItems(
+        userId: String,
+        parentId: String? = nil,
+        includeItemTypes: [String]? = nil,
+        sortBy: String? = nil,
+        sortOrder: String? = nil,
+        limit: Int? = nil,
+        startIndex: Int? = nil,
+        recursive: Bool = true,
+        fields: [String] = [
+            "Overview", "Genres", "DateCreated", "UserData", "CommunityRating", "OfficialRating",
+            "ProductionYear",
+        ],
+        searchTerm: String? = nil,
+        isFavorite: Bool? = nil
+    ) async throws -> ItemsResult {
+        let url = baseURL.appendingPathComponent("Users/\(userId)/Items")
+
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "Recursive", value: recursive ? "true" : "false"),
+            URLQueryItem(name: "Fields", value: fields.joined(separator: ",")),
+        ]
+
+        if let parentId { queryItems.append(URLQueryItem(name: "ParentId", value: parentId)) }
+        if let includeItemTypes {
+            queryItems.append(
+                URLQueryItem(
+                    name: "IncludeItemTypes", value: includeItemTypes.joined(separator: ",")))
+        }
+        if let sortBy { queryItems.append(URLQueryItem(name: "SortBy", value: sortBy)) }
+        if let sortOrder { queryItems.append(URLQueryItem(name: "SortOrder", value: sortOrder)) }
+        if let limit { queryItems.append(URLQueryItem(name: "Limit", value: String(limit))) }
+        if let startIndex {
+            queryItems.append(URLQueryItem(name: "StartIndex", value: String(startIndex)))
+        }
+        if let searchTerm { queryItems.append(URLQueryItem(name: "SearchTerm", value: searchTerm)) }
+        if let isFavorite {
+            queryItems.append(
+                URLQueryItem(name: "IsFavorite", value: isFavorite ? "true" : "false"))
+        }
+
+        logger.debug("Fetching items for user \(userId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+    }
+
+    /// Get a single item's full details.
+    /// `GET /Users/{userId}/Items/{itemId}`
+    public func getItem(userId: String, itemId: String) async throws -> BaseItemDto {
+        let url = baseURL.appendingPathComponent("Users/\(userId)/Items/\(itemId)")
+        let fields = [
+            "Overview", "Genres", "DateCreated", "UserData", "CommunityRating", "OfficialRating",
+            "ProductionYear", "People",
+        ]
+        let queryItems = [URLQueryItem(name: "Fields", value: fields.joined(separator: ","))]
+        logger.debug("Fetching item \(itemId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+    }
+
+    // MARK: - Image URLs
+
+    /// Build an image URL for an item. This is synchronous — no network call.
+    public func imageURL(
+        itemId: String, imageType: String, maxWidth: Int? = nil, maxHeight: Int? = nil,
+        tag: String? = nil
+    ) -> URL? {
+        var urlComponents = URLComponents(
+            url: baseURL.appendingPathComponent("Items/\(itemId)/Images/\(imageType)"),
+            resolvingAgainstBaseURL: false)
+        var queryItems: [URLQueryItem] = []
+        if let maxWidth {
+            queryItems.append(URLQueryItem(name: "maxWidth", value: String(maxWidth)))
+        }
+        if let maxHeight {
+            queryItems.append(URLQueryItem(name: "maxHeight", value: String(maxHeight)))
+        }
+        if let tag { queryItems.append(URLQueryItem(name: "tag", value: tag)) }
+        if !queryItems.isEmpty { urlComponents?.queryItems = queryItems }
+        return urlComponents?.url
     }
 }
 

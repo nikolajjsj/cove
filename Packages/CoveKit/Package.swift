@@ -73,6 +73,7 @@ let package = Package(
             dependencies: [
                 "Models",
                 .product(name: "Nuke", package: "Nuke"),
+                .product(name: "NukeUI", package: "Nuke"),
             ],
             path: "Sources/ImageService"
         ),
