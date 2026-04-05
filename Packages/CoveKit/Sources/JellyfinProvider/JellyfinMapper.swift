@@ -47,6 +47,7 @@ enum JellyfinMapper {
         case "musicartist", "artist": return .artist
         case "audio": return .track
         case "playlist": return .playlist
+        case "boxset": return .collection
         default: return .movie  // fallback
         }
     }

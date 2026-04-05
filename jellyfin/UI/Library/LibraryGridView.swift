@@ -174,6 +174,7 @@ struct LibraryGridView: View {
         case .movies: return totalCount == 1 ? "movie" : "movies"
         case .tvshows: return totalCount == 1 ? "show" : "shows"
         case .music: return totalCount == 1 ? "item" : "items"
+        case .boxsets: return totalCount == 1 ? "collection" : "collections"
         default: return totalCount == 1 ? "item" : "items"
         }
     }

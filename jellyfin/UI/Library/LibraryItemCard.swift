@@ -71,6 +71,7 @@ struct LibraryItemCard: View {
         case .artist: "person"
         case .track: "music.note"
         case .playlist: "music.note.list"
+        case .collection: "rectangle.stack.fill"
         case .season: "tv"
         case .book: "book"
         case .podcast: "mic"

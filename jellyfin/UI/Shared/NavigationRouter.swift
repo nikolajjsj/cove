@@ -13,6 +13,8 @@ enum NavigationRouter {
             MovieDetailView(item: item)
         case .series:
             SeriesDetailView(item: item)
+        case .collection:
+            CollectionDetailView(item: item)
         case .artist:
             ArtistDetailView(artistItem: item)
         case .album:
@@ -76,6 +78,8 @@ extension MediaLibrary {
             return ["Movie"]
         case .tvshows:
             return ["Series"]
+        case .boxsets:
+            return ["BoxSet"]
         default:
             return nil
         }

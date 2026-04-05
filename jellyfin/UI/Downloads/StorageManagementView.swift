@@ -33,8 +33,8 @@ struct StorageManagementView: View {
             }
         }
         .navigationTitle("Storage")
-#if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -257,6 +257,7 @@ struct StorageManagementView: View {
         case .playlist: "Playlists"
         case .book: "Books"
         case .podcast: "Podcasts"
+        case .collection: "Collections"
         }
     }
 
@@ -272,6 +273,7 @@ struct StorageManagementView: View {
         case .playlist: "music.note.list"
         case .book: "book"
         case .podcast: "antenna.radiowaves.left.and.right"
+        case .collection: "rectangle.stack.fill"
         }
     }
 }

@@ -61,7 +61,7 @@ public struct DownloadStorage: Sendable {
             return "epub"
         case .podcast:
             return "mp3"
-        case .series, .season, .album, .artist, .playlist:
+        case .series, .season, .album, .artist, .playlist, .collection:
             return "mp4"
         }
     }

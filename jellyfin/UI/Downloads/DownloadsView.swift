@@ -209,6 +209,7 @@ struct DownloadsView: View {
         case .playlist: "Playlists"
         case .book: "Books"
         case .podcast: "Podcasts"
+        case .collection: "Collections"
         }
     }
 

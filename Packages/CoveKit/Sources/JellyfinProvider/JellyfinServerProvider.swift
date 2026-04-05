@@ -326,6 +326,21 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
     // MARK: - Shows & Continue Watching (Phase 5)
 
+    // MARK: - Collections (Boxsets)
+
+    /// Fetch the items (typically movies) inside a collection / boxset.
+    public func collectionItems(collectionId: ItemID) async throws -> [MediaItem] {
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getItems(
+            userId: userId,
+            parentId: collectionId.rawValue,
+            sortBy: "SortName",
+            sortOrder: "Ascending",
+            recursive: false
+        )
+        return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+    }
+
     /// Get episodes for a specific series and season.
     public func episodes(series: SeriesID, season: SeasonID) async throws -> [Episode] {
         let (client, userId) = try authenticatedClient()
