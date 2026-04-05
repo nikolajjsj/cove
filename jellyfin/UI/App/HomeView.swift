@@ -28,29 +28,9 @@ struct HomeView: View {
             }
             .padding()
         }
-        .navigationDestination(for: MediaItem.self) { item in
-            destinationView(for: item)
-        }
+        .navigationDestination(for: MediaItem.self) { NavigationRouter.destination(for: $0) }
     }
 
-    @ViewBuilder
-    private func destinationView(for item: MediaItem) -> some View {
-        switch item.mediaType {
-        case .movie:
-            MovieDetailView(item: item)
-        case .series:
-            SeriesDetailView(item: item)
-        case .episode:
-            MovieDetailView(item: item)
-        case .artist:
-            ArtistDetailView(artistItem: item)
-        case .album:
-            AlbumDetailView(albumItem: item)
-        default:
-            Text(item.title)
-                .navigationTitle(item.title)
-        }
-    }
 }
 
 // MARK: - Continue Watching Section
@@ -269,24 +249,11 @@ private struct LibrarySection: View {
             let sort = SortOptions(field: .dateAdded, order: .descending)
             let filter = FilterOptions(
                 limit: 20,
-                includeItemTypes: includeItemTypes(for: library),
+                includeItemTypes: library.includeItemTypes,
             )
             items = try await appState.provider.items(in: library, sort: sort, filter: filter)
         } catch {
             items = []
-        }
-    }
-
-    /// Returns Jellyfin IncludeItemTypes for each library collection type
-    /// so that e.g. TV show libraries only return Series (not Seasons/Episodes).
-    private func includeItemTypes(for library: MediaLibrary) -> [String]? {
-        switch library.collectionType {
-        case .movies:
-            return ["Movie"]
-        case .tvshows:
-            return ["Series"]
-        default:
-            return nil
         }
     }
 

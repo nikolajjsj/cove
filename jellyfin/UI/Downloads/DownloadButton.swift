@@ -2,6 +2,148 @@ import DownloadManager
 import Models
 import SwiftUI
 
+// MARK: - Shared Download Button State
+
+/// Shared state and logic for download button variants.
+/// Manages the download lifecycle (enqueue, pause, resume, retry, delete)
+/// and keeps the UI in sync with the current `DownloadItem` state.
+@Observable
+final class DownloadButtonModel {
+    let item: MediaItem
+    let serverId: String
+    let downloadManager: DownloadManagerService
+    let downloadURLResolver: @Sendable () async throws -> URL
+
+    private(set) var downloadItem: DownloadItem?
+    private(set) var isProcessing = false
+    var showRemoveConfirmation = false
+    var errorMessage: String?
+    var showError = false
+
+    var state: DownloadState? { downloadItem?.state }
+    var progress: Double { downloadItem?.progress ?? 0 }
+
+    init(
+        item: MediaItem,
+        serverId: String,
+        downloadManager: DownloadManagerService,
+        downloadURLResolver: @escaping @Sendable () async throws -> URL
+    ) {
+        self.item = item
+        self.serverId = serverId
+        self.downloadManager = downloadManager
+        self.downloadURLResolver = downloadURLResolver
+    }
+
+    func handleTap() async {
+        guard !isProcessing else { return }
+
+        switch downloadItem?.state {
+        case .none:
+            await startDownload()
+        case .queued, .downloading:
+            await pauseDownload()
+        case .paused:
+            await resumeDownload()
+        case .completed:
+            showRemoveConfirmation = true
+        case .failed:
+            await retryDownload()
+        }
+    }
+
+    func refreshState() async {
+        do {
+            downloadItem = try await downloadManager.download(
+                for: item.id, serverId: serverId
+            )
+        } catch {
+            // If we can't query state, leave the button in its current state.
+            // This avoids flickering on transient errors.
+        }
+    }
+
+    func startDownload() async {
+        isProcessing = true
+        defer { isProcessing = false }
+
+        do {
+            let url = try await downloadURLResolver()
+            let result = try await downloadManager.enqueueDownload(
+                itemId: item.id,
+                serverId: serverId,
+                title: item.title,
+                mediaType: item.mediaType,
+                remoteURL: url,
+                parentId: nil,
+                artworkURL: nil
+            )
+            downloadItem = result
+        } catch {
+            setError("Failed to start download: \(error.localizedDescription)")
+        }
+    }
+
+    func pauseDownload() async {
+        guard let id = downloadItem?.id else { return }
+        isProcessing = true
+        defer { isProcessing = false }
+
+        do {
+            try await downloadManager.pauseDownload(id: id)
+            await refreshState()
+        } catch {
+            setError("Failed to pause: \(error.localizedDescription)")
+        }
+    }
+
+    func resumeDownload() async {
+        guard let id = downloadItem?.id else { return }
+        isProcessing = true
+        defer { isProcessing = false }
+
+        do {
+            try await downloadManager.resumeDownload(id: id)
+            await refreshState()
+        } catch {
+            setError("Failed to resume: \(error.localizedDescription)")
+        }
+    }
+
+    func retryDownload() async {
+        guard let id = downloadItem?.id else { return }
+        isProcessing = true
+        defer { isProcessing = false }
+
+        do {
+            try await downloadManager.retryDownload(id: id)
+            await refreshState()
+        } catch {
+            setError("Failed to retry: \(error.localizedDescription)")
+        }
+    }
+
+    func removeDownload() async {
+        guard let id = downloadItem?.id else { return }
+        isProcessing = true
+        defer { isProcessing = false }
+
+        do {
+            try await downloadManager.deleteDownload(id: id)
+            downloadItem = nil
+        } catch {
+            setError("Failed to remove: \(error.localizedDescription)")
+        }
+    }
+
+    private func setError(_ message: String) {
+        errorMessage = message
+        showError = true
+    }
+}
+
+// MARK: - Download Button
+
 /// A reusable download button that reflects the current download state for a media item
 /// and allows the user to initiate, pause, resume, retry, or remove downloads.
 ///
@@ -19,45 +161,51 @@ import SwiftUI
 /// }
 /// ```
 struct DownloadButton: View {
-    let item: MediaItem
-    let serverId: String
-    let downloadManager: DownloadManagerService
-    let downloadURLResolver: @Sendable () async throws -> URL
+    @State private var model: DownloadButtonModel
 
-    @State private var downloadItem: DownloadItem?
-    @State private var isProcessing = false
-    @State private var showRemoveConfirmation = false
-    @State private var errorMessage: String?
-    @State private var showError = false
+    init(
+        item: MediaItem,
+        serverId: String,
+        downloadManager: DownloadManagerService,
+        downloadURLResolver: @escaping @Sendable () async throws -> URL
+    ) {
+        _model = State(
+            initialValue: DownloadButtonModel(
+                item: item,
+                serverId: serverId,
+                downloadManager: downloadManager,
+                downloadURLResolver: downloadURLResolver
+            ))
+    }
 
     var body: some View {
         Button {
-            Task { await handleTap() }
+            Task { await model.handleTap() }
         } label: {
             buttonLabel
         }
-        .disabled(isProcessing)
+        .disabled(model.isProcessing)
         .confirmationDialog(
             "Remove Download?",
-            isPresented: $showRemoveConfirmation,
+            isPresented: $model.showRemoveConfirmation,
             titleVisibility: .visible
         ) {
             Button("Remove Download", role: .destructive) {
-                Task { await removeDownload() }
+                Task { await model.removeDownload() }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("'\(item.title)' will be removed from your device.")
+            Text("'\(model.item.title)' will be removed from your device.")
         }
-        .alert("Download Error", isPresented: $showError) {
+        .alert("Download Error", isPresented: $model.showError) {
             Button("OK", role: .cancel) {}
         } message: {
-            if let errorMessage {
+            if let errorMessage = model.errorMessage {
                 Text(errorMessage)
             }
         }
         .task {
-            await refreshState()
+            await model.refreshState()
         }
     }
 
@@ -65,7 +213,7 @@ struct DownloadButton: View {
 
     @ViewBuilder
     private var buttonLabel: some View {
-        switch downloadItem?.state {
+        switch model.state {
         case .none:
             // Not downloaded — show download arrow
             Image(systemName: "arrow.down.circle")
@@ -87,7 +235,7 @@ struct DownloadButton: View {
                     .stroke(.quaternary, lineWidth: 2.5)
 
                 Circle()
-                    .trim(from: 0, to: downloadItem?.progress ?? 0)
+                    .trim(from: 0, to: model.progress)
                     .stroke(.tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
 
@@ -116,126 +264,6 @@ struct DownloadButton: View {
                 .foregroundStyle(.red)
         }
     }
-
-    // MARK: - Tap Handling
-
-    private func handleTap() async {
-        guard !isProcessing else { return }
-
-        switch downloadItem?.state {
-        case .none:
-            await startDownload()
-
-        case .queued, .downloading:
-            // Tapping an active/queued download pauses it
-            await pauseDownload()
-
-        case .paused:
-            await resumeDownload()
-
-        case .completed:
-            // Tapping a completed download offers removal
-            showRemoveConfirmation = true
-
-        case .failed:
-            await retryDownload()
-        }
-    }
-
-    // MARK: - Download Actions
-
-    private func startDownload() async {
-        isProcessing = true
-        defer { isProcessing = false }
-
-        do {
-            let url = try await downloadURLResolver()
-            let result = try await downloadManager.enqueueDownload(
-                itemId: item.id,
-                serverId: serverId,
-                title: item.title,
-                mediaType: item.mediaType,
-                remoteURL: url,
-                parentId: nil,
-                artworkURL: nil
-            )
-            downloadItem = result
-        } catch {
-            showErrorMessage("Failed to start download: \(error.localizedDescription)")
-        }
-    }
-
-    private func pauseDownload() async {
-        guard let id = downloadItem?.id else { return }
-        isProcessing = true
-        defer { isProcessing = false }
-
-        do {
-            try await downloadManager.pauseDownload(id: id)
-            await refreshState()
-        } catch {
-            showErrorMessage("Failed to pause: \(error.localizedDescription)")
-        }
-    }
-
-    private func resumeDownload() async {
-        guard let id = downloadItem?.id else { return }
-        isProcessing = true
-        defer { isProcessing = false }
-
-        do {
-            try await downloadManager.resumeDownload(id: id)
-            await refreshState()
-        } catch {
-            showErrorMessage("Failed to resume: \(error.localizedDescription)")
-        }
-    }
-
-    private func retryDownload() async {
-        guard let id = downloadItem?.id else { return }
-        isProcessing = true
-        defer { isProcessing = false }
-
-        do {
-            try await downloadManager.retryDownload(id: id)
-            await refreshState()
-        } catch {
-            showErrorMessage("Failed to retry: \(error.localizedDescription)")
-        }
-    }
-
-    private func removeDownload() async {
-        guard let id = downloadItem?.id else { return }
-        isProcessing = true
-        defer { isProcessing = false }
-
-        do {
-            try await downloadManager.deleteDownload(id: id)
-            downloadItem = nil
-        } catch {
-            showErrorMessage("Failed to remove: \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: - State Refresh
-
-    private func refreshState() async {
-        do {
-            downloadItem = try await downloadManager.download(
-                for: item.id, serverId: serverId
-            )
-        } catch {
-            // If we can't query state, leave the button in its current state.
-            // This avoids flickering on transient errors.
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func showErrorMessage(_ message: String) {
-        errorMessage = message
-        showError = true
-    }
 }
 
 // MARK: - Convenience Initializer
@@ -248,10 +276,12 @@ extension DownloadButton {
         downloadManager: DownloadManagerService,
         downloadURL: URL
     ) {
-        self.item = item
-        self.serverId = serverId
-        self.downloadManager = downloadManager
-        self.downloadURLResolver = { downloadURL }
+        self.init(
+            item: item,
+            serverId: serverId,
+            downloadManager: downloadManager,
+            downloadURLResolver: { downloadURL }
+        )
     }
 }
 
@@ -260,43 +290,51 @@ extension DownloadButton {
 /// A smaller download button suitable for use in list rows (e.g. episode lists,
 /// track rows). Shows just an icon without extra padding.
 struct CompactDownloadButton: View {
-    let item: MediaItem
-    let serverId: String
-    let downloadManager: DownloadManagerService
-    let downloadURLResolver: @Sendable () async throws -> URL
+    @State private var model: DownloadButtonModel
 
-    @State private var downloadItem: DownloadItem?
-    @State private var isProcessing = false
-    @State private var showRemoveConfirmation = false
+    init(
+        item: MediaItem,
+        serverId: String,
+        downloadManager: DownloadManagerService,
+        downloadURLResolver: @escaping @Sendable () async throws -> URL
+    ) {
+        _model = State(
+            initialValue: DownloadButtonModel(
+                item: item,
+                serverId: serverId,
+                downloadManager: downloadManager,
+                downloadURLResolver: downloadURLResolver
+            ))
+    }
 
     var body: some View {
         Button {
-            Task { await handleTap() }
+            Task { await model.handleTap() }
         } label: {
             compactLabel
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(isProcessing)
+        .disabled(model.isProcessing)
         .confirmationDialog(
             "Remove Download?",
-            isPresented: $showRemoveConfirmation,
+            isPresented: $model.showRemoveConfirmation,
             titleVisibility: .visible
         ) {
             Button("Remove", role: .destructive) {
-                Task { await removeDownload() }
+                Task { await model.removeDownload() }
             }
             Button("Cancel", role: .cancel) {}
         }
         .task {
-            await refreshState()
+            await model.refreshState()
         }
     }
 
     @ViewBuilder
     private var compactLabel: some View {
-        switch downloadItem?.state {
+        switch model.state {
         case .none:
             Image(systemName: "arrow.down.circle")
                 .font(.body)
@@ -312,7 +350,7 @@ struct CompactDownloadButton: View {
                 Circle()
                     .stroke(.quaternary, lineWidth: 2)
                 Circle()
-                    .trim(from: 0, to: downloadItem?.progress ?? 0)
+                    .trim(from: 0, to: model.progress)
                     .stroke(.tint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
@@ -333,71 +371,12 @@ struct CompactDownloadButton: View {
                 .foregroundStyle(.red)
         }
     }
-
-    private func handleTap() async {
-        guard !isProcessing else { return }
-
-        switch downloadItem?.state {
-        case .none:
-            isProcessing = true
-            defer { isProcessing = false }
-            do {
-                let url = try await downloadURLResolver()
-                let result = try await downloadManager.enqueueDownload(
-                    itemId: item.id,
-                    serverId: serverId,
-                    title: item.title,
-                    mediaType: item.mediaType,
-                    remoteURL: url
-                )
-                downloadItem = result
-            } catch {
-                // Silently fail in compact mode — the icon will remain unchanged
-            }
-
-        case .queued, .downloading:
-            isProcessing = true
-            defer { isProcessing = false }
-            try? await downloadManager.pauseDownload(id: downloadItem?.id ?? "")
-            await refreshState()
-
-        case .paused:
-            isProcessing = true
-            defer { isProcessing = false }
-            try? await downloadManager.resumeDownload(id: downloadItem?.id ?? "")
-            await refreshState()
-
-        case .completed:
-            showRemoveConfirmation = true
-
-        case .failed:
-            isProcessing = true
-            defer { isProcessing = false }
-            try? await downloadManager.retryDownload(id: downloadItem?.id ?? "")
-            await refreshState()
-        }
-    }
-
-    private func removeDownload() async {
-        guard let id = downloadItem?.id else { return }
-        isProcessing = true
-        defer { isProcessing = false }
-        try? await downloadManager.deleteDownload(id: id)
-        downloadItem = nil
-    }
-
-    private func refreshState() async {
-        downloadItem = try? await downloadManager.download(
-            for: item.id, serverId: serverId
-        )
-    }
 }
 
 // MARK: - Preview
 
 #Preview("Download Button States") {
     VStack(spacing: 24) {
-        // These are illustrative — in a real preview you'd supply mock managers.
         Text("Download button states are shown in-context on detail views.")
             .font(.caption)
             .foregroundStyle(.secondary)

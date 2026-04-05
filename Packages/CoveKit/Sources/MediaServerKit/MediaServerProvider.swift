@@ -24,3 +24,12 @@ public protocol MediaServerProvider: Sendable {
     // Search
     func search(query: String, mediaTypes: [MediaType]) async throws -> SearchResults
 }
+
+extension MediaServerProvider {
+    /// Convenience overload that resolves an image URL by item ID alone,
+    /// avoiding the need to construct a full `MediaItem` just for image lookups.
+    public func imageURL(for itemId: ItemID, type: ImageType, maxSize: CGSize?) -> URL? {
+        let placeholder = MediaItem(id: itemId, title: "", mediaType: .movie)
+        return imageURL(for: placeholder, type: type, maxSize: maxSize)
+    }
+}

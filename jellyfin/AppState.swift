@@ -190,9 +190,8 @@ final class AppState {
 
         audioPlayer.artworkURLResolver = { track in
             guard let albumId = track.albumId else { return nil }
-            let item = MediaItem(id: albumId, title: "", mediaType: .album)
             return provider.imageURL(
-                for: item,
+                for: albumId,
                 type: .primary,
                 maxSize: CGSize(width: 600, height: 600)
             )

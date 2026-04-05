@@ -20,6 +20,25 @@ public final class JellyfinServerProvider: MediaServerProvider,
         self.state = ProviderState()
     }
 
+    // MARK: - Private Helpers
+
+    /// Returns the authenticated client and user ID, or throws if not connected.
+    private func authenticatedClient() throws -> (JellyfinAPIClient, String) {
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        return (client, userId)
+    }
+
+    /// Returns the authenticated client, or throws if not connected.
+    private func client() throws -> JellyfinAPIClient {
+        guard let client = state.client else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        return client
+    }
+
     // MARK: - Connection
 
     public func connect(url: URL, credentials: Credentials) async throws -> ServerConnection {
@@ -91,9 +110,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - Library Browsing
 
     public func libraries() async throws -> [MediaLibrary] {
-        guard let client = state.client else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let client = try client()
         let folders = try await client.getVirtualFolders()
         return folders.compactMap { JellyfinMapper.mapLibrary($0) }
     }
@@ -101,31 +118,14 @@ public final class JellyfinServerProvider: MediaServerProvider,
     public func items(in library: MediaLibrary, sort: SortOptions, filter: FilterOptions)
         async throws -> [MediaItem]
     {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
-        let result = try await client.getItems(
-            userId: userId,
-            parentId: library.id.rawValue,
-            includeItemTypes: filter.includeItemTypes,
-            sortBy: JellyfinMapper.sortByString(sort.field),
-            sortOrder: JellyfinMapper.sortOrderString(sort.order),
-            limit: filter.limit,
-            startIndex: filter.startIndex,
-            searchTerm: filter.searchTerm,
-            isFavorite: filter.isFavorite
-        )
-        return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+        let result = try await pagedItems(in: library, sort: sort, filter: filter)
+        return result.items
     }
 
     public func pagedItems(in library: MediaLibrary, sort: SortOptions, filter: FilterOptions)
         async throws -> PagedResult<MediaItem>
     {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let (client, userId) = try authenticatedClient()
         let result = try await client.getItems(
             userId: userId,
             parentId: library.id.rawValue,
@@ -146,10 +146,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
     }
 
     public func item(id: ItemID) async throws -> MediaItem {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let (client, userId) = try authenticatedClient()
         let dto = try await client.getItem(userId: userId, itemId: id.rawValue)
         guard let item = JellyfinMapper.mapItem(dto) else {
             throw AppError.itemNotFound(id: id)
@@ -170,10 +167,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
     }
 
     public func search(query: String, mediaTypes: [MediaType]) async throws -> SearchResults {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let (client, userId) = try authenticatedClient()
         let result = try await client.getItems(
             userId: userId,
             searchTerm: query
@@ -185,10 +179,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - MusicProvider (Phase 4)
 
     public func albums(artist: ArtistID) async throws -> [Album] {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let (client, userId) = try authenticatedClient()
         let result = try await client.getItems(
             userId: userId,
             parentId: artist.rawValue,
@@ -200,10 +191,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
     }
 
     public func tracks(album: AlbumID) async throws -> [Track] {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let (client, userId) = try authenticatedClient()
         let result = try await client.getItems(
             userId: userId,
             parentId: album.rawValue,
@@ -215,10 +203,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
     }
 
     public func playlists() async throws -> [Playlist] {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let (client, userId) = try authenticatedClient()
         let result = try await client.getItems(
             userId: userId,
             includeItemTypes: ["Playlist"],
@@ -243,19 +228,13 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - VideoProvider (Phase 5)
 
     public func seasons(series: SeriesID) async throws -> [Season] {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let (client, userId) = try authenticatedClient()
         let result = try await client.getSeasons(seriesId: series.rawValue, userId: userId)
         return (result.items ?? []).compactMap { JellyfinMapper.mapSeason($0) }
     }
 
     public func episodes(season: SeasonID) async throws -> [Episode] {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let (client, userId) = try authenticatedClient()
         // Use getItems with parentId = season to get episodes
         let result = try await client.getItems(
             userId: userId,
@@ -269,20 +248,14 @@ public final class JellyfinServerProvider: MediaServerProvider,
     }
 
     public func resumeItems() async throws -> [MediaItem] {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let (client, userId) = try authenticatedClient()
         let result = try await client.getResumeItems(
             userId: userId, mediaTypes: ["Video"], limit: 12)
         return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
     }
 
     public func streamURL(for item: MediaItem, profile: DeviceProfile?) async throws -> StreamInfo {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let (client, userId) = try authenticatedClient()
 
         let playbackInfo = try await client.getPlaybackInfo(
             userId: userId, itemId: item.id.rawValue)
@@ -339,10 +312,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
     public func transcodedStreamURL(for item: MediaItem, profile: DeviceProfile) async throws -> URL
     {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let (client, userId) = try authenticatedClient()
         let playbackInfo = try await client.getPlaybackInfo(
             userId: userId, itemId: item.id.rawValue)
         guard let source = playbackInfo.mediaSources?.first,
@@ -358,10 +328,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
     /// Get episodes for a specific series and season.
     public func episodes(series: SeriesID, season: SeasonID) async throws -> [Episode] {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let (client, userId) = try authenticatedClient()
         let result = try await client.getEpisodes(
             seriesId: series.rawValue,
             seasonId: season.rawValue,
@@ -372,10 +339,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
     /// Get "next up" episodes across all series or for a specific series.
     public func nextUp(seriesId: SeriesID? = nil) async throws -> [MediaItem] {
-        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
-        else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let (client, userId) = try authenticatedClient()
         let result = try await client.getNextUp(userId: userId, seriesId: seriesId?.rawValue)
         return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
     }
@@ -396,9 +360,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - PlaybackReportingProvider (Phase 4/5)
 
     public func reportPlaybackStart(item: MediaItem, position: TimeInterval) async throws {
-        guard let client = state.client else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let client = try client()
         let positionTicks = Int64(position * 10_000_000)
         try await client.reportPlaybackStart(
             itemId: item.id.rawValue,
@@ -407,9 +369,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
     }
 
     public func reportPlaybackProgress(item: MediaItem, position: TimeInterval) async throws {
-        guard let client = state.client else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let client = try client()
         let positionTicks = Int64(position * 10_000_000)
         try await client.reportPlaybackProgress(
             itemId: item.id.rawValue,
@@ -419,9 +379,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
     }
 
     public func reportPlaybackStopped(item: MediaItem, position: TimeInterval) async throws {
-        guard let client = state.client else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let client = try client()
         let positionTicks = Int64(position * 10_000_000)
         try await client.reportPlaybackStopped(
             itemId: item.id.rawValue,
@@ -432,9 +390,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - DownloadableProvider (Phase 6)
 
     public func downloadURL(for item: MediaItem, profile: DeviceProfile?) async throws -> URL {
-        guard let client = state.client else {
-            throw AppError.authFailed(reason: "Not connected to a server")
-        }
+        let client = try client()
 
         // Use the native download endpoint
         guard let url = client.downloadURL(itemId: item.id.rawValue) else {
@@ -451,34 +407,33 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
 /// Thread-safe mutable state for the provider.
 private final class ProviderState: @unchecked Sendable {
-    private let lock = NSLock()
-    private var _client: JellyfinAPIClient?
-    private var _connection: ServerConnection?
+    private struct State {
+        var client: JellyfinAPIClient?
+        var connection: ServerConnection?
+    }
+
+    private let storage = OSAllocatedUnfairLock(initialState: State())
 
     var client: JellyfinAPIClient? {
-        lock.lock()
-        defer { lock.unlock() }
-        return _client
+        storage.withLock { $0.client }
     }
 
     var connection: ServerConnection? {
-        lock.lock()
-        defer { lock.unlock() }
-        return _connection
+        storage.withLock { $0.connection }
     }
 
     func set(client: JellyfinAPIClient, connection: ServerConnection) {
-        lock.lock()
-        defer { lock.unlock() }
-        _client = client
-        _connection = connection
+        storage.withLock { state in
+            state.client = client
+            state.connection = connection
+        }
     }
 
     func clear() {
-        lock.lock()
-        defer { lock.unlock() }
-        _client = nil
-        _connection = nil
+        storage.withLock { state in
+            state.client = nil
+            state.connection = nil
+        }
     }
 }
 

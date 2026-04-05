@@ -1,8 +1,9 @@
 import ImageService
+import JellyfinProvider
 import Models
 import PlaybackEngine
 import SwiftUI
-import JellyfinProvider
+import MediaServerKit
 
 struct SeriesDetailView: View {
     let item: MediaItem
@@ -92,17 +93,17 @@ struct SeriesDetailView: View {
         .task {
             await loadSeasons()
         }
-#if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .fullScreenCover(isPresented: $showPlayer) {
-            if let streamInfo, let episodeItem = selectedEpisodeItem {
-                VideoPlayerView(
-                    item: episodeItem,
-                    streamInfo: streamInfo,
-                    startPosition: playbackStartPosition
-                )
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .fullScreenCover(isPresented: $showPlayer) {
+                if let streamInfo, let episodeItem = selectedEpisodeItem {
+                    VideoPlayerView(
+                        item: episodeItem,
+                        streamInfo: streamInfo,
+                        startPosition: playbackStartPosition
+                    )
+                }
             }
-        }
         #endif
     }
 
@@ -356,9 +357,8 @@ struct SeriesDetailView: View {
     }
 
     private func episodeThumbnailURL(for episode: Episode) -> URL? {
-        let tempItem = MediaItem(id: episode.id, title: "", mediaType: .episode)
-        return appState.provider.imageURL(
-            for: tempItem,
+        appState.provider.imageURL(
+            for: episode.id,
             type: .primary,
             maxSize: CGSize(width: 320, height: 180)
         )

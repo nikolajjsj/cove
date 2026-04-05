@@ -41,9 +41,7 @@ struct LibraryGridView: View {
                 scrollContent
             }
         }
-        .navigationDestination(for: MediaItem.self) { item in
-            destinationView(for: item)
-        }
+        .navigationDestination(for: MediaItem.self) { NavigationRouter.destination(for: $0) }
         .task(id: library?.id) {
             await loadFirstPage()
         }
@@ -119,7 +117,7 @@ struct LibraryGridView: View {
         let filter = FilterOptions(
             limit: pageSize,
             startIndex: 0,
-            includeItemTypes: includeItemTypes(for: library),
+            includeItemTypes: library.includeItemTypes,
         )
 
         do {
@@ -146,7 +144,7 @@ struct LibraryGridView: View {
         let filter = FilterOptions(
             limit: pageSize,
             startIndex: items.count,
-            includeItemTypes: includeItemTypes(for: library),
+            includeItemTypes: library.includeItemTypes,
         )
 
         do {
@@ -167,44 +165,6 @@ struct LibraryGridView: View {
         }
 
         isLoadingMore = false
-    }
-
-    // MARK: - Item Type Filtering
-
-    /// Returns the Jellyfin `IncludeItemTypes` values appropriate for each library type.
-    /// This ensures the TV Shows library returns only Series (not Seasons/Episodes),
-    /// the Movies library returns only Movies, etc.
-    private func includeItemTypes(for library: MediaLibrary) -> [String]? {
-        switch library.collectionType {
-        case .movies:
-            return ["Movie"]
-        case .tvshows:
-            return ["Series"]
-        case .music:
-            // Music library should show albums and artists at the top level
-            return nil
-        default:
-            return nil
-        }
-    }
-
-    // MARK: - Navigation Destinations
-
-    @ViewBuilder
-    private func destinationView(for item: MediaItem) -> some View {
-        switch item.mediaType {
-        case .movie:
-            MovieDetailView(item: item)
-        case .series:
-            SeriesDetailView(item: item)
-        case .artist:
-            ArtistDetailView(artistItem: item)
-        case .album:
-            AlbumDetailView(albumItem: item)
-        default:
-            Text(item.title)
-                .navigationTitle(item.title)
-        }
     }
 
     // MARK: - Helpers

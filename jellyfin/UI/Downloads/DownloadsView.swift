@@ -35,7 +35,7 @@ struct DownloadsView: View {
         .navigationTitle("Downloads")
         .toolbar {
             //ToolbarItem(placement: .topBarTrailing) {
-            ToolbarItem() {
+            ToolbarItem {
                 Menu {
                     Button {
                         showStorageManagement = true
@@ -179,7 +179,7 @@ struct DownloadsView: View {
             }
         }
         #if os(iOS)
-        .listStyle(.insetGrouped)
+            .listStyle(.insetGrouped)
         #endif
         .animation(.default, value: downloads.map(\.id))
     }
@@ -246,7 +246,7 @@ struct DownloadsView: View {
                     try await downloadManager.retryDownload(id: item.id)
                 case .delete:
                     itemToDelete = item
-                    return // Don't reload yet — wait for confirmation
+                    return  // Don't reload yet — wait for confirmation
                 case .play:
                     // Playback integration will be wired in a later phase.
                     // For now this is a no-op; the row tap is handled here
@@ -328,23 +328,12 @@ struct DownloadsView: View {
 
 #Preview {
     NavigationStack {
-        DownloadsView(
-            downloadManager: .previewMock
+        // Show the empty-state variant without requiring a real DownloadManagerService
+        ContentUnavailableView(
+            "No Downloads",
+            systemImage: "arrow.down.circle",
+            description: Text("Download music, movies, and episodes to enjoy offline.")
         )
-        .environment(AppState())
-    }
-}
-
-// MARK: - Preview Helpers
-
-extension DownloadManagerService {
-    /// A placeholder used only for SwiftUI previews. The preview will show the
-    /// empty-state because the mock repository contains no data.
-    fileprivate static var previewMock: DownloadManagerService {
-        // The initializer requires concrete repository instances. In a real
-        // preview you would supply in-memory fakes. For now we rely on the
-        // view's empty-state rendering, so this is intentionally a fatalError
-        // sentinel that is never actually called at preview-render time.
-        fatalError("Replace with a real mock when preview repositories are available")
+        .navigationTitle("Downloads")
     }
 }
