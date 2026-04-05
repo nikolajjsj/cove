@@ -331,6 +331,138 @@ public final class JellyfinAPIClient: Sendable {
         logger.debug("Reporting playback stopped for item \(itemId)")
         try await httpClient.request(url: url, method: .post, headers: authHeaders, body: body)
     }
+
+    // MARK: - Video Playback Info
+
+    /// Get playback info for a video item (media sources, streams, transcode decisions).
+    /// `POST /Items/{id}/PlaybackInfo`
+    public func getPlaybackInfo(userId: String, itemId: String) async throws -> PlaybackInfoResponse
+    {
+        let url = baseURL.appendingPathComponent("Items/\(itemId)/PlaybackInfo")
+        let body = PlaybackInfoRequest(userId: userId)
+        return try await httpClient.request(
+            url: url, method: .post, headers: authHeaders, body: body)
+    }
+
+    /// Build a direct video stream URL. Synchronous.
+    /// `GET /Videos/{id}/stream`
+    public func videoStreamURL(itemId: String, mediaSourceId: String, container: String? = nil)
+        -> URL?
+    {
+        guard let token = accessToken else { return nil }
+        var urlComponents = URLComponents(
+            url: baseURL.appendingPathComponent("Videos/\(itemId)/stream"),
+            resolvingAgainstBaseURL: false)
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "static", value: "true"),
+            URLQueryItem(name: "mediaSourceId", value: mediaSourceId),
+            URLQueryItem(name: "api_key", value: token),
+        ]
+        if let container {
+            queryItems.append(URLQueryItem(name: "container", value: container))
+        }
+        urlComponents?.queryItems = queryItems
+        return urlComponents?.url
+    }
+
+    /// Build an HLS transcode stream URL from a server-provided transcode path. Synchronous.
+    public func hlsStreamURL(transcodingPath: String) -> URL? {
+        guard !transcodingPath.isEmpty else { return nil }
+        // The transcodingUrl from Jellyfin is a relative path like /videos/{id}/master.m3u8?...
+        // It already contains all query params including the play session
+        // We just need to prepend the base URL
+        if let baseComponents = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) {
+            let fullURLString =
+                "\(baseComponents.scheme ?? "http")://\(baseComponents.host ?? "")\(baseComponents.port.map { ":\($0)" } ?? "")\(transcodingPath)"
+            return URL(string: fullURLString)
+        }
+        return nil
+    }
+
+    /// Build a subtitle stream URL. Synchronous.
+    /// `GET /Videos/{id}/{mediaSourceId}/Subtitles/{index}/Stream.vtt`
+    public func subtitleURL(
+        itemId: String, mediaSourceId: String, subtitleIndex: Int, format: String = "vtt"
+    ) -> URL? {
+        guard let token = accessToken else { return nil }
+        var urlComponents = URLComponents(
+            url: baseURL.appendingPathComponent(
+                "Videos/\(itemId)/\(mediaSourceId)/Subtitles/\(subtitleIndex)/Stream.\(format)"),
+            resolvingAgainstBaseURL: false)
+        urlComponents?.queryItems = [URLQueryItem(name: "api_key", value: token)]
+        return urlComponents?.url
+    }
+
+    // MARK: - Shows (TV Series)
+
+    /// Get seasons for a series.
+    /// `GET /Shows/{seriesId}/Seasons`
+    public func getSeasons(seriesId: String, userId: String) async throws -> ItemsResult {
+        let url = baseURL.appendingPathComponent("Shows/\(seriesId)/Seasons")
+        let queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "UserId", value: userId),
+            URLQueryItem(name: "Fields", value: "Overview,UserData,ChildCount"),
+        ]
+        logger.debug("Fetching seasons for series \(seriesId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+    }
+
+    /// Get episodes for a series, optionally filtered by season.
+    /// `GET /Shows/{seriesId}/Episodes`
+    public func getEpisodes(seriesId: String, seasonId: String? = nil, userId: String) async throws
+        -> ItemsResult
+    {
+        let url = baseURL.appendingPathComponent("Shows/\(seriesId)/Episodes")
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "UserId", value: userId),
+            URLQueryItem(name: "Fields", value: "Overview,UserData,DateCreated,MediaSources"),
+        ]
+        if let seasonId {
+            queryItems.append(URLQueryItem(name: "SeasonId", value: seasonId))
+        }
+        logger.debug("Fetching episodes for series \(seriesId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+    }
+
+    /// Get "next up" episodes to watch.
+    /// `GET /Shows/NextUp`
+    public func getNextUp(userId: String, seriesId: String? = nil, limit: Int = 20) async throws
+        -> ItemsResult
+    {
+        let url = baseURL.appendingPathComponent("Shows/NextUp")
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "UserId", value: userId),
+            URLQueryItem(name: "Fields", value: "Overview,UserData,DateCreated"),
+            URLQueryItem(name: "Limit", value: String(limit)),
+        ]
+        if let seriesId {
+            queryItems.append(URLQueryItem(name: "SeriesId", value: seriesId))
+        }
+        logger.debug("Fetching next up episodes")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+    }
+
+    /// Get items to resume (continue watching).
+    /// `GET /Users/{userId}/Items/Resume`
+    public func getResumeItems(userId: String, mediaTypes: [String]? = nil, limit: Int = 12)
+        async throws -> ItemsResult
+    {
+        let url = baseURL.appendingPathComponent("Users/\(userId)/Items/Resume")
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "Fields", value: "Overview,UserData,DateCreated"),
+            URLQueryItem(name: "Limit", value: String(limit)),
+        ]
+        if let mediaTypes {
+            queryItems.append(
+                URLQueryItem(name: "MediaTypes", value: mediaTypes.joined(separator: ",")))
+        }
+        logger.debug("Fetching resume items for user \(userId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+    }
 }
 
 // MARK: - Thread-safe token storage
@@ -424,5 +556,14 @@ private struct PlaybackStopInfo: Encodable, Sendable {
         case positionTicks = "positionticks"
         case mediaSourceId = "mediasourceid"
         case playMethod = "playmethod"
+    }
+}
+
+/// Body for `POST /Items/{id}/PlaybackInfo`
+private struct PlaybackInfoRequest: Encodable, Sendable {
+    let userId: String
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "userid"
     }
 }

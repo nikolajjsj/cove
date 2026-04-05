@@ -216,30 +216,154 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - VideoProvider (Phase 5)
 
     public func seasons(series: SeriesID) async throws -> [Season] {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let result = try await client.getSeasons(seriesId: series.rawValue, userId: userId)
+        return (result.items ?? []).compactMap { JellyfinMapper.mapSeason($0) }
     }
 
     public func episodes(season: SeasonID) async throws -> [Episode] {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        // Use getItems with parentId = season to get episodes
+        let result = try await client.getItems(
+            userId: userId,
+            parentId: season.rawValue,
+            includeItemTypes: ["Episode"],
+            sortBy: "IndexNumber",
+            sortOrder: "Ascending",
+            fields: ["Overview", "UserData", "DateCreated", "MediaSources"]
+        )
+        return (result.items ?? []).compactMap { JellyfinMapper.mapEpisode($0) }
     }
 
     public func resumeItems() async throws -> [MediaItem] {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let result = try await client.getResumeItems(
+            userId: userId, mediaTypes: ["Video"], limit: 12)
+        return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
     }
 
     public func streamURL(for item: MediaItem, profile: DeviceProfile?) async throws -> StreamInfo {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+
+        let playbackInfo = try await client.getPlaybackInfo(
+            userId: userId, itemId: item.id.rawValue)
+
+        guard let source = playbackInfo.mediaSources?.first else {
+            throw AppError.playbackFailed(reason: "No media source available")
+        }
+
+        let mediaStreams = JellyfinMapper.mapMediaStreams(source.mediaStreams ?? [])
+        let sourceId = source.id ?? item.id.rawValue
+
+        // Decide: direct play vs transcode
+        if source.supportsDirectPlay == true || source.supportsDirectStream == true,
+            let url = client.videoStreamURL(
+                itemId: item.id.rawValue, mediaSourceId: sourceId, container: source.container)
+        {
+            return StreamInfo(
+                url: url,
+                isTranscoded: false,
+                mediaStreams: mediaStreams,
+                directPlaySupported: true
+            )
+        }
+
+        // Try transcode
+        if let transcodingPath = source.transcodingUrl,
+            let url = client.hlsStreamURL(transcodingPath: transcodingPath)
+        {
+            return StreamInfo(
+                url: url,
+                isTranscoded: true,
+                mediaStreams: mediaStreams,
+                directPlaySupported: false
+            )
+        }
+
+        throw AppError.playbackFailed(reason: "Unable to resolve a playable stream URL")
     }
 
     // MARK: - TranscodingProvider (Phase 5)
 
     public func deviceProfile() -> DeviceProfile {
-        DeviceProfile(name: "Cove iOS")  // Stub — Phase 5
+        DeviceProfile(
+            name: "Cove iOS",
+            maxStreamingBitrate: 120_000_000,
+            supportedVideoCodecs: ["h264", "hevc", "h265"],
+            supportedAudioCodecs: ["aac", "mp3", "alac", "flac", "opus"],
+            supportedContainers: ["mp4", "mov", "m4v", "hls", "ts", "mkv"],
+            supportsDirectPlay: true,
+            supportsDirectStream: true,
+            supportsTranscoding: true
+        )
     }
 
     public func transcodedStreamURL(for item: MediaItem, profile: DeviceProfile) async throws -> URL
     {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let playbackInfo = try await client.getPlaybackInfo(
+            userId: userId, itemId: item.id.rawValue)
+        guard let source = playbackInfo.mediaSources?.first,
+            let transcodingPath = source.transcodingUrl,
+            let url = client.hlsStreamURL(transcodingPath: transcodingPath)
+        else {
+            throw AppError.playbackFailed(reason: "Server could not provide a transcode URL")
+        }
+        return url
+    }
+
+    // MARK: - Shows & Continue Watching (Phase 5)
+
+    /// Get episodes for a specific series and season.
+    public func episodes(series: SeriesID, season: SeasonID) async throws -> [Episode] {
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let result = try await client.getEpisodes(
+            seriesId: series.rawValue,
+            seasonId: season.rawValue,
+            userId: userId
+        )
+        return (result.items ?? []).compactMap { JellyfinMapper.mapEpisode($0) }
+    }
+
+    /// Get "next up" episodes across all series or for a specific series.
+    public func nextUp(seriesId: SeriesID? = nil) async throws -> [MediaItem] {
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let result = try await client.getNextUp(userId: userId, seriesId: seriesId?.rawValue)
+        return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+    }
+
+    /// Build a subtitle URL for a video item.
+    public func subtitleURL(
+        itemId: ItemID, mediaSourceId: String, subtitleIndex: Int, format: String = "vtt"
+    ) -> URL? {
+        guard let client = state.client else { return nil }
+        return client.subtitleURL(
+            itemId: itemId.rawValue,
+            mediaSourceId: mediaSourceId,
+            subtitleIndex: subtitleIndex,
+            format: format
+        )
     }
 
     // MARK: - PlaybackReportingProvider (Phase 4/5)

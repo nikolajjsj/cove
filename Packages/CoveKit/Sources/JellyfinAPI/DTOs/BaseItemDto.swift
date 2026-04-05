@@ -28,6 +28,9 @@ public struct BaseItemDto: Codable, Sendable {
     public let backdropImageTags: [String]?
     public let userData: BaseItemUserData?
     public let collectionType: String?
+    public let people: [BaseItemPerson]?
+    public let childCount: Int?
+    public let status: String?
 
     public init(
         id: String? = nil,
@@ -54,7 +57,10 @@ public struct BaseItemDto: Codable, Sendable {
         imageTags: [String: String]? = nil,
         backdropImageTags: [String]? = nil,
         userData: BaseItemUserData? = nil,
-        collectionType: String? = nil
+        collectionType: String? = nil,
+        people: [BaseItemPerson]? = nil,
+        childCount: Int? = nil,
+        status: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -81,6 +87,9 @@ public struct BaseItemDto: Codable, Sendable {
         self.backdropImageTags = backdropImageTags
         self.userData = userData
         self.collectionType = collectionType
+        self.people = people
+        self.childCount = childCount
+        self.status = status
     }
 
     enum CodingKeys: String, CodingKey {
@@ -109,6 +118,26 @@ public struct BaseItemDto: Codable, Sendable {
         case backdropImageTags = "BackdropImageTags"
         case userData = "UserData"
         case collectionType = "CollectionType"
+        case people = "People"
+        case childCount = "ChildCount"
+        case status = "Status"
+    }
+}
+
+/// A person associated with a Jellyfin item (actor, director, etc.).
+public struct BaseItemPerson: Codable, Sendable {
+    public let name: String?
+    public let id: String?
+    public let role: String?
+    public let type: String?
+    public let primaryImageTag: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name = "Name"
+        case id = "Id"
+        case role = "Role"
+        case type = "Type"
+        case primaryImageTag = "PrimaryImageTag"
     }
 }
 

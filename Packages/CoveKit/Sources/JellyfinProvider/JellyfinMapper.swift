@@ -161,6 +161,60 @@ enum JellyfinMapper {
         )
     }
 
+    // MARK: - Video Mapping
+
+    /// Map BaseItemDto to Season.
+    static func mapSeason(_ dto: BaseItemDto) -> Season? {
+        guard let id = dto.id, let name = dto.name else { return nil }
+        // seriesId might come from the dto's seriesId field or parentId
+        guard let seriesId = dto.seriesId else { return nil }
+        return Season(
+            id: SeasonID(id),
+            seriesId: SeriesID(seriesId),
+            seasonNumber: dto.indexNumber ?? 0,
+            title: name,
+            episodeCount: dto.childCount
+        )
+    }
+
+    /// Map BaseItemDto to Episode.
+    static func mapEpisode(_ dto: BaseItemDto) -> Episode? {
+        guard let id = dto.id, let name = dto.name else { return nil }
+        let runtime: TimeInterval? = dto.runTimeTicks.map { TimeInterval($0) / 10_000_000.0 }
+        return Episode(
+            id: EpisodeID(id),
+            seriesId: dto.seriesId.map { SeriesID($0) },
+            seasonId: dto.seasonId.map { SeasonID($0) },
+            episodeNumber: dto.indexNumber,
+            seasonNumber: dto.parentIndexNumber,
+            title: name,
+            overview: dto.overview,
+            runtime: runtime
+        )
+    }
+
+    /// Map MediaStreamInfo DTOs to domain MediaStream models.
+    static func mapMediaStreams(_ dtos: [MediaStreamInfo]) -> [MediaStream] {
+        dtos.compactMap { dto -> MediaStream? in
+            guard let index = dto.index, let codec = dto.codec else { return nil }
+            let streamType: MediaStreamType
+            switch dto.type?.lowercased() {
+            case "video": streamType = .video
+            case "audio": streamType = .audio
+            case "subtitle": streamType = .subtitle
+            default: return nil
+            }
+            return MediaStream(
+                index: index,
+                type: streamType,
+                codec: codec,
+                language: dto.language,
+                title: dto.displayTitle ?? dto.title,
+                isExternal: dto.isExternal ?? false
+            )
+        }
+    }
+
     // MARK: - Helpers
 
     private static let dateFormatters: [DateFormatter] = {
