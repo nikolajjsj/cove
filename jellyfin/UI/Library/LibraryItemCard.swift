@@ -15,16 +15,14 @@ struct LibraryItemCard: View {
                 if let image = state.image {
                     image
                         .resizable()
-                        .aspectRatio(posterAspectRatio, contentMode: .fill)
+                        .aspectRatio(contentMode: .fill)
                 } else if state.isLoading {
                     Rectangle()
                         .fill(.quaternary)
-                        .aspectRatio(posterAspectRatio, contentMode: .fill)
                         .overlay { ProgressView() }
                 } else {
                     Rectangle()
                         .fill(.quaternary)
-                        .aspectRatio(posterAspectRatio, contentMode: .fill)
                         .overlay {
                             Image(systemName: placeholderIcon)
                                 .font(.largeTitle)
@@ -32,13 +30,14 @@ struct LibraryItemCard: View {
                         }
                 }
             }
+            .aspectRatio(posterAspectRatio, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
             // Title
             Text(item.title)
                 .font(.caption)
                 .fontWeight(.medium)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: true)
                 .foregroundStyle(.primary)
         }
         .frame(maxWidth: .infinity)

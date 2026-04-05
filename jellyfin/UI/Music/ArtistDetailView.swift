@@ -198,7 +198,7 @@ private struct ArtistAlbumCard: View {
             Text(album.title)
                 .font(.caption)
                 .fontWeight(.medium)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: true)
                 .foregroundStyle(.primary)
 
             HStack(spacing: 4) {

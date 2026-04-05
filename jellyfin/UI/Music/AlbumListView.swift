@@ -126,7 +126,7 @@ private struct AlbumCard: View {
             Text(title)
                 .font(.caption)
                 .fontWeight(.medium)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: true)
                 .foregroundStyle(.primary)
         }
         .frame(maxWidth: .infinity)

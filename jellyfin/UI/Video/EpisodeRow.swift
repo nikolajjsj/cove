@@ -45,7 +45,7 @@ struct EpisodeRow: View {
                         Text(overview)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(2)
+                            .lineLimit(2, reservesSpace: true)
                             .multilineTextAlignment(.leading)
                     }
 
