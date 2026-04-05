@@ -108,6 +108,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
         let result = try await client.getItems(
             userId: userId,
             parentId: library.id.rawValue,
+            includeItemTypes: filter.includeItemTypes,
             sortBy: JellyfinMapper.sortByString(sort.field),
             sortOrder: JellyfinMapper.sortOrderString(sort.order),
             limit: filter.limit,
@@ -116,6 +117,32 @@ public final class JellyfinServerProvider: MediaServerProvider,
             isFavorite: filter.isFavorite
         )
         return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+    }
+
+    public func pagedItems(in library: MediaLibrary, sort: SortOptions, filter: FilterOptions)
+        async throws -> PagedResult<MediaItem>
+    {
+        guard let client = state.client, let userId = client.userId ?? state.connection?.userId
+        else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+        let result = try await client.getItems(
+            userId: userId,
+            parentId: library.id.rawValue,
+            includeItemTypes: filter.includeItemTypes,
+            sortBy: JellyfinMapper.sortByString(sort.field),
+            sortOrder: JellyfinMapper.sortOrderString(sort.order),
+            limit: filter.limit,
+            startIndex: filter.startIndex,
+            searchTerm: filter.searchTerm,
+            isFavorite: filter.isFavorite
+        )
+        let items = (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+        return PagedResult(
+            items: items,
+            startIndex: filter.startIndex ?? 0,
+            totalCount: result.totalRecordCount ?? items.count
+        )
     }
 
     public func item(id: ItemID) async throws -> MediaItem {

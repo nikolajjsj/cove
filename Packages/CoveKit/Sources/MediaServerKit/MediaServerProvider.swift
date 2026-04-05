@@ -11,6 +11,11 @@ public protocol MediaServerProvider: Sendable {
     func libraries() async throws -> [MediaLibrary]
     func items(in library: MediaLibrary, sort: SortOptions, filter: FilterOptions) async throws
         -> [MediaItem]
+
+    /// Paginated library browsing — returns items with total count for infinite scroll.
+    func pagedItems(in library: MediaLibrary, sort: SortOptions, filter: FilterOptions) async throws
+        -> PagedResult<MediaItem>
+
     func item(id: ItemID) async throws -> MediaItem
 
     // Images

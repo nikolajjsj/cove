@@ -1,7 +1,7 @@
 import JellyfinProvider
-import NukeUI
 import MediaServerKit
 import Models
+import NukeUI
 import PlaybackEngine
 import SwiftUI
 
@@ -267,10 +267,26 @@ private struct LibrarySection: View {
         defer { isLoading = false }
         do {
             let sort = SortOptions(field: .dateAdded, order: .descending)
-            let filter = FilterOptions(limit: 20)
+            let filter = FilterOptions(
+                limit: 20,
+                includeItemTypes: includeItemTypes(for: library),
+            )
             items = try await appState.provider.items(in: library, sort: sort, filter: filter)
         } catch {
             items = []
+        }
+    }
+
+    /// Returns Jellyfin IncludeItemTypes for each library collection type
+    /// so that e.g. TV show libraries only return Series (not Seasons/Episodes).
+    private func includeItemTypes(for library: MediaLibrary) -> [String]? {
+        switch library.collectionType {
+        case .movies:
+            return ["Movie"]
+        case .tvshows:
+            return ["Series"]
+        default:
+            return nil
         }
     }
 
