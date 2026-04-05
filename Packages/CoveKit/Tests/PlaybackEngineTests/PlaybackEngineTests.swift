@@ -4,6 +4,6 @@ import XCTest
 
 final class PlaybackEngineTests: XCTestCase {
     func testPlaybackEngineModuleVersion() {
-        XCTAssertEqual(PlaybackEngineModule.version, "0.1.0")
+        XCTAssertEqual(PlaybackEngineModule.version, "1.0.0")
     }
 }
