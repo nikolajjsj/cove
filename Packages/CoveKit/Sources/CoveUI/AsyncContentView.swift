@@ -1,4 +1,3 @@
-import CoveUI
 import SwiftUI
 
 /// A convenience wrapper that renders a `CollectionLoader`'s phase with standard
@@ -26,7 +25,7 @@ import SwiftUI
 ///     await loader.load { try await provider.playlists() }
 /// }
 /// ```
-struct AsyncContentView<Element: Sendable, Content: View>: View {
+public struct AsyncContentView<Element: Sendable, Content: View>: View {
 
     // MARK: - Stored Properties
 
@@ -51,7 +50,7 @@ struct AsyncContentView<Element: Sendable, Content: View>: View {
     ///   - emptySystemImage: SF Symbol name for the empty state.
     ///   - emptyDescription: Optional description text for the empty state.
     ///   - content: A view builder that receives the loaded items.
-    init(
+    public init(
         _ loader: CollectionLoader<Element>,
         loadingMessage: String = "Loading…",
         errorTitle: String = "Unable to Load",
@@ -71,7 +70,7 @@ struct AsyncContentView<Element: Sendable, Content: View>: View {
 
     // MARK: - Body
 
-    var body: some View {
+    public var body: some View {
         Group {
             switch loader.phase {
             case .loading:
