@@ -28,15 +28,39 @@ struct LibraryGridView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 16) {
                         ForEach(items) { item in
-                            LibraryItemCard(item: item)
+                            NavigationLink(value: item) {
+                                LibraryItemCard(item: item)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding()
                 }
             }
         }
+        .navigationDestination(for: MediaItem.self) { item in
+            destinationView(for: item)
+        }
         .task(id: library?.id) {
             await loadItems()
+        }
+    }
+
+    @ViewBuilder
+    private func destinationView(for item: MediaItem) -> some View {
+        switch item.mediaType {
+        case .movie:
+            MovieDetailView(item: item)
+        case .series:
+            SeriesDetailView(item: item)
+        case .artist:
+            ArtistDetailView(artistItem: item)
+        case .album:
+            AlbumDetailView(albumItem: item)
+        default:
+            // Fallback for other types — just show the title
+            Text(item.title)
+                .navigationTitle(item.title)
         }
     }
 
