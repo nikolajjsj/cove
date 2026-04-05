@@ -151,7 +151,8 @@ public final class JellyfinAPIClient: Sendable {
                 URLQueryItem(name: "IsFavorite", value: isFavorite ? "true" : "false"))
         }
 
-        logger.debug("Fetching items for user \(userId)")
+        logger.debug(
+            "Fetching \(includeItemTypes?.joined(separator: ", ") ?? "items") for user \(userId)")
         return try await httpClient.request(
             url: url, method: .get, headers: authHeaders, queryItems: queryItems,
             cachePolicy: .cacheFirst(maxAge: 120))
