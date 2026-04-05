@@ -1,5 +1,5 @@
-import SwiftUI
 internal import Combine
+import SwiftUI
 
 /// A polished launch screen shown while the app restores the user's session.
 ///
@@ -30,45 +30,6 @@ struct LaunchView: View {
 
             VStack(spacing: 0) {
                 Spacer()
-
-                // MARK: - App Icon
-
-                ZStack {
-                    // Glow behind icon
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    Color.accentColor.opacity(0.25),
-                                    Color.accentColor.opacity(0.0),
-                                ],
-                                center: .center,
-                                startRadius: 20,
-                                endRadius: 80
-                            )
-                        )
-                        .frame(width: 160, height: 160)
-                        .opacity(iconOpacity)
-
-                    // The icon itself
-                    Image(systemName: "play.rectangle.fill")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 72, height: 72)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    Color.accentColor,
-                                    Color.accentColor.opacity(0.7),
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .shadow(color: Color.accentColor.opacity(0.3), radius: 16, y: 4)
-                }
-                .scaleEffect(iconScale)
-                .opacity(iconOpacity)
 
                 // MARK: - App Title
 
