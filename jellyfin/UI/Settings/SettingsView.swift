@@ -29,7 +29,7 @@ struct SettingsView: View {
                 }
             }
 
-            if let downloadManager = appState.downloadManager {
+            if let _ = appState.downloadManager {
                 Section("Downloads & Storage") {
                     Button {
                         showStorageManagement = true

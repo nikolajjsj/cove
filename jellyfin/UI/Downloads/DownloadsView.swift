@@ -34,7 +34,8 @@ struct DownloadsView: View {
         }
         .navigationTitle("Downloads")
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            //ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem() {
                 Menu {
                     Button {
                         showStorageManagement = true
@@ -73,7 +74,7 @@ struct DownloadsView: View {
             }
         } message: {
             if let item = itemToDelete {
-                Text(""\(item.title)" will be removed from your device.")
+                Text("'\(item.title)' will be removed from your device.")
             }
         }
         .confirmationDialog(
@@ -177,7 +178,9 @@ struct DownloadsView: View {
                 }
             }
         }
+        #if os(iOS)
         .listStyle(.insetGrouped)
+        #endif
         .animation(.default, value: downloads.map(\.id))
     }
 
@@ -265,7 +268,7 @@ struct DownloadsView: View {
             await loadDownloads()
         } catch {
             withAnimation {
-                errorMessage = "Failed to delete "\(item.title)": \(error.localizedDescription)"
+                errorMessage = "Failed to delete '\(item.title)': \(error.localizedDescription)"
             }
         }
     }
@@ -273,7 +276,7 @@ struct DownloadsView: View {
     private func performDeleteAll() async {
         guard let serverId = appState.activeConnection?.id else { return }
         do {
-            try await downloadManager.deleteAllDownloads(serverId: serverId)
+            try await downloadManager.deleteAllDownloads(serverId: serverId.uuidString)
             await loadDownloads()
         } catch {
             withAnimation {
@@ -296,7 +299,7 @@ struct DownloadsView: View {
             let all = try await downloadManager.allDownloads()
             // If authenticated, filter to active server; otherwise show everything
             if let serverId = appState.activeConnection?.id {
-                downloads = all.filter { $0.serverId == serverId }
+                downloads = all.filter { $0.serverId == serverId.uuidString }
             } else {
                 downloads = all
             }

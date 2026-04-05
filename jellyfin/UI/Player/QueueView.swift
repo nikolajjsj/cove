@@ -2,6 +2,7 @@ import ImageService
 import Models
 import PlaybackEngine
 import SwiftUI
+import JellyfinProvider
 
 struct QueueView: View {
     @Environment(AppState.self) private var appState
@@ -23,7 +24,9 @@ struct QueueView: View {
                 }
             }
             .navigationTitle("Queue")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
         }
     }
 
@@ -79,7 +82,9 @@ struct QueueView: View {
             }
         }
         .listStyle(.plain)
+        #if os(iOS)
         .environment(\.editMode, .constant(.active))
+        #endif
     }
 
     // MARK: - Now Playing Row

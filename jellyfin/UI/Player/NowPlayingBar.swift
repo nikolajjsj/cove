@@ -2,6 +2,7 @@ import ImageService
 import Models
 import PlaybackEngine
 import SwiftUI
+import JellyfinProvider
 
 struct NowPlayingBar: View {
     @Environment(AppState.self) private var appState

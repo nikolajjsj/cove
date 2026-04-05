@@ -47,7 +47,7 @@ struct DownloadButton: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(""\(item.title)" will be removed from your device.")
+            Text("'\(item.title)' will be removed from your device.")
         }
         .alert("Download Error", isPresented: $showError) {
             Button("OK", role: .cancel) {}

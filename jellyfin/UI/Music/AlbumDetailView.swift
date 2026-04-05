@@ -44,9 +44,12 @@ struct AlbumDetailView: View {
             }
         }
         .navigationTitle(albumItem.title)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            //ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem() {
                 if let downloadManager = appState.downloadManager {
                     DownloadButton(
                         item: albumItem,
@@ -309,7 +312,7 @@ private struct TrackRow: View {
                 Group {
                     if isCurrentTrack {
                         Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.fill")
-                            .foregroundStyle(.accent)
+                            .foregroundStyle(Color.accentColor)
                             .font(.caption)
                     } else {
                         Text(trackNumberText)
@@ -323,7 +326,7 @@ private struct TrackRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(track.title)
                         .font(.body)
-                        .foregroundStyle(isCurrentTrack ? .accent : .primary)
+                        .foregroundStyle(isCurrentTrack ? Color.accentColor : .primary)
                         .lineLimit(1)
 
                     if let artistName = track.artistName {

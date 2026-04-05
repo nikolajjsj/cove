@@ -2,6 +2,7 @@ import ImageService
 import Models
 import PlaybackEngine
 import SwiftUI
+import JellyfinProvider
 
 struct SeriesDetailView: View {
     let item: MediaItem
@@ -88,10 +89,11 @@ struct SeriesDetailView: View {
             .padding(.bottom, 32)
         }
         .navigationTitle(item.title)
-        .navigationBarTitleDisplayMode(.inline)
         .task {
             await loadSeasons()
         }
+#if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(isPresented: $showPlayer) {
             if let streamInfo, let episodeItem = selectedEpisodeItem {
                 VideoPlayerView(
@@ -101,6 +103,7 @@ struct SeriesDetailView: View {
                 )
             }
         }
+        #endif
     }
 
     // MARK: - Backdrop
@@ -164,7 +167,7 @@ struct SeriesDetailView: View {
         }
         .overlay(alignment: .bottom) {
             LinearGradient(
-                colors: [.clear, Color(.systemBackground).opacity(0.8)],
+                colors: [.clear, Color.primary.opacity(0.8)],
                 startPoint: .top,
                 endPoint: .bottom
             )

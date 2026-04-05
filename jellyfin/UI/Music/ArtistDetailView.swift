@@ -37,7 +37,9 @@ struct ArtistDetailView: View {
             }
         }
         .navigationTitle(artistItem.title)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .navigationDestination(for: Album.self) { album in
             AlbumDetailView(
                 albumItem: MediaItem(

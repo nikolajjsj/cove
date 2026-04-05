@@ -3,6 +3,7 @@ import ImageService
 import Models
 import PlaybackEngine
 import SwiftUI
+import JellyfinProvider
 
 struct MovieDetailView: View {
     let item: MediaItem
@@ -51,9 +52,21 @@ struct MovieDetailView: View {
             }
         }
         .navigationTitle(item.title)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(isPresented: $showPlayer) {
+            if let streamInfo {
+                VideoPlayerView(
+                    item: item,
+                    streamInfo: streamInfo,
+                    startPosition: item.userData?.playbackPosition ?? 0
+                )
+            }
+        }
+        #endif
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            //ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem() {
                 if let downloadManager = appState.downloadManager {
                     DownloadButton(
                         item: item,
@@ -63,15 +76,6 @@ struct MovieDetailView: View {
                         try await appState.provider.downloadURL(for: item, profile: nil)
                     }
                 }
-            }
-        }
-        .fullScreenCover(isPresented: $showPlayer) {
-            if let streamInfo {
-                VideoPlayerView(
-                    item: item,
-                    streamInfo: streamInfo,
-                    startPosition: item.userData?.playbackPosition ?? 0
-                )
             }
         }
         .alert(

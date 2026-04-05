@@ -3,6 +3,7 @@ import ImageService
 import Models
 import PlaybackEngine
 import SwiftUI
+import JellyfinProvider
 
 struct VideoPlayerView: View {
     let item: MediaItem
@@ -307,39 +308,41 @@ struct VideoPlayerView: View {
                         Spacer()
                         if videoManager.selectedSubtitleIndex == nil {
                             Image(systemName: "checkmark")
-                                .foregroundStyle(.accent)
+                                .foregroundStyle(Color.accentColor)
                                 .fontWeight(.semibold)
                         }
                     }
                 }
 
-                ForEach(videoManager.subtitleTracks) { track in
-                    Button {
-                        videoManager.selectedSubtitleIndex = track.id
-                        showSubtitlePicker = false
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(track.title)
-                                    .foregroundStyle(.primary)
-                                if let language = track.language {
-                                    Text(language.uppercased())
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            Spacer()
-                            if videoManager.selectedSubtitleIndex == track.id {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.accent)
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                    }
-                }
+//                ForEach(videoManager.subtitleTracks, id: \.id) { track in
+//                    Button {
+//                        videoManager.selectedSubtitleIndex = track.id
+//                        showSubtitlePicker = false
+//                    } label: {
+//                        HStack {
+//                            VStack(alignment: .leading, spacing: 2) {
+//                                Text(track.title)
+//                                    .foregroundStyle(.primary)
+//                                if let language = track.language {
+//                                    Text(language.uppercased())
+//                                        .font(.caption)
+//                                        .foregroundStyle(.secondary)
+//                                }
+//                            }
+//                            Spacer()
+//                            if videoManager.selectedSubtitleIndex == track.id {
+//                                Image(systemName: "checkmark")
+//                                    .foregroundStyle(.accent)
+//                                    .fontWeight(.semibold)
+//                            }
+//                        }
+//                    }
+//                }
             }
             .navigationTitle("Subtitles")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
@@ -368,7 +371,7 @@ struct VideoPlayerView: View {
                         Spacer()
 
                         Button {
-                            videoManager.showNextEpisodeCountdown = false
+//                            videoManager.showNextEpisodeCountdown = false
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.caption.bold())
