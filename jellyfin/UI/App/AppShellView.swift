@@ -10,16 +10,12 @@ struct AppShellView: View {
     @State private var showFullPlayer = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Group {
-                if sizeClass == .compact {
-                    compactLayout
-                } else {
-                    regularLayout
-                }
+        Group {
+            if sizeClass == .compact {
+                compactLayout
+            } else {
+                regularLayout
             }
-
-            NowPlayingBar(showFullPlayer: $showFullPlayer)
         }
         .overlay(alignment: .top) {
             if appState.isOffline {
@@ -32,7 +28,6 @@ struct AppShellView: View {
         .sheet(isPresented: $showFullPlayer) {
             AudioPlayerView()
         }
-
     }
 
     // MARK: - iPhone (compact) — TabView
@@ -47,6 +42,11 @@ struct AppShellView: View {
                             .withNavigationDestinations()
                     }
                 }
+            }
+        }
+        .tabViewBottomAccessory(isEnabled: appState.audioPlayer.queue.currentTrack != nil) {
+            if let track = appState.audioPlayer.queue.currentTrack {
+                NowPlayingBar(showFullPlayer: $showFullPlayer, track: track)
             }
         }
     }
@@ -66,6 +66,22 @@ struct AppShellView: View {
                 selectedTab.destination(appState: appState)
                     .navigationTitle(selectedTab.title)
                     .withNavigationDestinations()
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let track = appState.audioPlayer.queue.currentTrack {
+                NowPlayingBar(showFullPlayer: $showFullPlayer, track: track)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(height: 64)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(.separator, lineWidth: 0.5)
+                    )
+                    .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 4)
             }
         }
     }
