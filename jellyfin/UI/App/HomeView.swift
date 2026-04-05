@@ -223,11 +223,7 @@ private struct LibrarySection: View {
             }
             .buttonStyle(.plain)
 
-            if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 20)
-            } else if items.isEmpty {
+            if !isLoading && items.isEmpty {
                 Text("No items")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -235,12 +231,21 @@ private struct LibrarySection: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 12) {
-                        ForEach(items) { item in
-                            NavigationLink(value: item) {
-                                LibraryItemCard(item: item)
-                                    .frame(width: cardWidth(for: item))
+                        if isLoading {
+                            ForEach(0..<6, id: \.self) { _ in
+                                SkeletonCard(
+                                    width: defaultCardWidth,
+                                    aspectRatio: defaultAspectRatio
+                                )
                             }
-                            .buttonStyle(.plain)
+                        } else {
+                            ForEach(items) { item in
+                                NavigationLink(value: item) {
+                                    LibraryItemCard(item: item)
+                                        .frame(width: cardWidth(for: item))
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
                 }
@@ -266,6 +271,18 @@ private struct LibrarySection: View {
         }
     }
 
+    private var isMusic: Bool {
+        library.collectionType == .music
+    }
+
+    private var defaultCardWidth: CGFloat {
+        isMusic ? 140 : 130
+    }
+
+    private var defaultAspectRatio: CGFloat {
+        isMusic ? 1.0 : 2.0 / 3.0
+    }
+
     private func cardWidth(for item: MediaItem) -> CGFloat {
         switch item.mediaType {
         case .album, .artist, .track, .playlist:
@@ -273,5 +290,31 @@ private struct LibrarySection: View {
         default:
             130  // Portrait cards for video
         }
+    }
+}
+
+// MARK: - Skeleton Placeholder Card
+
+/// A placeholder card that matches the exact dimensions of a real
+/// `LibraryItemCard`, reserving layout space while data loads.
+private struct SkeletonCard: View {
+    let width: CGFloat
+    let aspectRatio: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.quaternary)
+                .aspectRatio(aspectRatio, contentMode: .fit)
+
+            // Two lines matching .caption + .lineLimit(2, reservesSpace: true)
+            RoundedRectangle(cornerRadius: 4)
+                .fill(.quaternary)
+                .frame(height: 10)
+            RoundedRectangle(cornerRadius: 4)
+                .fill(.quaternary)
+                .frame(width: width * 0.6, height: 10)
+        }
+        .frame(width: width)
     }
 }
