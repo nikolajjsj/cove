@@ -242,8 +242,8 @@ Download an album and a movie → go airplane mode → everything still plays wi
 
 ## Current Status
 
-- [~] **Phase 1** — Foundation (SPM Package + Models)
-- [ ] **Phase 2** — Networking + Jellyfin Auth
+- [x] **Phase 1** — Foundation (SPM Package + Models)
+- [~] **Phase 2** — Networking + Jellyfin Auth
 - [ ] **Phase 3** — Login UI + Library Browsing
 - [ ] **Phase 4** — Music Playback
 - [ ] **Phase 5** — Video Playback
