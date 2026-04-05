@@ -405,7 +405,18 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - DownloadableProvider (Phase 6)
 
     public func downloadURL(for item: MediaItem, profile: DeviceProfile?) async throws -> URL {
-        throw AppError.unknown(underlying: NotImplementedError())
+        guard let client = state.client else {
+            throw AppError.authFailed(reason: "Not connected to a server")
+        }
+
+        // Use the native download endpoint
+        guard let url = client.downloadURL(itemId: item.id.rawValue) else {
+            throw AppError.downloadFailed(
+                itemTitle: item.title,
+                reason: "Unable to build download URL"
+            )
+        }
+        return url
     }
 }
 

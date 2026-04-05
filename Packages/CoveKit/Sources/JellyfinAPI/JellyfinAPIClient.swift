@@ -393,6 +393,21 @@ public final class JellyfinAPIClient: Sendable {
         return urlComponents?.url
     }
 
+    /// Build a download URL for a media item. Synchronous.
+    /// For audio: uses the audio stream endpoint
+    /// For video: uses the video stream endpoint with `static=true`
+    /// `GET /Items/{id}/Download` (Jellyfin native download endpoint)
+    public func downloadURL(itemId: String) -> URL? {
+        guard let token = accessToken else { return nil }
+        var urlComponents = URLComponents(
+            url: baseURL.appendingPathComponent("Items/\(itemId)/Download"),
+            resolvingAgainstBaseURL: false)
+        urlComponents?.queryItems = [
+            URLQueryItem(name: "api_key", value: token)
+        ]
+        return urlComponents?.url
+    }
+
     // MARK: - Shows (TV Series)
 
     /// Get seasons for a series.
