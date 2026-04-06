@@ -89,7 +89,7 @@ struct AppShellView: View {
     // MARK: - Dynamic Tabs
 
     private var availableTabs: [AppTab] {
-        var tabs: [AppTab] = [.home]
+        var tabs: [AppTab] = [.home, .search]
         // On compact (iPhone), only show Home / Downloads / Settings.
         // Library sections are reachable by tapping their header on the Home view.
         if sizeClass != .compact {
@@ -108,6 +108,7 @@ struct AppShellView: View {
 
 enum AppTab: Hashable {
     case home
+    case search
     case music
     case movies
     case tvShows
@@ -117,6 +118,7 @@ enum AppTab: Hashable {
     var title: String {
         switch self {
         case .home: "Home"
+        case .search: "Search"
         case .music: "Music"
         case .movies: "Movies"
         case .tvShows: "TV Shows"
@@ -128,6 +130,7 @@ enum AppTab: Hashable {
     var icon: String {
         switch self {
         case .home: "house"
+        case .search: "magnifyingglass"
         case .music: "music.note"
         case .movies: "film"
         case .tvShows: "tv"
@@ -141,6 +144,8 @@ enum AppTab: Hashable {
         switch self {
         case .home:
             HomeView()
+        case .search:
+            SearchView()
         case .music:
             MusicLibraryView(library: appState.libraries.first { $0.collectionType == .music })
         case .movies:

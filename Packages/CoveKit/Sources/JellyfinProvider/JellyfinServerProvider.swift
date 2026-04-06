@@ -178,6 +178,25 @@ public final class JellyfinServerProvider: MediaServerProvider,
         return SearchResults(items: items)
     }
 
+    public func searchPaged(
+        query: String, includeItemTypes: [String]?, limit: Int?, startIndex: Int?
+    ) async throws -> PagedResult<MediaItem> {
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getItems(
+            userId: userId,
+            includeItemTypes: includeItemTypes,
+            limit: limit,
+            startIndex: startIndex,
+            searchTerm: query
+        )
+        let items = (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+        return PagedResult(
+            items: items,
+            startIndex: startIndex ?? 0,
+            totalCount: result.totalRecordCount ?? items.count
+        )
+    }
+
     // MARK: - MusicProvider (Phase 4)
 
     public func albums(artist: ArtistID) async throws -> [Album] {

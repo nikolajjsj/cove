@@ -23,6 +23,8 @@ public protocol MediaServerProvider: Sendable {
 
     // Search
     func search(query: String, mediaTypes: [MediaType]) async throws -> SearchResults
+    func searchPaged(query: String, includeItemTypes: [String]?, limit: Int?, startIndex: Int?)
+        async throws -> PagedResult<MediaItem>
 }
 
 extension MediaServerProvider {
