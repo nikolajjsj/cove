@@ -30,6 +30,12 @@ public final class AudioPlaybackManager {
     /// Maps backend item tokens to their corresponding Track for identification.
     @ObservationIgnored private var tokenToTrack: [AnyHashable: Track] = [:]
 
+    /// Whether playback was active before an audio session interruption began.
+    @ObservationIgnored private var wasPlayingBeforeInterruption: Bool = false
+
+    /// Task listening for audio session interruption notifications.
+    @ObservationIgnored private nonisolated(unsafe) var interruptionTask: Task<Void, Never>?
+
     // MARK: - Init
 
     public init(
@@ -39,6 +45,7 @@ public final class AudioPlaybackManager {
         self.playerBackend = playerBackend ?? AVQueuePlayerBackend()
         self.nowPlaying = nowPlayingProvider ?? NowPlayingService()
         setupAudioSession()
+        setupInterruptionObserver()
         setupPlayerCallbacks()
         nowPlaying.setup()
         setupRemoteCommandHandlers()
@@ -163,6 +170,54 @@ public final class AudioPlaybackManager {
                 logger.debug("Audio session configured for playback")
             } catch {
                 logger.error("Failed to configure audio session: \(error.localizedDescription)")
+            }
+        #endif
+    }
+
+    /// Observes `AVAudioSession.interruptionNotification` to pause on interruption
+    /// begin (e.g. phone call) and resume when the interruption ends.
+    private func setupInterruptionObserver() {
+        #if os(iOS)
+            interruptionTask = Task { [weak self] in
+                let notifications = NotificationCenter.default.notifications(
+                    named: AVAudioSession.interruptionNotification
+                )
+                for await notification in notifications {
+                    guard let self else { break }
+                    guard let info = notification.userInfo,
+                        let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+                        let type = AVAudioSession.InterruptionType(rawValue: typeValue)
+                    else {
+                        continue
+                    }
+
+                    switch type {
+                    case .began:
+                        self.wasPlayingBeforeInterruption = self.isPlaying
+                        if self.isPlaying {
+                            self.pause()
+                            self.logger.info("Playback paused due to audio session interruption")
+                        }
+                    case .ended:
+                        let shouldResume: Bool
+                        if let optionsValue = info[AVAudioSessionInterruptionOptionKey] as? UInt {
+                            shouldResume = AVAudioSession.InterruptionOptions(
+                                rawValue: optionsValue
+                            )
+                            .contains(.shouldResume)
+                        } else {
+                            shouldResume = false
+                        }
+
+                        if self.wasPlayingBeforeInterruption && shouldResume {
+                            self.resume()
+                            self.logger.info("Playback resumed after audio session interruption")
+                        }
+                        self.wasPlayingBeforeInterruption = false
+                    @unknown default:
+                        break
+                    }
+                }
             }
         #endif
     }
