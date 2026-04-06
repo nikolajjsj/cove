@@ -42,7 +42,7 @@ private struct PersonCard: View {
                 if let image = state.image {
                     image
                         .resizable()
-                        .aspectRatio(1, contentMode: .fit)
+                        .scaledToFill()
                 } else if state.isLoading {
                     Rectangle()
                         .fill(.quaternary)
@@ -68,7 +68,7 @@ private struct PersonCard: View {
                     .fontWeight(.medium)
                     .lineLimit(1)
                     .foregroundStyle(.primary)
-                
+
                 // Role
                 if let role = person.role, !role.isEmpty {
                     Text(role)

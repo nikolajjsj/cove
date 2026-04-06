@@ -61,7 +61,7 @@ struct PersonDetailView: View {
                 if let image = state.image {
                     image
                         .resizable()
-                        .aspectRatio(1, contentMode: .fill)
+                        .scaledToFill()
                 } else if state.isLoading {
                     Rectangle()
                         .fill(.quaternary)
