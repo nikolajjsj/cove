@@ -146,7 +146,9 @@ final class AppState {
         else { return }
 
         let serverId = connection.id.uuidString
-        let remoteURL = try await provider.downloadURL(for: item, profile: provider.deviceProfile())
+        let downloadInfo = try await provider.downloadInfo(
+            for: item, profile: provider.deviceProfile())
+        let remoteURL = downloadInfo.url
 
         let artworkURL = provider.imageURL(
             for: item,
@@ -198,7 +200,8 @@ final class AppState {
             mediaType: item.mediaType,
             remoteURL: remoteURL,
             parentId: parentId,
-            artworkURL: artworkURL
+            artworkURL: artworkURL,
+            expectedBytes: downloadInfo.expectedBytes ?? 0
         )
     }
 
@@ -252,7 +255,8 @@ final class AppState {
         try await metadataRepo.save(seasonMeta)
 
         // 3. Save episode metadata and resolve download URLs
-        var episodeTuples: [(itemId: ItemID, title: String, remoteURL: URL)] = []
+        var episodeTuples: [(itemId: ItemID, title: String, remoteURL: URL, expectedBytes: Int64)] =
+            []
 
         for episode in episodes.sorted(by: { ($0.episodeNumber ?? 0) < ($1.episodeNumber ?? 0) }) {
             // Save episode metadata
@@ -283,9 +287,13 @@ final class AppState {
             let epItem = MediaItem(
                 id: episode.id, title: episode.title, mediaType: .episode
             )
-            let remoteURL = try await provider.downloadURL(
+            let downloadInfo = try await provider.downloadInfo(
                 for: epItem, profile: provider.deviceProfile())
-            episodeTuples.append((itemId: episode.id, title: episode.title, remoteURL: remoteURL))
+            episodeTuples.append(
+                (
+                    itemId: episode.id, title: episode.title, remoteURL: downloadInfo.url,
+                    expectedBytes: downloadInfo.expectedBytes ?? 0
+                ))
         }
 
         // 4. Batch enqueue via download manager
@@ -332,7 +340,8 @@ final class AppState {
         try await metadataRepo.save(albumMeta)
 
         // 2. Save track metadata and resolve download URLs
-        var trackTuples: [(itemId: ItemID, title: String, remoteURL: URL)] = []
+        var trackTuples: [(itemId: ItemID, title: String, remoteURL: URL, expectedBytes: Int64)] =
+            []
 
         for track in tracks.sorted(by: {
             ($0.discNumber ?? 1, $0.trackNumber ?? 0) < ($1.discNumber ?? 1, $1.trackNumber ?? 0)
@@ -342,9 +351,13 @@ final class AppState {
 
             // Resolve download URL
             let trackItem = MediaItem(id: track.id, title: track.title, mediaType: .track)
-            let remoteURL = try await provider.downloadURL(
+            let downloadInfo = try await provider.downloadInfo(
                 for: trackItem, profile: provider.deviceProfile())
-            trackTuples.append((itemId: track.id, title: track.title, remoteURL: remoteURL))
+            trackTuples.append(
+                (
+                    itemId: track.id, title: track.title, remoteURL: downloadInfo.url,
+                    expectedBytes: downloadInfo.expectedBytes ?? 0
+                ))
         }
 
         // 3. Batch enqueue via download manager

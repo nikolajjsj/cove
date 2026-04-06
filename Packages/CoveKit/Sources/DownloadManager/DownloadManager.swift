@@ -76,6 +76,9 @@ public final class DownloadManagerService: @unchecked Sendable {
         var resumeDataCache: [String: Data] = [:]
         /// Number of downloads currently in the `.downloading` state with an active task.
         var activeDownloadCount: Int = 0
+        /// Expected file sizes (bytes) stored at enqueue time, keyed by `DownloadItem.id`.
+        /// Used as a fallback when the server omits `Content-Length`.
+        var expectedBytesCache: [String: Int64] = [:]
     }
 
     private let state: OSAllocatedUnfairLock<State>
@@ -142,7 +145,8 @@ public final class DownloadManagerService: @unchecked Sendable {
         mediaType: MediaType,
         remoteURL: URL,
         parentId: ItemID? = nil,
-        artworkURL: URL? = nil
+        artworkURL: URL? = nil,
+        expectedBytes: Int64 = 0
     ) async throws -> DownloadItem {
         // Check for duplicates
         if let existing = try await downloadRepository.fetch(
@@ -167,7 +171,7 @@ public final class DownloadManagerService: @unchecked Sendable {
             mediaType: mediaType,
             state: .queued,
             progress: 0,
-            totalBytes: 0,
+            totalBytes: expectedBytes,
             downloadedBytes: 0,
             localFilePath: nil,
             remoteURL: remoteURL.absoluteString,
@@ -203,7 +207,7 @@ public final class DownloadManagerService: @unchecked Sendable {
     @discardableResult
     public func enqueueAlbum(
         albumItemId: ItemID,
-        tracks: [(itemId: ItemID, title: String, remoteURL: URL)],
+        tracks: [(itemId: ItemID, title: String, remoteURL: URL, expectedBytes: Int64)],
         serverId: String,
         groupTitle: String
     ) async throws -> DownloadGroup {
@@ -242,7 +246,7 @@ public final class DownloadManagerService: @unchecked Sendable {
                 mediaType: .track,
                 state: .queued,
                 progress: 0,
-                totalBytes: 0,
+                totalBytes: track.expectedBytes,
                 downloadedBytes: 0,
                 localFilePath: nil,
                 remoteURL: track.remoteURL.absoluteString,
@@ -275,7 +279,7 @@ public final class DownloadManagerService: @unchecked Sendable {
     public func enqueueSeason(
         seasonItemId: ItemID,
         seriesItemId: ItemID,
-        episodes: [(itemId: ItemID, title: String, remoteURL: URL)],
+        episodes: [(itemId: ItemID, title: String, remoteURL: URL, expectedBytes: Int64)],
         serverId: String,
         groupTitle: String
     ) async throws -> DownloadGroup {
@@ -313,7 +317,7 @@ public final class DownloadManagerService: @unchecked Sendable {
                 mediaType: .episode,
                 state: .queued,
                 progress: 0,
-                totalBytes: 0,
+                totalBytes: episode.expectedBytes,
                 downloadedBytes: 0,
                 localFilePath: nil,
                 remoteURL: episode.remoteURL.absoluteString,
@@ -677,10 +681,13 @@ public final class DownloadManagerService: @unchecked Sendable {
 
         task.taskDescription = item.id  // belt-and-suspenders: store ID on the task too
 
-        // Register mapping
+        // Register mapping and cache expected size for progress fallback
         state.withLock { state in
             state.taskToDownloadID[task.taskIdentifier] = item.id
             state.activeDownloadCount += 1
+            if item.totalBytes > 0 {
+                state.expectedBytesCache[item.id] = item.totalBytes
+            }
         }
 
         // Update DB state
@@ -708,7 +715,14 @@ public final class DownloadManagerService: @unchecked Sendable {
         if totalBytesExpectedToWrite > 0 {
             progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
         } else {
-            progress = 0
+            // Server didn't provide Content-Length (e.g. transcoded stream).
+            // Fall back to the expected size stored at enqueue time.
+            let storedTotal = state.withLock { $0.expectedBytesCache[downloadID] }
+            if let storedTotal, storedTotal > 0 {
+                progress = Double(totalBytesWritten) / Double(storedTotal)
+            } else {
+                progress = 0
+            }
         }
 
         Task { [downloadRepository] in

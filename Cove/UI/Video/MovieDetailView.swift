@@ -5,6 +5,7 @@ import JellyfinProvider
 import Models
 import PlaybackEngine
 import SwiftUI
+import MediaServerKit
 
 struct MovieDetailView: View {
     let item: MediaItem
@@ -91,8 +92,9 @@ struct MovieDetailView: View {
                         serverId: appState.activeConnection?.id.uuidString ?? "",
                         downloadManager: downloadManager,
                         downloadURLResolver: {
-                            try await appState.provider.downloadURL(
+                            let info = try await appState.provider.downloadInfo(
                                 for: item, profile: appState.provider.deviceProfile())
+                            return info.url
                         },
                         onDownload: {
                             try await appState.downloadItem(item)

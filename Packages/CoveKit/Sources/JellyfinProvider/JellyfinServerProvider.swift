@@ -583,7 +583,9 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
     // MARK: - DownloadableProvider (Phase 6)
 
-    public func downloadURL(for item: MediaItem, profile: DeviceProfile?) async throws -> URL {
+    public func downloadInfo(for item: MediaItem, profile: DeviceProfile?) async throws
+        -> DownloadInfo
+    {
         let (client, userId) = try authenticatedClient()
         let resolvedProfile = profile ?? deviceProfile()
 
@@ -608,7 +610,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
                     reason: "Unable to build download URL"
                 )
             }
-            return url
+            return DownloadInfo(url: url, expectedBytes: source.size)
         }
 
         // Otherwise, request a compatible format via the stream endpoint
@@ -623,7 +625,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
                 reason: "Unable to build compatible download URL"
             )
         }
-        return url
+        return DownloadInfo(url: url, expectedBytes: source.size)
     }
 }
 
