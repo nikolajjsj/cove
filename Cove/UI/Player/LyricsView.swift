@@ -89,12 +89,11 @@ struct LyricsView: View {
                 }
             }
             .scrollIndicators(.hidden)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 5)
-                    .onChanged { _ in
-                        pauseAutoScroll()
-                    }
-            )
+            .onScrollPhaseChange { _, newPhase in
+                if newPhase == .interacting {
+                    pauseAutoScroll()
+                }
+            }
             .onChange(of: currentLineIndex) { _, newIndex in
                 guard let newIndex, !isUserScrolling else { return }
                 withAnimation(.easeInOut(duration: 0.4)) {
