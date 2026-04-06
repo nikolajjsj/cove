@@ -25,9 +25,22 @@
 		B53D7B9F2F823DC20023368C /* Cove.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cove.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B5FDE42F2F83AA9F00F54FAA /* Exceptions for "Cove" folder in "Cove" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B53D7B9E2F823DC20023368C /* Cove */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B53D7BA12F823DC20023368C /* Cove */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B5FDE42F2F83AA9F00F54FAA /* Exceptions for "Cove" folder in "Cove" target */,
+			);
 			path = Cove;
 			sourceTree = "<group>";
 		};
@@ -306,6 +319,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Cove/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Cove;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -354,6 +368,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Cove/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Cove;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
