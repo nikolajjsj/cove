@@ -129,6 +129,18 @@ extension DownloadItem {
         state == .completed && localFilePath != nil
     }
 
+    /// Whether this download supports pause/resume.
+    ///
+    /// Downloads from the static `/Items/{id}/Download` endpoint support HTTP range
+    /// requests and can be resumed after pausing. Downloads from the streaming
+    /// `/Videos/{id}/stream?static=false` endpoint are transcoded/remuxed on-the-fly
+    /// and cannot be resumed — pausing would discard all progress.
+    public var isResumable: Bool {
+        // Streaming endpoints contain "static=false" in the URL; static file
+        // downloads use the /Download endpoint and don't contain this parameter.
+        !remoteURL.contains("static=false")
+    }
+
     /// A formatted string describing the downloaded size (e.g. "12.3 MB / 100.0 MB").
     public var formattedProgress: String {
         let formatter = ByteCountFormatter()

@@ -60,12 +60,20 @@ struct DownloadRowView: View {
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             switch item.state {
             case .downloading:
-                Button {
-                    onAction(.pause, item)
-                } label: {
-                    Label("Pause", systemImage: "pause.fill")
+                if item.isResumable {
+                    Button {
+                        onAction(.pause, item)
+                    } label: {
+                        Label("Pause", systemImage: "pause.fill")
+                    }
+                    .tint(.orange)
+                } else {
+                    Button(role: .destructive) {
+                        onAction(.delete, item)
+                    } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                    }
                 }
-                .tint(.orange)
 
             case .paused, .queued:
                 Button {
@@ -194,7 +202,7 @@ struct DownloadRowView: View {
                     .trim(from: 0, to: item.progress)
                     .stroke(.tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                Image(systemName: "pause.fill")
+                Image(systemName: item.isResumable ? "pause.fill" : "stop.fill")
                     .font(.system(size: 8))
                     .foregroundStyle(.secondary)
             }
@@ -223,10 +231,18 @@ struct DownloadRowView: View {
     private var contextMenuItems: some View {
         switch item.state {
         case .downloading:
-            Button {
-                onAction(.pause, item)
-            } label: {
-                Label("Pause", systemImage: "pause.fill")
+            if item.isResumable {
+                Button {
+                    onAction(.pause, item)
+                } label: {
+                    Label("Pause", systemImage: "pause.fill")
+                }
+            } else {
+                Button(role: .destructive) {
+                    onAction(.delete, item)
+                } label: {
+                    Label("Stop Download", systemImage: "stop.fill")
+                }
             }
 
         case .paused:

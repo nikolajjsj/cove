@@ -45,6 +45,11 @@ final class DownloadButtonModel {
         case .none:
             await startDownload()
         case .queued, .downloading:
+            // Streaming/transcoded downloads can't be paused — they would lose
+            // all progress because the server doesn't support HTTP range requests.
+            if downloadItem?.isResumable == false {
+                return
+            }
             await pauseDownload()
         case .paused:
             await resumeDownload()

@@ -79,6 +79,10 @@ public final class DownloadManagerService: @unchecked Sendable {
         /// Expected file sizes (bytes) stored at enqueue time, keyed by `DownloadItem.id`.
         /// Used as a fallback when the server omits `Content-Length`.
         var expectedBytesCache: [String: Int64] = [:]
+        /// Timestamp of the last DB progress write per download, keyed by `DownloadItem.id`.
+        /// Used to throttle writes to ~1 per second so GRDB observation doesn't cause
+        /// excessive SwiftUI re-renders (which break context menu interaction).
+        var lastProgressWrite: [String: ContinuousClock.Instant] = [:]
     }
 
     private let state: OSAllocatedUnfairLock<State>
@@ -372,6 +376,16 @@ public final class DownloadManagerService: @unchecked Sendable {
             return
         }
 
+        // Streaming/transcoded downloads cannot be resumed — the server generates
+        // the output on-the-fly without HTTP range support. Pausing would discard
+        // all progress, so we block it entirely.
+        guard item.isResumable else {
+            logger.warning(
+                "Cannot pause download \(id): streaming download does not support resume"
+            )
+            return
+        }
+
         // Find the task and cancel with resume data
         let taskIdentifier = state.withLock {
             $0.taskToDownloadID.first(where: { $0.value == id })?.key
@@ -395,6 +409,7 @@ public final class DownloadManagerService: @unchecked Sendable {
             state.withLock { state in
                 state.taskToDownloadID.removeValue(forKey: taskId)
                 state.activeDownloadCount = max(0, state.activeDownloadCount - 1)
+                state.lastProgressWrite.removeValue(forKey: id)
             }
         }
 
@@ -489,7 +504,11 @@ public final class DownloadManagerService: @unchecked Sendable {
             }
         }
 
-        state.withLock { _ = $0.resumeDataCache.removeValue(forKey: id) }
+        state.withLock { state in
+            state.resumeDataCache.removeValue(forKey: id)
+            state.expectedBytesCache.removeValue(forKey: id)
+            state.lastProgressWrite.removeValue(forKey: id)
+        }
 
         // Delete files
         if let item = try await downloadRepository.fetch(id: id) {
@@ -700,6 +719,12 @@ public final class DownloadManagerService: @unchecked Sendable {
 
     // MARK: - Internal — Delegate Callbacks
 
+    /// Minimum interval between DB progress writes for a single download.
+    /// Throttling prevents GRDB `ValueObservation` from firing too often,
+    /// which would cause SwiftUI to re-render the download row so frequently
+    /// that context menus and swipe actions become unresponsive.
+    private static let progressWriteInterval: ContinuousClock.Duration = .seconds(1)
+
     /// Called by the delegate when periodic progress is reported.
     internal func handleProgress(
         taskIdentifier: Int,
@@ -724,6 +749,21 @@ public final class DownloadManagerService: @unchecked Sendable {
                 progress = 0
             }
         }
+
+        // Throttle: only write to the DB at most once per second per download.
+        // This prevents excessive GRDB observation events → SwiftUI re-renders.
+        let now = ContinuousClock.now
+        let shouldWrite = state.withLock { state -> Bool in
+            if let lastWrite = state.lastProgressWrite[downloadID],
+                now - lastWrite < Self.progressWriteInterval
+            {
+                return false
+            }
+            state.lastProgressWrite[downloadID] = now
+            return true
+        }
+
+        guard shouldWrite else { return }
 
         Task { [downloadRepository] in
             try? await downloadRepository.updateProgress(
@@ -817,6 +857,7 @@ public final class DownloadManagerService: @unchecked Sendable {
             guard let id = state.taskToDownloadID[taskIdentifier] else { return nil }
             state.taskToDownloadID.removeValue(forKey: taskIdentifier)
             state.activeDownloadCount = max(0, state.activeDownloadCount - 1)
+            state.lastProgressWrite.removeValue(forKey: id)
             return id
         }
 
