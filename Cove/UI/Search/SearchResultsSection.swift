@@ -1,6 +1,13 @@
 import Models
 import SwiftUI
 
+/// A route value for navigating to the "See All" search results view.
+struct SearchSeeAllRoute: Hashable {
+    let query: String
+    let mediaType: MediaType
+    let title: String
+}
+
 struct SearchResultsSection: View {
     let title: String
     let items: [MediaItem]
@@ -20,13 +27,13 @@ struct SearchResultsSection: View {
                     Spacer()
 
                     if items.count > maxItems {
-                        NavigationLink {
-                            SearchSeeAllView(
+                        NavigationLink(
+                            value: SearchSeeAllRoute(
                                 query: query,
                                 mediaType: mediaType,
                                 title: title
                             )
-                        } label: {
+                        ) {
                             Text("See All")
                                 .font(.subheadline)
                                 .foregroundStyle(.accent)

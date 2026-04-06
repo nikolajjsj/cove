@@ -57,6 +57,13 @@ private struct NavigationDestinations: ViewModifier {
             .navigationDestination(for: Album.self) { album in
                 NavigationRouter.destination(for: album)
             }
+            .navigationDestination(for: SearchSeeAllRoute.self) { route in
+                SearchSeeAllView(
+                    query: route.query,
+                    mediaType: route.mediaType,
+                    title: route.title
+                )
+            }
     }
 }
 
