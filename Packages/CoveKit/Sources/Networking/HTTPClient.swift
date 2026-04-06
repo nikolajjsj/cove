@@ -67,6 +67,28 @@ public final class HTTPClient: Sendable {
         }
     }
 
+    /// Execute a request with a pre-encoded JSON body (bypasses the shared encoder).
+    ///
+    /// Use this when the request body requires a specific encoding strategy
+    /// (e.g. PascalCase keys for Jellyfin API) that differs from the client's
+    /// default `.convertToSnakeCase` encoder.
+    public func request<T: Decodable & Sendable>(
+        url: URL,
+        method: HTTPMethod = .get,
+        headers: [String: String] = [:],
+        rawBody: Data,
+        queryItems: [URLQueryItem]? = nil
+    ) async throws -> T {
+        let data = try await execute(
+            url: url, method: method, headers: headers, rawBody: rawBody,
+            queryItems: queryItems, cachePolicy: .networkOnly)
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            throw AppError.unknown(underlying: error)
+        }
+    }
+
     /// Execute a request and discard the response body.
     public func request(
         url: URL,
@@ -116,7 +138,39 @@ public final class HTTPClient: Sendable {
         url: URL,
         method: HTTPMethod,
         headers: [String: String],
+        rawBody: Data,
+        queryItems: [URLQueryItem]?,
+        cachePolicy: CachePolicy
+    ) async throws -> Data {
+        try await execute(
+            url: url, method: method, headers: headers,
+            resolvedBody: rawBody, queryItems: queryItems, cachePolicy: cachePolicy)
+    }
+
+    private func execute(
+        url: URL,
+        method: HTTPMethod,
+        headers: [String: String],
         body: (any Encodable & Sendable)?,
+        queryItems: [URLQueryItem]?,
+        cachePolicy: CachePolicy
+    ) async throws -> Data {
+        let resolvedBody: Data?
+        if let body {
+            resolvedBody = try encoder.encode(body)
+        } else {
+            resolvedBody = nil
+        }
+        return try await execute(
+            url: url, method: method, headers: headers,
+            resolvedBody: resolvedBody, queryItems: queryItems, cachePolicy: cachePolicy)
+    }
+
+    private func execute(
+        url: URL,
+        method: HTTPMethod,
+        headers: [String: String],
+        resolvedBody: Data?,
         queryItems: [URLQueryItem]?,
         cachePolicy: CachePolicy
     ) async throws -> Data {
@@ -148,8 +202,8 @@ public final class HTTPClient: Sendable {
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }
 
-        if let body {
-            urlRequest.httpBody = try encoder.encode(body)
+        if let resolvedBody {
+            urlRequest.httpBody = resolvedBody
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
 

@@ -146,7 +146,7 @@ final class AppState {
         else { return }
 
         let serverId = connection.id.uuidString
-        let remoteURL = try await provider.downloadURL(for: item, profile: nil)
+        let remoteURL = try await provider.downloadURL(for: item, profile: provider.deviceProfile())
 
         let artworkURL = provider.imageURL(
             for: item,
@@ -160,7 +160,7 @@ final class AppState {
         // Download primary artwork
         let storage = DownloadStorage.shared
         if let artworkURL {
-            try? storage.prepareParentDirectory(
+            let _ = try? storage.prepareParentDirectory(
                 serverId: serverId, mediaType: item.mediaType, itemId: item.id
             )
             let destURL = storage.primaryImageURL(
@@ -217,7 +217,7 @@ final class AppState {
 
         // 1. Save and download artwork for the series (parent)
         var seriesMeta = OfflineMediaMetadata.from(item: series, serverId: serverId)
-        try? storage.prepareParentDirectory(
+        let _ = try? storage.prepareParentDirectory(
             serverId: serverId, mediaType: .series, itemId: series.id
         )
 
@@ -264,7 +264,7 @@ final class AppState {
             if let thumbURL = provider.imageURL(
                 for: episode.id, type: .primary, maxSize: CGSize(width: 320, height: 180)
             ) {
-                try? storage.prepareParentDirectory(
+                let _ = try? storage.prepareParentDirectory(
                     serverId: serverId, mediaType: .episode, itemId: episode.id
                 )
                 let dest = storage.primaryImageURL(
@@ -283,7 +283,8 @@ final class AppState {
             let epItem = MediaItem(
                 id: episode.id, title: episode.title, mediaType: .episode
             )
-            let remoteURL = try await provider.downloadURL(for: epItem, profile: nil)
+            let remoteURL = try await provider.downloadURL(
+                for: epItem, profile: provider.deviceProfile())
             episodeTuples.append((itemId: episode.id, title: episode.title, remoteURL: remoteURL))
         }
 
@@ -312,7 +313,7 @@ final class AppState {
 
         // 1. Save and download artwork for the album
         var albumMeta = OfflineMediaMetadata.from(album: album, serverId: serverId)
-        try? storage.prepareParentDirectory(
+        let _ = try? storage.prepareParentDirectory(
             serverId: serverId, mediaType: .album, itemId: album.id
         )
 
@@ -341,7 +342,8 @@ final class AppState {
 
             // Resolve download URL
             let trackItem = MediaItem(id: track.id, title: track.title, mediaType: .track)
-            let remoteURL = try await provider.downloadURL(for: trackItem, profile: nil)
+            let remoteURL = try await provider.downloadURL(
+                for: trackItem, profile: provider.deviceProfile())
             trackTuples.append((itemId: track.id, title: track.title, remoteURL: remoteURL))
         }
 

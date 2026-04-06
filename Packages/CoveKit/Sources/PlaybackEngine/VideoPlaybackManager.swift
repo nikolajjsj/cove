@@ -48,6 +48,8 @@ public final class VideoPlaybackManager {
     public var onPlaybackStopped: (@MainActor (MediaItem, TimeInterval) async -> Void)?
     /// Called when the user triggers "play next episode".
     public var onPlayNextEpisode: (@MainActor (MediaItem) -> Void)?
+    /// Called when playback fails (e.g. AVPlayerItem enters .failed status).
+    public var onPlaybackError: (@MainActor (MediaItem, Error) -> Void)?
 
     // MARK: - Internal
 
@@ -108,6 +110,10 @@ public final class VideoPlaybackManager {
                     url: nil  // App layer will provide subtitle URLs separately if needed
                 )
             }
+
+        logger.info(
+            "Loading stream: url=\(streamInfo.url.absoluteString) method=\(streamInfo.playMethod.rawValue) container=\(streamInfo.container ?? "unknown") video=\(streamInfo.videoCodec ?? "unknown") audio=\(streamInfo.audioCodec ?? "unknown")"
+        )
 
         let playerItem = AVPlayerItem(url: streamInfo.url)
         player.replaceCurrentItem(with: playerItem)
@@ -330,9 +336,32 @@ public final class VideoPlaybackManager {
                     }
                     self.isBuffering = false
                 case .failed:
+                    let error =
+                        item.error
+                        ?? NSError(
+                            domain: "VideoPlayback",
+                            code: -1,
+                            userInfo: [NSLocalizedDescriptionKey: "Unknown playback error"]
+                        )
+                    let nsError = error as NSError
                     self.logger.error(
-                        "Player item failed: \(item.error?.localizedDescription ?? "unknown")")
+                        "Player item failed: domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)"
+                    )
+                    if let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+                        self.logger.error(
+                            "Underlying error: domain=\(underlyingError.domain) code=\(underlyingError.code) description=\(underlyingError.localizedDescription)"
+                        )
+                    }
+                    if let failureReason = nsError.localizedFailureReason {
+                        self.logger.error("Failure reason: \(failureReason)")
+                    }
+                    if let url = (item.asset as? AVURLAsset)?.url {
+                        self.logger.error("Failed URL: \(url.absoluteString)")
+                    }
                     self.isBuffering = false
+                    if let currentItem = self.currentItem {
+                        self.onPlaybackError?(currentItem, error)
+                    }
                 default:
                     break
                 }

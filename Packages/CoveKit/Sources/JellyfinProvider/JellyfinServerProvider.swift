@@ -320,9 +320,10 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
     public func streamURL(for item: MediaItem, profile: DeviceProfile?) async throws -> StreamInfo {
         let (client, userId) = try authenticatedClient()
+        let resolvedProfile = profile ?? deviceProfile()
 
         let playbackInfo = try await client.getPlaybackInfo(
-            userId: userId, itemId: item.id.rawValue)
+            userId: userId, itemId: item.id.rawValue, profile: resolvedProfile)
 
         guard let source = playbackInfo.mediaSources?.first else {
             throw AppError.playbackFailed(reason: "No media source available")
@@ -331,54 +332,168 @@ public final class JellyfinServerProvider: MediaServerProvider,
         let mediaStreams = JellyfinMapper.mapMediaStreams(source.mediaStreams ?? [])
         let sourceId = source.id ?? item.id.rawValue
 
-        // Decide: direct play vs transcode
-        if source.supportsDirectPlay == true || source.supportsDirectStream == true,
+        // Extract codec info from media streams for logging/debugging
+        let videoCodec = source.mediaStreams?
+            .first(where: { $0.type == "Video" })?.codec?.lowercased()
+        let audioCodec = source.mediaStreams?
+            .first(where: { $0.type == "Audio" })?.codec?.lowercased()
+        let container = source.container?.lowercased()
+
+        // Log raw server response for diagnostics
+        logger.info(
+            "PlaybackInfo response: container=\(container ?? "nil") video=\(videoCodec ?? "nil") audio=\(audioCodec ?? "nil") directPlay=\(source.supportsDirectPlay ?? false) directStream=\(source.supportsDirectStream ?? false) transcodingUrl=\(source.transcodingUrl != nil ? "present" : "nil")"
+        )
+
+        // Client-side safety net: verify that AVPlayer can actually handle the format
+        // before trusting the server's DirectPlay/DirectStream decision.
+        let avPlayerCompatible = Self.isAVPlayerCompatible(
+            container: container, videoCodec: videoCodec, audioCodec: audioCodec
+        )
+
+        // Branch 1: Direct Play — file is natively supported as-is
+        if source.supportsDirectPlay == true && avPlayerCompatible,
             let url = client.videoStreamURL(
-                itemId: item.id.rawValue, mediaSourceId: sourceId, container: source.container)
+                itemId: item.id.rawValue,
+                mediaSourceId: sourceId,
+                container: source.container,
+                staticStream: true
+            )
         {
+            logger.info("Stream resolved: DirectPlay")
             return StreamInfo(
                 url: url,
-                isTranscoded: false,
+                playMethod: .directPlay,
+                container: container,
+                videoCodec: videoCodec,
+                audioCodec: audioCodec,
                 mediaStreams: mediaStreams,
-                directPlaySupported: true
+                mediaSourceId: sourceId
             )
         }
 
-        // Try transcode
+        // Branch 2: Direct Stream — server remuxes container, no re-encoding
+        // Only safe if the codecs themselves are AVPlayer-compatible (container mismatch is fine
+        // since the server will remux into a compatible container).
+        let codecsCompatible = Self.areCodecsAVPlayerCompatible(
+            videoCodec: videoCodec, audioCodec: audioCodec
+        )
+
+        if source.supportsDirectStream == true && codecsCompatible,
+            let url = client.videoStreamURL(
+                itemId: item.id.rawValue,
+                mediaSourceId: sourceId,
+                staticStream: false
+            )
+        {
+            logger.info("Stream resolved: DirectStream")
+            return StreamInfo(
+                url: url,
+                playMethod: .directStream,
+                container: container,
+                videoCodec: videoCodec,
+                audioCodec: audioCodec,
+                mediaStreams: mediaStreams,
+                mediaSourceId: sourceId
+            )
+        }
+
+        // If server said DirectPlay/DirectStream but we rejected it, log why
+        if source.supportsDirectPlay == true && !avPlayerCompatible {
+            logger.warning(
+                "Server suggested DirectPlay but format is not AVPlayer-compatible — falling through to transcode"
+            )
+        }
+        if source.supportsDirectStream == true && !codecsCompatible {
+            logger.warning(
+                "Server suggested DirectStream but codecs are not AVPlayer-compatible — falling through to transcode"
+            )
+        }
+
+        // Branch 3: Transcode — server re-encodes via HLS
         if let transcodingPath = source.transcodingUrl,
             let url = client.hlsStreamURL(transcodingPath: transcodingPath)
         {
+            logger.info("Stream resolved: Transcode")
             return StreamInfo(
                 url: url,
-                isTranscoded: true,
+                playMethod: .transcode,
+                container: container,
+                videoCodec: videoCodec,
+                audioCodec: audioCodec,
                 mediaStreams: mediaStreams,
-                directPlaySupported: false
+                mediaSourceId: sourceId
             )
+        }
+
+        // Branch 4: Server suggested DirectPlay/DirectStream for a format AVPlayer can't handle
+        // and didn't provide a transcodingUrl. Re-request with direct play/stream disabled
+        // to force the server to give us a transcode URL.
+        if !avPlayerCompatible || !codecsCompatible {
+            logger.warning(
+                "No transcode URL in initial response — retrying with forced transcoding"
+            )
+
+            let retryPlaybackInfo = try await client.getPlaybackInfoTranscodeOnly(
+                userId: userId, itemId: item.id.rawValue, profile: resolvedProfile)
+
+            if let retrySource = retryPlaybackInfo.mediaSources?.first,
+                let transcodingPath = retrySource.transcodingUrl,
+                let url = client.hlsStreamURL(transcodingPath: transcodingPath)
+            {
+                logger.info("Stream resolved: Transcode (forced retry)")
+                return StreamInfo(
+                    url: url,
+                    playMethod: .transcode,
+                    container: container,
+                    videoCodec: videoCodec,
+                    audioCodec: audioCodec,
+                    mediaStreams: mediaStreams,
+                    mediaSourceId: sourceId
+                )
+            }
         }
 
         throw AppError.playbackFailed(reason: "Unable to resolve a playable stream URL")
     }
 
+    // MARK: - AVPlayer Compatibility Check
+
+    /// Containers and codecs that AVPlayer can reliably handle on iOS 18+ / macOS 15+.
+    private static let avPlayerContainers: Set<String> = ["mp4", "m4v", "mov"]
+    private static let avPlayerVideoCodecs: Set<String> = ["h264", "hevc", "h265"]
+    private static let avPlayerAudioCodecs: Set<String> = [
+        "aac", "mp3", "alac", "flac", "ac3", "eac3",
+    ]
+
+    /// Full check: container + video codec + audio codec must all be AVPlayer-compatible.
+    private static func isAVPlayerCompatible(
+        container: String?, videoCodec: String?, audioCodec: String?
+    ) -> Bool {
+        guard let container, avPlayerContainers.contains(container) else { return false }
+        return areCodecsAVPlayerCompatible(videoCodec: videoCodec, audioCodec: audioCodec)
+    }
+
+    /// Codec-only check: used for DirectStream where the server remuxes the container.
+    private static func areCodecsAVPlayerCompatible(
+        videoCodec: String?, audioCodec: String?
+    ) -> Bool {
+        guard let videoCodec, avPlayerVideoCodecs.contains(videoCodec) else { return false }
+        // Audio codec is optional — some streams are video-only
+        if let audioCodec, !avPlayerAudioCodecs.contains(audioCodec) { return false }
+        return true
+    }
+
     // MARK: - TranscodingProvider (Phase 5)
 
     public func deviceProfile() -> DeviceProfile {
-        DeviceProfile(
-            name: "Cove iOS",
-            maxStreamingBitrate: 120_000_000,
-            supportedVideoCodecs: ["h264", "hevc", "h265"],
-            supportedAudioCodecs: ["aac", "mp3", "alac", "flac", "opus"],
-            supportedContainers: ["mp4", "mov", "m4v", "hls", "ts", "mkv"],
-            supportsDirectPlay: true,
-            supportsDirectStream: true,
-            supportsTranscoding: true
-        )
+        .appleDevice()
     }
 
     public func transcodedStreamURL(for item: MediaItem, profile: DeviceProfile) async throws -> URL
     {
         let (client, userId) = try authenticatedClient()
         let playbackInfo = try await client.getPlaybackInfo(
-            userId: userId, itemId: item.id.rawValue)
+            userId: userId, itemId: item.id.rawValue, profile: profile)
         guard let source = playbackInfo.mediaSources?.first,
             let transcodingPath = source.transcodingUrl,
             let url = client.hlsStreamURL(transcodingPath: transcodingPath)
@@ -469,13 +584,43 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - DownloadableProvider (Phase 6)
 
     public func downloadURL(for item: MediaItem, profile: DeviceProfile?) async throws -> URL {
-        let client = try client()
+        let (client, userId) = try authenticatedClient()
+        let resolvedProfile = profile ?? deviceProfile()
 
-        // Use the native download endpoint
-        guard let url = client.downloadURL(itemId: item.id.rawValue) else {
+        // Query PlaybackInfo to determine if the file needs remuxing/transcoding
+        let playbackInfo = try await client.getPlaybackInfo(
+            userId: userId, itemId: item.id.rawValue, profile: resolvedProfile)
+
+        guard let source = playbackInfo.mediaSources?.first else {
             throw AppError.downloadFailed(
                 itemTitle: item.title,
-                reason: "Unable to build download URL"
+                reason: "No media source available"
+            )
+        }
+
+        let sourceId = source.id ?? item.id.rawValue
+
+        // If the file is directly playable, download the raw original
+        if source.supportsDirectPlay == true {
+            guard let url = client.downloadURL(itemId: item.id.rawValue) else {
+                throw AppError.downloadFailed(
+                    itemTitle: item.title,
+                    reason: "Unable to build download URL"
+                )
+            }
+            return url
+        }
+
+        // Otherwise, request a compatible format via the stream endpoint
+        guard
+            let url = client.compatibleDownloadURL(
+                itemId: item.id.rawValue,
+                mediaSourceId: sourceId
+            )
+        else {
+            throw AppError.downloadFailed(
+                itemTitle: item.title,
+                reason: "Unable to build compatible download URL"
             )
         }
         return url

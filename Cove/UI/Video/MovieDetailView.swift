@@ -91,7 +91,8 @@ struct MovieDetailView: View {
                         serverId: appState.activeConnection?.id.uuidString ?? "",
                         downloadManager: downloadManager,
                         downloadURLResolver: {
-                            try await appState.provider.downloadURL(for: item, profile: nil)
+                            try await appState.provider.downloadURL(
+                                for: item, profile: appState.provider.deviceProfile())
                         },
                         onDownload: {
                             try await appState.downloadItem(item)

@@ -407,7 +407,7 @@ struct VideoPlayerView: View {
 
     private func setupAndPlay() {
         // Wire playback reporting callbacks
-        nonisolated(unsafe) let provider = appState.provider
+        let provider = appState.provider
         let coordinator = self.coordinator
 
         videoManager.onPlaybackStart = { item, position in
@@ -421,6 +421,13 @@ struct VideoPlayerView: View {
         }
         videoManager.onPlayNextEpisode = { _ in
             // Dismiss and let the parent handle navigation to the next episode
+            coordinator.dismiss()
+        }
+        videoManager.onPlaybackError = { item, error in
+            coordinator.error = VideoPlayerCoordinator.PlaybackError(
+                itemTitle: item.title,
+                underlyingError: error
+            )
             coordinator.dismiss()
         }
 

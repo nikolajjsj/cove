@@ -10,6 +10,16 @@ public final class JellyfinAPIClient: Sendable {
     public let baseURL: URL
     private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "JellyfinAPI")
 
+    /// Encoder that preserves PascalCase CodingKeys exactly as written.
+    /// The shared HTTPClient encoder uses `.convertToSnakeCase`, which mangles
+    /// PascalCase keys like `"DirectPlayProfiles"` → `"direct_play_profiles"`.
+    /// The Jellyfin API expects PascalCase, so PlaybackInfo requests use this instead.
+    private static let pascalCaseEncoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.dateEncodingStrategy = .iso8601
+        return e
+    }()
+
     /// The current access token, set after successful authentication.
     /// Thread-safe via nonisolated(unsafe) + Sendable container.
     private let tokenStore: TokenStore
@@ -348,25 +358,64 @@ public final class JellyfinAPIClient: Sendable {
 
     /// Get playback info for a video item (media sources, streams, transcode decisions).
     /// `POST /Items/{id}/PlaybackInfo`
-    public func getPlaybackInfo(userId: String, itemId: String) async throws -> PlaybackInfoResponse
-    {
+    public func getPlaybackInfo(
+        userId: String,
+        itemId: String,
+        profile: DeviceProfile? = nil
+    ) async throws -> PlaybackInfoResponse {
         let url = baseURL.appendingPathComponent("Items/\(itemId)/PlaybackInfo")
-        let body = PlaybackInfoRequest(userId: userId)
+        let body = PlaybackInfoRequest(
+            userId: userId,
+            deviceProfile: profile,
+            autoOpenLiveStream: true,
+            enableDirectPlay: true,
+            enableDirectStream: true,
+            enableTranscoding: true,
+            maxStreamingBitrate: profile?.maxStreamingBitrate
+        )
+        let rawBody = try Self.pascalCaseEncoder.encode(body)
         return try await httpClient.request(
-            url: url, method: .post, headers: authHeaders, body: body)
+            url: url, method: .post, headers: authHeaders, rawBody: rawBody)
     }
 
-    /// Build a direct video stream URL. Synchronous.
-    /// `GET /Videos/{id}/stream`
-    public func videoStreamURL(itemId: String, mediaSourceId: String, container: String? = nil)
-        -> URL?
-    {
+    /// Request playback info with direct play and direct stream disabled,
+    /// forcing the server to provide a transcode URL.
+    /// Used as a fallback when the server's initial response suggests direct play
+    /// for a format AVPlayer cannot handle.
+    public func getPlaybackInfoTranscodeOnly(
+        userId: String,
+        itemId: String,
+        profile: DeviceProfile
+    ) async throws -> PlaybackInfoResponse {
+        let url = baseURL.appendingPathComponent("Items/\(itemId)/PlaybackInfo")
+        let body = PlaybackInfoRequest(
+            userId: userId,
+            deviceProfile: profile,
+            autoOpenLiveStream: true,
+            enableDirectPlay: false,
+            enableDirectStream: false,
+            enableTranscoding: true,
+            maxStreamingBitrate: profile.maxStreamingBitrate
+        )
+        let rawBody = try Self.pascalCaseEncoder.encode(body)
+        return try await httpClient.request(
+            url: url, method: .post, headers: authHeaders, rawBody: rawBody)
+    }
+
+    /// Build a video stream URL.
+    /// - Parameter staticStream: `true` for direct play (raw file), `false` for direct stream (server remuxes).
+    public func videoStreamURL(
+        itemId: String,
+        mediaSourceId: String,
+        container: String? = nil,
+        staticStream: Bool = true
+    ) -> URL? {
         guard let token = accessToken else { return nil }
         var urlComponents = URLComponents(
             url: baseURL.appendingPathComponent("Videos/\(itemId)/stream"),
             resolvingAgainstBaseURL: false)
         var queryItems: [URLQueryItem] = [
-            URLQueryItem(name: "static", value: "true"),
+            URLQueryItem(name: "static", value: staticStream ? "true" : "false"),
             URLQueryItem(name: "mediaSourceId", value: mediaSourceId),
             URLQueryItem(name: "api_key", value: token),
         ]
@@ -416,6 +465,28 @@ public final class JellyfinAPIClient: Sendable {
             resolvingAgainstBaseURL: false)
         urlComponents?.queryItems = [
             URLQueryItem(name: "api_key", value: token)
+        ]
+        return urlComponents?.url
+    }
+
+    /// Build a download URL that requests a compatible format from the server.
+    /// Uses the video stream endpoint with `static=false` so the server can remux/transcode.
+    /// - Parameters:
+    ///   - itemId: The item ID to download.
+    ///   - mediaSourceId: The media source ID from PlaybackInfo.
+    public func compatibleDownloadURL(
+        itemId: String,
+        mediaSourceId: String
+    ) -> URL? {
+        guard let token = accessToken else { return nil }
+        var urlComponents = URLComponents(
+            url: baseURL.appendingPathComponent("Videos/\(itemId)/stream"),
+            resolvingAgainstBaseURL: false)
+        urlComponents?.queryItems = [
+            URLQueryItem(name: "static", value: "false"),
+            URLQueryItem(name: "mediaSourceId", value: mediaSourceId),
+            URLQueryItem(name: "container", value: "mp4"),
+            URLQueryItem(name: "api_key", value: token),
         ]
         return urlComponents?.url
     }
@@ -650,8 +721,20 @@ private struct PlaybackStopInfo: Encodable, Sendable {
 /// Body for `POST /Items/{id}/PlaybackInfo`
 private struct PlaybackInfoRequest: Encodable, Sendable {
     let userId: String
+    let deviceProfile: DeviceProfile?
+    let autoOpenLiveStream: Bool
+    let enableDirectPlay: Bool
+    let enableDirectStream: Bool
+    let enableTranscoding: Bool
+    let maxStreamingBitrate: Int?
 
     enum CodingKeys: String, CodingKey {
-        case userId = "userid"
+        case userId = "UserId"
+        case deviceProfile = "DeviceProfile"
+        case autoOpenLiveStream = "AutoOpenLiveStream"
+        case enableDirectPlay = "EnableDirectPlay"
+        case enableDirectStream = "EnableDirectStream"
+        case enableTranscoding = "EnableTranscoding"
+        case maxStreamingBitrate = "MaxStreamingBitrate"
     }
 }

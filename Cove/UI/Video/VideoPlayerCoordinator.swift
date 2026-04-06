@@ -136,8 +136,7 @@ final class VideoPlayerCoordinator {
     func playLocal(item: MediaItem, localFileURL: URL) {
         let info = StreamInfo(
             url: localFileURL,
-            isTranscoded: false,
-            directPlaySupported: true
+            playMethod: .directPlay
         )
         currentItem = item
         streamInfo = info
@@ -173,8 +172,19 @@ extension VideoPlayerCoordinator {
         let itemTitle: String
         let underlyingError: Error
 
+        /// User-friendly message explaining what went wrong and what to try.
         var localizedDescription: String {
-            underlyingError.localizedDescription
+            let nsError = underlyingError as NSError
+
+            // Stream resolution errors (from our code)
+            if underlyingError is AppError {
+                return underlyingError.localizedDescription
+            }
+
+            // AVFoundation / network errors — give the user something actionable
+            let detail = nsError.localizedFailureReason ?? nsError.localizedDescription
+            return
+                "The server could not provide a playable stream. This may happen if the file requires transcoding and your server doesn't have enough resources.\n\n(\(detail))"
         }
     }
 }
