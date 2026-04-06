@@ -1,3 +1,4 @@
+import CoveUI
 import ImageService
 import JellyfinProvider
 import MediaServerKit
@@ -12,9 +13,7 @@ struct PersonDetailView: View {
     let person: Person
 
     @Environment(AppState.self) private var appState
-    @State private var items: [MediaItem] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
+    @State private var loader = CollectionLoader<MediaItem>()
 
     private let columns = [
         GridItem(.adaptive(minimum: 130, maximum: 180), spacing: 16)
@@ -22,16 +21,17 @@ struct PersonDetailView: View {
 
     var body: some View {
         Group {
-            if isLoading {
+            switch loader.phase {
+            case .loading:
                 ProgressView("Loading filmography…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage {
+            case .failed(let message):
                 ContentUnavailableView(
                     "Unable to Load",
                     systemImage: "exclamationmark.triangle",
-                    description: Text(errorMessage)
+                    description: Text(message)
                 )
-            } else {
+            case .empty, .loaded:
                 ScrollView {
                     VStack(spacing: 24) {
                         personHeader
@@ -46,7 +46,9 @@ struct PersonDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
         #endif
         .task {
-            await loadFilmography()
+            await loader.load {
+                try await appState.provider.personItems(personId: person.id)
+            }
         }
     }
 
@@ -101,7 +103,7 @@ struct PersonDetailView: View {
 
     @ViewBuilder
     private var filmographySection: some View {
-        if items.isEmpty {
+        if loader.items.isEmpty {
             ContentUnavailableView(
                 "No Items",
                 systemImage: "film",
@@ -116,7 +118,7 @@ struct PersonDetailView: View {
                     .padding(.horizontal)
 
                 LazyVGrid(columns: columns, spacing: 20) {
-                    ForEach(items) { item in
+                    ForEach(loader.items) { item in
                         NavigationLink(value: item) {
                             LibraryItemCard(item: item)
                         }
@@ -126,19 +128,5 @@ struct PersonDetailView: View {
                 .padding(.horizontal)
             }
         }
-    }
-
-    // MARK: - Data Loading
-
-    private func loadFilmography() async {
-        isLoading = true
-        errorMessage = nil
-        do {
-            items = try await appState.provider.personItems(personId: person.id)
-        } catch {
-            errorMessage = error.localizedDescription
-            items = []
-        }
-        isLoading = false
     }
 }

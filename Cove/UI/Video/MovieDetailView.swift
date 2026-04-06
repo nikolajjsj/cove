@@ -13,7 +13,7 @@ struct MovieDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var isOverviewExpanded = false
-    @State private var detailedItem: MediaItem?
+    @State private var detailLoader = DetailItemLoader()
 
     private let overviewLineLimit = 4
 
@@ -72,7 +72,9 @@ struct MovieDetailView: View {
             }
         }
         .task {
-            await fetchFullItem()
+            await detailLoader.load {
+                try await appState.provider.item(id: item.id)
+            }
         }
         .ignoresSafeArea(edges: .top)
         .navigationTitle(item.title)
@@ -102,19 +104,7 @@ struct MovieDetailView: View {
 
     /// The fully-fetched item (with people & remote trailers), falling back to the navigation item.
     private var displayItem: MediaItem {
-        detailedItem ?? item
-    }
-
-    // MARK: - Full Item Fetch
-
-    private func fetchFullItem() async {
-        do {
-            let full = try await appState.provider.item(id: item.id)
-            guard !Task.isCancelled else { return }
-            detailedItem = full
-        } catch {
-            // Silently fall back to the navigation item — people/trailers just won't show.
-        }
+        detailLoader.displayItem(fallback: item)
     }
 
     // MARK: - Hero Section

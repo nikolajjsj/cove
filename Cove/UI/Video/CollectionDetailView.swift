@@ -11,9 +11,7 @@ struct CollectionDetailView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
-    @State private var collectionItems: [MediaItem] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
+    @State private var loader = CollectionLoader<MediaItem>()
 
     private let columns = [
         GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16)
@@ -52,7 +50,9 @@ struct CollectionDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
         #endif
         .task {
-            await loadCollectionItems()
+            await loader.load {
+                try await appState.provider.collectionItems(collectionId: item.id)
+            }
         }
     }
 
@@ -65,9 +65,9 @@ struct CollectionDetailView: View {
                     .font(.system(.title, design: .default, weight: .bold))
                     .foregroundStyle(.primary)
 
-                if !collectionItems.isEmpty {
+                if !loader.items.isEmpty {
                     Text(
-                        "\(collectionItems.count) \(collectionItems.count == 1 ? "item" : "items")"
+                        "\(loader.items.count) \(loader.items.count == 1 ? "item" : "items")"
                     )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -94,8 +94,8 @@ struct CollectionDetailView: View {
             pills.append(pill)
         }
 
-        if !collectionItems.isEmpty {
-            pills.append(.itemCount(collectionItems.count))
+        if !loader.items.isEmpty {
+            pills.append(.itemCount(loader.items.count))
         }
 
         return pills
@@ -132,30 +132,31 @@ struct CollectionDetailView: View {
             Text("In This Collection")
                 .font(.title3.weight(.bold))
 
-            if isLoading {
+            switch loader.phase {
+            case .loading:
                 HStack {
                     Spacer()
                     ProgressView("Loading…")
                     Spacer()
                 }
                 .padding(.vertical, 32)
-            } else if let error = errorMessage {
+            case .failed(let message):
                 ContentUnavailableView(
                     "Unable to Load",
                     systemImage: "exclamationmark.triangle",
-                    description: Text(error)
+                    description: Text(message)
                 )
                 .padding(.vertical, 16)
-            } else if collectionItems.isEmpty {
+            case .empty:
                 ContentUnavailableView(
                     "No Items",
                     systemImage: "rectangle.stack",
                     description: Text("This collection appears to be empty.")
                 )
                 .padding(.vertical, 16)
-            } else {
+            case .loaded(let items):
                 LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(collectionItems) { collectionItem in
+                    ForEach(items) { collectionItem in
                         NavigationLink(value: collectionItem) {
                             LibraryItemCard(item: collectionItem)
                         }
@@ -164,21 +165,6 @@ struct CollectionDetailView: View {
                 }
             }
         }
-    }
-
-    // MARK: - Data Loading
-
-    private func loadCollectionItems() async {
-        isLoading = true
-        errorMessage = nil
-
-        do {
-            collectionItems = try await appState.provider.collectionItems(collectionId: item.id)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-
-        isLoading = false
     }
 
     // MARK: - Image Helpers

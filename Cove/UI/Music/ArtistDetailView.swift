@@ -1,15 +1,14 @@
+import CoveUI
 import JellyfinProvider
-import NukeUI
 import MediaServerKit
 import Models
+import NukeUI
 import SwiftUI
 
 struct ArtistDetailView: View {
     let artistItem: MediaItem
     @Environment(AppState.self) private var appState
-    @State private var albums: [Album] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
+    @State private var loader = CollectionLoader<Album>()
 
     private let columns = [
         GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
@@ -17,16 +16,17 @@ struct ArtistDetailView: View {
 
     var body: some View {
         Group {
-            if isLoading {
+            switch loader.phase {
+            case .loading:
                 ProgressView("Loading artist…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage {
+            case .failed(let message):
                 ContentUnavailableView(
                     "Unable to Load Artist",
                     systemImage: "exclamationmark.triangle",
-                    description: Text(errorMessage)
+                    description: Text(message)
                 )
-            } else {
+            case .empty, .loaded:
                 ScrollView {
                     VStack(spacing: 24) {
                         artistHeader
@@ -41,7 +41,9 @@ struct ArtistDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
         #endif
         .task {
-            await loadAlbums()
+            await loader.load {
+                try await appState.provider.albums(artist: artistItem.id)
+            }
         }
     }
 
@@ -99,7 +101,7 @@ struct ArtistDetailView: View {
 
     @ViewBuilder
     private var albumsSection: some View {
-        if albums.isEmpty {
+        if loader.items.isEmpty {
             ContentUnavailableView(
                 "No Albums",
                 systemImage: "square.stack",
@@ -114,7 +116,7 @@ struct ArtistDetailView: View {
                     .padding(.horizontal)
 
                 LazyVGrid(columns: columns, spacing: 20) {
-                    ForEach(albums) { album in
+                    ForEach(loader.items) { album in
                         NavigationLink(value: album) {
                             ArtistAlbumCard(
                                 album: album,
@@ -127,20 +129,6 @@ struct ArtistDetailView: View {
                 .padding(.horizontal)
             }
         }
-    }
-
-    // MARK: - Data Loading
-
-    private func loadAlbums() async {
-        isLoading = true
-        errorMessage = nil
-        do {
-            albums = try await appState.provider.albums(artist: artistItem.id)
-        } catch {
-            errorMessage = error.localizedDescription
-            albums = []
-        }
-        isLoading = false
     }
 
     // MARK: - Image Helpers

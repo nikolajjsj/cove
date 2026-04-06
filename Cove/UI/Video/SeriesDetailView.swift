@@ -52,11 +52,11 @@ struct SeriesDetailView: View {
     @State private var offlineEpisodeDownloads: [DownloadItem] = []
     @State private var showDeleteSeriesConfirmation = false
     @State private var episodeToDelete: DownloadItem?
-    @State private var detailedItem: MediaItem?
+    @State private var detailLoader = DetailItemLoader()
 
     /// The fully-fetched item (with people data), falling back to the navigation item.
     private var displayItem: MediaItem {
-        detailedItem ?? item
+        detailLoader.displayItem(fallback: item)
     }
 
     private var coordinator: VideoPlayerCoordinator {
@@ -209,7 +209,9 @@ struct SeriesDetailView: View {
         .task {
             await loadSeasons()
             if !isOffline {
-                await fetchFullItem()
+                await detailLoader.load {
+                    try await appState.provider.item(id: item.id)
+                }
             }
         }
     }
@@ -424,18 +426,6 @@ struct SeriesDetailView: View {
     }
 
     // MARK: - Data Loading
-
-    // MARK: - Full Item Fetch
-
-    private func fetchFullItem() async {
-        do {
-            let full = try await appState.provider.item(id: item.id)
-            guard !Task.isCancelled else { return }
-            detailedItem = full
-        } catch {
-            // Silently fall back to the navigation item — people just won't show.
-        }
-    }
 
     private func loadSeasons() async {
         isLoadingSeasons = true
