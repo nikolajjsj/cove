@@ -45,6 +45,10 @@ public struct DownloadItem: Identifiable, Codable, Hashable, Sendable {
     /// Used for grouping downloads in the UI.
     public let parentId: ItemID?
 
+    /// Optional group identifier linking this download to a `DownloadGroup`.
+    /// Used when downloading entire seasons or albums.
+    public let groupId: String?
+
     /// URL string for cached artwork associated with this item.
     public let artworkURL: String?
 
@@ -72,6 +76,7 @@ public struct DownloadItem: Identifiable, Codable, Hashable, Sendable {
     ///   - localFilePath: Relative path to the local file, or `nil`.
     ///   - remoteURL: The remote URL to download from.
     ///   - parentId: Optional parent item identifier for grouping.
+    ///   - groupId: Optional group identifier linking to a `DownloadGroup`.
     ///   - artworkURL: Optional artwork URL string.
     ///   - errorMessage: Optional error description on failure.
     ///   - createdAt: When the download was queued.
@@ -89,6 +94,7 @@ public struct DownloadItem: Identifiable, Codable, Hashable, Sendable {
         localFilePath: String?,
         remoteURL: String,
         parentId: ItemID?,
+        groupId: String? = nil,
         artworkURL: String?,
         errorMessage: String?,
         createdAt: Date,
@@ -106,6 +112,7 @@ public struct DownloadItem: Identifiable, Codable, Hashable, Sendable {
         self.localFilePath = localFilePath
         self.remoteURL = remoteURL
         self.parentId = parentId
+        self.groupId = groupId
         self.artworkURL = artworkURL
         self.errorMessage = errorMessage
         self.createdAt = createdAt

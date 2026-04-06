@@ -17,6 +17,7 @@ struct DownloadRecord: Codable, Sendable {
     var localFilePath: String?
     var remoteURL: String
     var parentId: String?
+    var groupId: String?
     var artworkURL: String?
     var errorMessage: String?
     var createdAt: Date
@@ -36,6 +37,7 @@ struct DownloadRecord: Codable, Sendable {
         self.localFilePath = item.localFilePath
         self.remoteURL = item.remoteURL
         self.parentId = item.parentId?.rawValue
+        self.groupId = item.groupId
         self.artworkURL = item.artworkURL
         self.errorMessage = item.errorMessage
         self.createdAt = item.createdAt
@@ -65,6 +67,7 @@ struct DownloadRecord: Codable, Sendable {
             localFilePath: localFilePath,
             remoteURL: remoteURL,
             parentId: parentId.map { ItemID($0) },
+            groupId: groupId,
             artworkURL: artworkURL,
             errorMessage: errorMessage,
             createdAt: createdAt,

@@ -126,6 +126,65 @@ public final class DatabaseManager: Sendable {
             )
         }
 
+        migrator.registerMigration("003_offline_redesign") { db in
+            // offline_metadata table — cached Jellyfin metadata for offline browsing
+            try db.create(table: "offline_metadata") { t in
+                t.column("itemId", .text).notNull()
+                t.column("serverId", .text).notNull()
+                    .references("servers", onDelete: .cascade)
+                t.column("mediaType", .text).notNull()
+                t.column("metadataJSON", .blob).notNull()
+                t.column("updatedAt", .datetime).notNull().defaults(sql: "CURRENT_TIMESTAMP")
+                t.primaryKey(["itemId", "serverId"])
+            }
+
+            // Index for filtered lookups by server and media type
+            try db.create(
+                index: "offline_metadata_on_serverId_mediaType",
+                on: "offline_metadata",
+                columns: ["serverId", "mediaType"]
+            )
+
+            // download_groups table — logical grouping of downloads (e.g. a season or album)
+            try db.create(table: "download_groups") { t in
+                t.primaryKey("id", .text).notNull()
+                t.column("itemId", .text).notNull()
+                t.column("serverId", .text).notNull()
+                    .references("servers", onDelete: .cascade)
+                t.column("mediaType", .text).notNull()
+                t.column("title", .text).notNull()
+                t.column("createdAt", .datetime).notNull().defaults(sql: "CURRENT_TIMESTAMP")
+            }
+
+            // Unique index to prevent duplicate groups for the same item on the same server
+            try db.create(
+                index: "download_groups_on_itemId_serverId",
+                on: "download_groups",
+                columns: ["itemId", "serverId"],
+                unique: true
+            )
+
+            // Index for fast lookups by server
+            try db.create(
+                index: "download_groups_on_serverId",
+                on: "download_groups",
+                columns: ["serverId"]
+            )
+
+            // Add groupId column to downloads table
+            try db.alter(table: "downloads") { t in
+                t.add(column: "groupId", .text)
+                    .references("download_groups", onDelete: .setNull)
+            }
+
+            // Index for fast group lookups on downloads
+            try db.create(
+                index: "downloads_on_groupId",
+                on: "downloads",
+                columns: ["groupId"]
+            )
+        }
+
         try migrator.migrate(dbWriter)
         logger.info("Database migrations complete")
     }

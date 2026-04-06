@@ -13,6 +13,7 @@ final class DownloadButtonModel {
     let serverId: String
     let downloadManager: DownloadManagerService
     let downloadURLResolver: @Sendable () async throws -> URL
+    let onDownload: (@Sendable () async throws -> Void)?
 
     private(set) var downloadItem: DownloadItem?
     private(set) var isProcessing = false
@@ -27,12 +28,14 @@ final class DownloadButtonModel {
         item: MediaItem,
         serverId: String,
         downloadManager: DownloadManagerService,
-        downloadURLResolver: @escaping @Sendable () async throws -> URL
+        downloadURLResolver: @escaping @Sendable () async throws -> URL,
+        onDownload: (@Sendable () async throws -> Void)? = nil
     ) {
         self.item = item
         self.serverId = serverId
         self.downloadManager = downloadManager
         self.downloadURLResolver = downloadURLResolver
+        self.onDownload = onDownload
     }
 
     func handleTap() async {
@@ -68,17 +71,22 @@ final class DownloadButtonModel {
         defer { isProcessing = false }
 
         do {
-            let url = try await downloadURLResolver()
-            let result = try await downloadManager.enqueueDownload(
-                itemId: item.id,
-                serverId: serverId,
-                title: item.title,
-                mediaType: item.mediaType,
-                remoteURL: url,
-                parentId: nil,
-                artworkURL: nil
-            )
-            downloadItem = result
+            if let onDownload {
+                try await onDownload()
+                await refreshState()
+            } else {
+                let url = try await downloadURLResolver()
+                let result = try await downloadManager.enqueueDownload(
+                    itemId: item.id,
+                    serverId: serverId,
+                    title: item.title,
+                    mediaType: item.mediaType,
+                    remoteURL: url,
+                    parentId: nil,
+                    artworkURL: nil
+                )
+                downloadItem = result
+            }
         } catch {
             setError("Failed to start download: \(error.localizedDescription)")
         }
@@ -167,14 +175,16 @@ struct DownloadButton: View {
         item: MediaItem,
         serverId: String,
         downloadManager: DownloadManagerService,
-        downloadURLResolver: @escaping @Sendable () async throws -> URL
+        downloadURLResolver: @escaping @Sendable () async throws -> URL,
+        onDownload: (@Sendable () async throws -> Void)? = nil
     ) {
         _model = State(
             initialValue: DownloadButtonModel(
                 item: item,
                 serverId: serverId,
                 downloadManager: downloadManager,
-                downloadURLResolver: downloadURLResolver
+                downloadURLResolver: downloadURLResolver,
+                onDownload: onDownload
             ))
     }
 
@@ -206,6 +216,14 @@ struct DownloadButton: View {
         }
         .task {
             await model.refreshState()
+        }
+        .task(id: model.state) {
+            // Poll for progress updates while actively downloading
+            guard model.state == .downloading || model.state == .queued else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                await model.refreshState()
+            }
         }
     }
 
@@ -274,13 +292,15 @@ extension DownloadButton {
         item: MediaItem,
         serverId: String,
         downloadManager: DownloadManagerService,
-        downloadURL: URL
+        downloadURL: URL,
+        onDownload: (@Sendable () async throws -> Void)? = nil
     ) {
         self.init(
             item: item,
             serverId: serverId,
             downloadManager: downloadManager,
-            downloadURLResolver: { downloadURL }
+            downloadURLResolver: { downloadURL },
+            onDownload: onDownload
         )
     }
 }
@@ -296,14 +316,16 @@ struct CompactDownloadButton: View {
         item: MediaItem,
         serverId: String,
         downloadManager: DownloadManagerService,
-        downloadURLResolver: @escaping @Sendable () async throws -> URL
+        downloadURLResolver: @escaping @Sendable () async throws -> URL,
+        onDownload: (@Sendable () async throws -> Void)? = nil
     ) {
         _model = State(
             initialValue: DownloadButtonModel(
                 item: item,
                 serverId: serverId,
                 downloadManager: downloadManager,
-                downloadURLResolver: downloadURLResolver
+                downloadURLResolver: downloadURLResolver,
+                onDownload: onDownload
             ))
     }
 
@@ -329,6 +351,14 @@ struct CompactDownloadButton: View {
         }
         .task {
             await model.refreshState()
+        }
+        .task(id: model.state) {
+            // Poll for progress updates while actively downloading
+            guard model.state == .downloading || model.state == .queued else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                await model.refreshState()
+            }
         }
     }
 

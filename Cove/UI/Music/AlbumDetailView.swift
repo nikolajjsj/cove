@@ -2,15 +2,48 @@ import DownloadManager
 import JellyfinProvider
 import MediaServerKit
 import Models
+import Persistence
 import PlaybackEngine
 import SwiftUI
 
 struct AlbumDetailView: View {
     let albumItem: MediaItem
+    /// When non-nil, the view operates in offline mode using local storage.
+    private let offlineServerId: String?
+
     @Environment(AppState.self) private var appState
     @State private var tracks: [Track] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var isDownloadingAlbum = false
+    @State private var isAlbumDownloaded = false
+    @State private var downloadError: String?
+    @State private var showDownloadError = false
+    @State private var showRemoveConfirmation = false
+
+    // Offline-specific state
+    @State private var offlineAlbumMetadata: OfflineMediaMetadata?
+    @State private var showDeleteAlbumConfirmation = false
+    @State private var trackToDelete: DownloadItem?
+    @State private var offlineDownloads: [DownloadItem] = []
+
+    // MARK: - Initializers
+
+    /// Online init (unchanged API).
+    init(albumItem: MediaItem) {
+        self.albumItem = albumItem
+        self.offlineServerId = nil
+    }
+
+    /// Offline init for use from DownloadsView.
+    init(offlineAlbumId: String, serverId: String, title: String) {
+        self.albumItem = MediaItem(id: ItemID(offlineAlbumId), title: title, mediaType: .album)
+        self.offlineServerId = serverId
+    }
+
+    private var isOffline: Bool { offlineServerId != nil }
+
+    // MARK: - Body
 
     var body: some View {
         Group {
@@ -47,21 +80,58 @@ struct AlbumDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
-            //ToolbarItem(placement: .topBarTrailing) {
             ToolbarItem {
-                if let downloadManager = appState.downloadManager {
-                    DownloadButton(
-                        item: albumItem,
-                        serverId: appState.activeConnection?.id.uuidString ?? "",
-                        downloadManager: downloadManager
-                    ) {
-                        try await appState.provider.downloadURL(for: albumItem, profile: nil)
+                if isOffline {
+                    Menu {
+                        Button(role: .destructive) {
+                            showDeleteAlbumConfirmation = true
+                        } label: {
+                            Label("Remove Album", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
                     }
+                } else if appState.downloadManager != nil {
+                    albumDownloadButton
                 }
             }
         }
+        .alert("Download Error", isPresented: $showDownloadError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let downloadError {
+                Text(downloadError)
+            }
+        }
+        .confirmationDialog(
+            "Remove \(albumItem.title)?",
+            isPresented: $showRemoveConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Remove All Tracks", role: .destructive) {
+                Task { await removeAlbumDownload() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("All downloaded tracks will be removed from your device.")
+        }
+        .confirmationDialog(
+            "Remove \(albumItem.title)?",
+            isPresented: $showDeleteAlbumConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Remove All Tracks", role: .destructive) {
+                Task { await deleteOfflineAlbum() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("All \(tracks.count) tracks will be removed from your device.")
+        }
         .task {
             await loadTracks()
+            if !isOffline {
+                await checkAlbumDownloadState()
+            }
         }
     }
 
@@ -109,8 +179,9 @@ struct AlbumDetailView: View {
     private var metadataParts: [String] {
         var parts: [String] = []
 
-        // Infer year from first track or album overview
-        // We don't have year directly on MediaItem, so we skip it unless tracks provide info
+        if let year = offlineAlbumMetadata?.productionYear ?? albumItem.productionYear {
+            parts.append(String(year))
+        }
 
         if !tracks.isEmpty {
             let count = tracks.count
@@ -135,7 +206,7 @@ struct AlbumDetailView: View {
                 Label("Play", systemImage: "play.fill")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 6)
             }
             .buttonStyle(.borderedProminent)
             .tint(.accentColor)
@@ -147,7 +218,7 @@ struct AlbumDetailView: View {
                 Label("Shuffle", systemImage: "shuffle")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 6)
             }
             .buttonStyle(.bordered)
             .disabled(tracks.isEmpty)
@@ -173,6 +244,15 @@ struct AlbumDetailView: View {
                             isPlaying: isCurrentTrack(track) && appState.audioPlayer.isPlaying
                         ) {
                             playAllTracks(startingAt: globalIndex)
+                        }
+                        .contextMenu {
+                            if isOffline {
+                                Button(role: .destructive) {
+                                    Task { await deleteOfflineTrack(track) }
+                                } label: {
+                                    Label("Remove Download", systemImage: "trash")
+                                }
+                            }
                         }
 
                         if localIndex < discTracks.count - 1 {
@@ -234,19 +314,82 @@ struct AlbumDetailView: View {
     private func loadTracks() async {
         isLoading = true
         errorMessage = nil
-        do {
-            tracks = try await appState.provider.tracks(album: albumItem.id)
-        } catch {
-            errorMessage = error.localizedDescription
-            tracks = []
+
+        if let serverId = offlineServerId {
+            await loadOfflineTracks(serverId: serverId)
+        } else {
+            do {
+                tracks = try await appState.provider.tracks(album: albumItem.id)
+            } catch {
+                errorMessage = error.localizedDescription
+                tracks = []
+            }
         }
         isLoading = false
+    }
+
+    private func loadOfflineTracks(serverId: String) async {
+        guard let metadataRepo = appState.offlineMetadataRepository,
+            let dm = appState.downloadManager
+        else { return }
+
+        // Load album metadata for artist name, year, etc.
+        offlineAlbumMetadata = try? await metadataRepo.fetch(
+            itemId: albumItem.id.rawValue, serverId: serverId
+        )
+
+        // Load track metadata for this album
+        let allTrackMeta =
+            (try? await metadataRepo.fetchAll(
+                serverId: serverId, mediaType: MediaType.track.rawValue
+            )) ?? []
+        let albumTrackMetas = allTrackMeta.filter { $0.albumId == albumItem.id.rawValue }
+
+        // Load completed downloads for this album
+        let allDownloads = (try? await dm.downloads(for: serverId)) ?? []
+        offlineDownloads = allDownloads.filter { dl in
+            dl.mediaType == .track
+                && dl.state == .completed
+                && (dl.parentId?.rawValue == albumItem.id.rawValue
+                    || albumTrackMetas.contains { $0.itemId == dl.itemId.rawValue })
+        }
+
+        // Build Track objects from metadata (only for completed downloads)
+        let completedIds = Set(offlineDownloads.map { $0.itemId.rawValue })
+        tracks =
+            albumTrackMetas
+            .filter { completedIds.contains($0.itemId) }
+            .map { meta in
+                Track(
+                    id: TrackID(meta.itemId),
+                    title: meta.title ?? "Unknown Track",
+                    albumId: meta.albumId.map { AlbumID($0) },
+                    albumName: meta.albumName,
+                    artistId: meta.artistId.map { ArtistID($0) },
+                    artistName: meta.artistName,
+                    trackNumber: meta.trackNumber,
+                    discNumber: meta.discNumber,
+                    duration: meta.duration,
+                    codec: meta.codec
+                )
+            }
+            .sorted(by: {
+                ($0.discNumber ?? 1, $0.trackNumber ?? 0) < (
+                    $1.discNumber ?? 1, $1.trackNumber ?? 0
+                )
+            })
     }
 
     // MARK: - Image Helpers
 
     private var albumImageURL: URL? {
-        appState.provider.imageURL(
+        if offlineServerId != nil {
+            if let path = offlineAlbumMetadata?.primaryImagePath {
+                return DownloadStorage.shared.localImageURL(relativePath: path)
+            }
+            return nil
+        }
+        return appState.provider.imageURL(
             for: albumItem,
             type: .primary,
             maxSize: CGSize(width: 600, height: 600)
@@ -256,10 +399,123 @@ struct AlbumDetailView: View {
     // MARK: - Inferred Metadata
 
     private var inferredArtistName: String? {
-        // Try to get artist name from the first track
-        tracks.first?.artistName
+        offlineAlbumMetadata?.artistName ?? tracks.first?.artistName
     }
 
+    // MARK: - Album Download (Online)
+
+    @ViewBuilder
+    private var albumDownloadButton: some View {
+        if isDownloadingAlbum {
+            ProgressView()
+        } else if isAlbumDownloaded {
+            Button {
+                showRemoveConfirmation = true
+            } label: {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.green)
+            }
+        } else {
+            Button {
+                Task { await downloadAlbum() }
+            } label: {
+                Image(systemName: "arrow.down.circle")
+                    .font(.title2)
+                    .foregroundStyle(.tint)
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .disabled(tracks.isEmpty)
+        }
+    }
+
+    private func downloadAlbum() async {
+        guard !tracks.isEmpty else { return }
+        isDownloadingAlbum = true
+        defer { isDownloadingAlbum = false }
+
+        let album = Album(
+            id: albumItem.id,
+            title: albumItem.title,
+            artistId: tracks.first?.artistId,
+            artistName: tracks.first?.artistName,
+            year: albumItem.productionYear,
+            trackCount: tracks.count,
+            duration: tracks.compactMap(\.duration).reduce(0, +)
+        )
+
+        do {
+            try await appState.downloadAlbum(album: album, tracks: tracks)
+            isAlbumDownloaded = true
+        } catch {
+            downloadError = "Failed to download album: \(error.localizedDescription)"
+            showDownloadError = true
+        }
+    }
+
+    private func removeAlbumDownload() async {
+        guard let dm = appState.downloadManager,
+            let connection = appState.activeConnection
+        else { return }
+        let serverId = connection.id.uuidString
+        let allDownloads = (try? await dm.downloads(for: serverId)) ?? []
+        for dl in allDownloads where dl.mediaType == .track && dl.parentId == albumItem.id {
+            try? await dm.deleteDownload(id: dl.id)
+        }
+        // Clean up metadata
+        for track in tracks {
+            try? await appState.offlineMetadataRepository?.delete(
+                itemId: track.id.rawValue, serverId: serverId
+            )
+        }
+        try? await appState.offlineMetadataRepository?.delete(
+            itemId: albumItem.id.rawValue, serverId: serverId
+        )
+        isAlbumDownloaded = false
+    }
+
+    private func checkAlbumDownloadState() async {
+        guard let dm = appState.downloadManager,
+            let connection = appState.activeConnection
+        else { return }
+        let serverId = connection.id.uuidString
+        let allDownloads = (try? await dm.downloads(for: serverId)) ?? []
+        let albumTracks = allDownloads.filter {
+            $0.mediaType == .track && $0.parentId == albumItem.id
+        }
+        // Consider downloaded if there's at least one completed track for this album
+        isAlbumDownloaded =
+            !albumTracks.isEmpty && albumTracks.allSatisfy { $0.state == .completed }
+    }
+
+    // MARK: - Offline Deletion
+
+    private func deleteOfflineAlbum() async {
+        guard let dm = appState.downloadManager, let serverId = offlineServerId else { return }
+        for dl in offlineDownloads {
+            try? await dm.deleteDownload(id: dl.id)
+        }
+        for dl in offlineDownloads {
+            try? await appState.offlineMetadataRepository?.delete(
+                itemId: dl.itemId.rawValue, serverId: serverId
+            )
+        }
+        try? await appState.offlineMetadataRepository?.delete(
+            itemId: albumItem.id.rawValue, serverId: serverId
+        )
+        await loadTracks()
+    }
+
+    private func deleteOfflineTrack(_ track: Track) async {
+        guard let dm = appState.downloadManager, let serverId = offlineServerId else { return }
+        if let dl = offlineDownloads.first(where: { $0.itemId == track.id }) {
+            try? await dm.deleteDownload(id: dl.id)
+        }
+        try? await appState.offlineMetadataRepository?.delete(
+            itemId: track.id.rawValue, serverId: serverId
+        )
+        await loadTracks()
+    }
 }
 
 // MARK: - Track Row

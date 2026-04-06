@@ -129,6 +129,22 @@ final class VideoPlayerCoordinator {
         }
     }
 
+    /// Play a video item directly from a local file URL (for offline downloads).
+    ///
+    /// This bypasses stream URL resolution entirely, using the local file
+    /// as a direct-play source. Used for downloaded movies and episodes.
+    func playLocal(item: MediaItem, localFileURL: URL) {
+        let info = StreamInfo(
+            url: localFileURL,
+            isTranscoded: false,
+            directPlaySupported: true
+        )
+        currentItem = item
+        streamInfo = info
+        startPosition = item.userData?.playbackPosition ?? 0
+        isPresented = true
+    }
+
     /// Dismiss the video player and clear playback state.
     func dismiss() {
         isPresented = false

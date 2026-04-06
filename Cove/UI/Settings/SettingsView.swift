@@ -1,8 +1,10 @@
+import Defaults
 import DownloadManager
 import Models
 import SwiftUI
 
 struct SettingsView: View {
+    @Default(.downloadOverCellular) var downloadOverCellular
     @Environment(AppState.self) private var appState
     @State private var showStorageManagement = false
     @State private var totalDownloadSize: Int64 = 0
@@ -29,8 +31,10 @@ struct SettingsView: View {
                 }
             }
 
-            if let _ = appState.downloadManager {
+            if appState.downloadManager != nil {
                 Section("Downloads & Storage") {
+                    Toggle("Download over Cellular", isOn: $downloadOverCellular)
+
                     Button {
                         showStorageManagement = true
                     } label: {

@@ -17,7 +17,7 @@ struct NowPlayingBar: View {
             HStack(spacing: 12) {
                 // MARK: - Album Artwork
 
-                MediaImage.trackThumbnail(url: artworkURL(for: track), cornerRadius: 8)
+                MediaImage.trackThumbnail(url: artworkURL(for: track), cornerRadius: 0)
                     .frame(width: 48, height: 48)
 
                 // MARK: - Track Info

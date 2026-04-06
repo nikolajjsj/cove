@@ -145,6 +145,141 @@ public struct DownloadStorage: Sendable {
         return relativePath
     }
 
+    // MARK: - Artwork & Subtitle Paths
+
+    /// Returns the URL where a primary image should be stored for an item.
+    ///
+    /// Layout: `Downloads/{serverId}/{mediaType}/{itemId}/primary.jpg`
+    public func primaryImageURL(serverId: String, mediaType: MediaType, itemId: ItemID) -> URL {
+        itemDirectory(serverId: serverId, mediaType: mediaType, itemId: itemId)
+            .appendingPathComponent("primary.jpg")
+    }
+
+    /// Returns the URL where a backdrop image should be stored for an item.
+    ///
+    /// Layout: `Downloads/{serverId}/{mediaType}/{itemId}/backdrop.jpg`
+    public func backdropImageURL(serverId: String, mediaType: MediaType, itemId: ItemID) -> URL {
+        itemDirectory(serverId: serverId, mediaType: mediaType, itemId: itemId)
+            .appendingPathComponent("backdrop.jpg")
+    }
+
+    /// Returns the URL where a subtitle file should be stored.
+    ///
+    /// Layout: `Downloads/{serverId}/{mediaType}/{itemId}/sub_{index}_{language}.{format}`
+    public func subtitleURL(
+        serverId: String,
+        mediaType: MediaType,
+        itemId: ItemID,
+        index: Int,
+        language: String?,
+        format: String = "vtt"
+    ) -> URL {
+        let lang = language ?? "und"
+        let filename = "sub_\(index)_\(lang).\(format)"
+        return itemDirectory(serverId: serverId, mediaType: mediaType, itemId: itemId)
+            .appendingPathComponent(filename)
+    }
+
+    /// Returns the relative path (from `downloadsDirectory`) for a primary image.
+    public func relativePrimaryImagePath(serverId: String, mediaType: MediaType, itemId: ItemID)
+        -> String
+    {
+        "\(serverId)/\(mediaType.rawValue)/\(itemId.rawValue)/primary.jpg"
+    }
+
+    /// Returns the relative path (from `downloadsDirectory`) for a backdrop image.
+    public func relativeBackdropImagePath(serverId: String, mediaType: MediaType, itemId: ItemID)
+        -> String
+    {
+        "\(serverId)/\(mediaType.rawValue)/\(itemId.rawValue)/backdrop.jpg"
+    }
+
+    /// Returns the relative path (from `downloadsDirectory`) for a subtitle file.
+    public func relativeSubtitlePath(
+        serverId: String,
+        mediaType: MediaType,
+        itemId: ItemID,
+        index: Int,
+        language: String?,
+        format: String = "vtt"
+    ) -> String {
+        let lang = language ?? "und"
+        return "\(serverId)/\(mediaType.rawValue)/\(itemId.rawValue)/sub_\(index)_\(lang).\(format)"
+    }
+
+    /// Resolve a local image URL for offline display.
+    /// Returns `nil` if the file does not exist on disk.
+    public func localImageURL(relativePath: String) -> URL? {
+        let url = resolveAbsoluteURL(relativePath: relativePath)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    /// Download a remote image to a local file path.
+    /// This is a simple synchronous file write — intended to be called from a background task.
+    ///
+    /// - Parameters:
+    ///   - remoteURL: The URL to download from.
+    ///   - destinationURL: The local file URL to write to.
+    /// - Returns: `true` if the download succeeded, `false` otherwise.
+    @discardableResult
+    public func downloadImage(from remoteURL: URL, to destinationURL: URL) async -> Bool {
+        do {
+            let fm = FileManager.default
+            try fm.createDirectory(
+                at: destinationURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+
+            let (data, response) = try await URLSession.shared.data(from: remoteURL)
+
+            guard let httpResponse = response as? HTTPURLResponse,
+                (200...299).contains(httpResponse.statusCode),
+                !data.isEmpty
+            else {
+                logger.warning(
+                    "Failed to download image from \(remoteURL.absoluteString): bad response")
+                return false
+            }
+
+            // Remove existing file if present
+            if fm.fileExists(atPath: destinationURL.path) {
+                try fm.removeItem(at: destinationURL)
+            }
+
+            try data.write(to: destinationURL)
+            logger.debug("Downloaded image to \(destinationURL.lastPathComponent)")
+            return true
+        } catch {
+            logger.warning(
+                "Failed to download image from \(remoteURL.absoluteString): \(error.localizedDescription)"
+            )
+            return false
+        }
+    }
+
+    /// Prepare directory for a parent item (series, album) that has no media file but needs artwork.
+    ///
+    /// - Parameters:
+    ///   - serverId: The server connection ID.
+    ///   - mediaType: The media type of the parent.
+    ///   - itemId: The parent item ID.
+    @discardableResult
+    public func prepareParentDirectory(serverId: String, mediaType: MediaType, itemId: ItemID)
+        throws -> URL
+    {
+        let dir = itemDirectory(serverId: serverId, mediaType: mediaType, itemId: itemId)
+        let fm = FileManager.default
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        // Exclude from backup
+        var topDir = downloadsDirectory
+        var resourceValues = URLResourceValues()
+        resourceValues.isExcludedFromBackup = true
+        try topDir.setResourceValues(resourceValues)
+
+        return dir
+    }
+
     // MARK: - Deletion
 
     /// Delete all downloaded files for a specific item.

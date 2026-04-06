@@ -59,13 +59,18 @@ struct MovieDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if let downloadManager = appState.downloadManager {
+                    let appState = appState
                     DownloadButton(
                         item: item,
                         serverId: appState.activeConnection?.id.uuidString ?? "",
-                        downloadManager: downloadManager
-                    ) {
-                        try await appState.provider.downloadURL(for: item, profile: nil)
-                    }
+                        downloadManager: downloadManager,
+                        downloadURLResolver: {
+                            try await appState.provider.downloadURL(for: item, profile: nil)
+                        },
+                        onDownload: {
+                            try await appState.downloadItem(item)
+                        }
+                    )
                 }
             }
         }
@@ -172,10 +177,10 @@ struct MovieDetailView: View {
             }
             .font(.callout)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.vertical, 6)
         }
         .buttonStyle(.borderedProminent)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .tint(.accentColor)
         .disabled(coordinator.isLoadingItem(item.id))
     }
 
