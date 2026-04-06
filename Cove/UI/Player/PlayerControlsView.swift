@@ -22,7 +22,7 @@ struct PlayerControlsView: View {
     @State private var showQualityPopover = false
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 24) {
             // Track Info
             trackInfoRow
 
@@ -31,11 +31,9 @@ struct PlayerControlsView: View {
 
             // Playback Controls – isolated so isPlaying changes stay local
             PlaybackControlsRow()
-
-            // Bottom Toolbar
-            bottomToolbar
         }
         .padding(.horizontal, 32)
+        .padding(.bottom, 32)
         .sheet(isPresented: $showPlaylistPicker) {
             PlaylistPickerSheet(trackIds: [track.id])
         }
@@ -63,6 +61,9 @@ struct PlayerControlsView: View {
 
             // Favorite button
             FavoriteButton(track: track)
+            
+            // Sleep Timer – isolated so remaining-seconds ticks stay local
+            SleepTimerButton()
 
             // Context menu
             Menu {
@@ -119,127 +120,8 @@ struct PlayerControlsView: View {
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
-        }
-    }
-
-    // MARK: - Bottom Toolbar
-
-    private var bottomToolbar: some View {
-        HStack {
-            // Lyrics shortcut
-            Button {
-                withAnimation { currentPage = .lyrics }
-            } label: {
-                Image(systemName: "quote.bubble")
-                    .font(.body)
-                    .foregroundStyle(currentPage == .lyrics ? Color.accentColor : .secondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .contentShape(Rectangle())
-            }
             .buttonStyle(.plain)
-            
-            Spacer()
-
-            // Queue shortcut
-            Button {
-                withAnimation { currentPage = .queue }
-            } label: {
-                Image(systemName: "list.bullet")
-                    .font(.body)
-                    .foregroundStyle(currentPage == .queue ? Color.accentColor : .secondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            
-            Spacer()
-
-            // Sleep Timer – isolated so remaining-seconds ticks stay local
-            SleepTimerButton()
-
-            // Audio quality badge
-            if let codec = track.codec {
-                Spacer()
-                
-                Button {
-                    showQualityPopover = true
-                } label: {
-                    Text(codec.uppercased())
-                        .font(.caption2.bold())
-                        .foregroundStyle(isLossless(codec) ? Color.accentColor : .secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            (isLossless(codec) ? Color.accentColor : Color.secondary).opacity(0.15),
-                            in: Capsule()
-                        )
-                }
-                .popover(isPresented: $showQualityPopover) {
-                    qualityPopoverContent
-                        .presentationCompactAdaptation(.popover)
-                }
-            }
         }
-    }
-
-    // MARK: - Helpers
-
-    private func isLossless(_ codec: String) -> Bool {
-        let lossless = ["flac", "alac", "wav", "aiff", "dsd", "pcm"]
-        return lossless.contains(codec.lowercased())
-    }
-
-    @ViewBuilder
-    private var qualityPopoverContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Audio Quality")
-                .font(.headline)
-
-            if let codec = track.codec {
-                HStack {
-                    Text("Codec")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(codec.uppercased())
-                        .fontWeight(.medium)
-                }
-            }
-
-            if let bitRate = track.bitRate, bitRate > 0 {
-                HStack {
-                    Text("Bitrate")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("\(bitRate / 1000) kbps")
-                        .fontWeight(.medium)
-                }
-            }
-
-            if let sampleRate = track.sampleRate, sampleRate > 0 {
-                HStack {
-                    Text("Sample Rate")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("\(sampleRate / 1000) kHz")
-                        .fontWeight(.medium)
-                }
-            }
-
-            if let channels = track.channelCount, channels > 0 {
-                HStack {
-                    Text("Channels")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(channels == 2 ? "Stereo" : channels == 1 ? "Mono" : "\(channels) ch")
-                        .fontWeight(.medium)
-                }
-            }
-        }
-        .font(.subheadline)
-        .padding()
-        .frame(minWidth: 200)
     }
 }
 
@@ -439,44 +321,14 @@ private struct SleepTimerButton: View {
                 Divider()
             }
 
-            Button {
-                player.setSleepTimer(.minutes(5))
-            } label: {
-                Text("5 minutes")
-            }
-            Button {
-                player.setSleepTimer(.minutes(10))
-            } label: {
-                Text("10 minutes")
-            }
-            Button {
-                player.setSleepTimer(.minutes(15))
-            } label: {
-                Text("15 minutes")
-            }
-            Button {
-                player.setSleepTimer(.minutes(30))
-            } label: {
-                Text("30 minutes")
-            }
-            Button {
-                player.setSleepTimer(.minutes(45))
-            } label: {
-                Text("45 minutes")
-            }
-            Button {
-                player.setSleepTimer(.minutes(60))
-            } label: {
-                Text("1 hour")
-            }
-
+            Button("5 minutes") { player.setSleepTimer(.minutes(5)) }
+            Button("10 minutes") { player.setSleepTimer(.minutes(10)) }
+            Button("15 minutes") { player.setSleepTimer(.minutes(15)) }
+            Button("30 minutes") { player.setSleepTimer(.minutes(30)) }
+            Button("45 minutes") { player.setSleepTimer(.minutes(45)) }
+            Button("1 hour") { player.setSleepTimer(.minutes(60)) }
             Divider()
-
-            Button {
-                player.setSleepTimer(.endOfTrack)
-            } label: {
-                Text("End of Track")
-            }
+            Button("End of Track") { player.setSleepTimer(.endOfTrack) }
         } label: {
             Group {
                 if player.sleepTimerMode != nil {
@@ -484,21 +336,17 @@ private struct SleepTimerButton: View {
                     if remaining > 0 {
                         Text("\(remaining / 60)m")
                             .font(.caption2.bold())
-                            .foregroundStyle(Color.accentColor)
                     } else {
                         Image(systemName: "moon.zzz.fill")
                             .font(.body)
-                            .foregroundStyle(Color.accentColor)
                     }
                 } else {
                     Image(systemName: "moon.zzz")
                         .font(.body)
-                        .foregroundStyle(.secondary)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
             .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 }
