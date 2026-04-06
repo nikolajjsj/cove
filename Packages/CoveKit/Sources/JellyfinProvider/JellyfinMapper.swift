@@ -115,6 +115,7 @@ enum JellyfinMapper {
         case "audio": return .track
         case "playlist": return .playlist
         case "boxset": return .collection
+        case "genre", "musicgenre": return .genre
         default: return .movie  // fallback
         }
     }
@@ -159,6 +160,7 @@ enum JellyfinMapper {
         case .random: return "Random"
         case .albumArtist: return "AlbumArtist"
         case .album: return "Album"
+        case .playCount: return "PlayCount"
         }
     }
 
@@ -175,12 +177,15 @@ enum JellyfinMapper {
     /// Map BaseItemDto to Artist.
     static func mapArtist(_ dto: BaseItemDto) -> Artist? {
         guard let id = dto.id, let name = dto.name else { return nil }
+        let userData = dto.userData.map { mapUserData($0) }
         return Artist(
             id: ArtistID(id),
             name: name,
             overview: dto.overview,
             sortName: dto.name,
-            albumCount: nil
+            albumCount: nil,
+            userData: userData,
+            genres: dto.genres
         )
     }
 
@@ -189,6 +194,8 @@ enum JellyfinMapper {
         guard let id = dto.id, let name = dto.name else { return nil }
         let artistId = dto.artistItems?.first?.id.map { ArtistID($0) }
         let duration: TimeInterval? = dto.runTimeTicks.map { TimeInterval($0) / 10_000_000.0 }
+        let userData = dto.userData.map { mapUserData($0) }
+        let dateAdded = dto.dateCreated.flatMap { parseDate($0) }
         return Album(
             id: AlbumID(id),
             title: name,
@@ -197,7 +204,10 @@ enum JellyfinMapper {
             year: dto.productionYear,
             genre: dto.genres?.first,
             trackCount: nil,
-            duration: duration
+            duration: duration,
+            userData: userData,
+            genres: dto.genres,
+            dateAdded: dateAdded
         )
     }
 
@@ -208,6 +218,17 @@ enum JellyfinMapper {
         let artistName = dto.albumArtist ?? dto.artistItems?.first?.name
         let albumId = dto.albumId.map { AlbumID($0) }
         let duration: TimeInterval? = dto.runTimeTicks.map { TimeInterval($0) / 10_000_000.0 }
+        let userData = dto.userData.map { mapUserData($0) }
+
+        // Extract audio stream info from media sources
+        let audioStream = dto.mediaSources?.first?.mediaStreams?.first {
+            $0.type?.lowercased() == "audio"
+        }
+        let codec = audioStream?.codec ?? dto.mediaSources?.first?.container
+        let bitRate = audioStream?.bitRate ?? dto.mediaSources?.first?.bitrate.map { Int($0) }
+        let sampleRate = audioStream?.sampleRate
+        let channelCount = audioStream?.channels
+
         return Track(
             id: TrackID(id),
             title: name,
@@ -218,7 +239,12 @@ enum JellyfinMapper {
             trackNumber: dto.indexNumber,
             discNumber: dto.parentIndexNumber,
             duration: duration,
-            codec: nil
+            codec: codec,
+            bitRate: bitRate,
+            sampleRate: sampleRate,
+            channelCount: channelCount,
+            genres: dto.genres,
+            userData: userData
         )
     }
 
@@ -226,12 +252,16 @@ enum JellyfinMapper {
     static func mapPlaylist(_ dto: BaseItemDto) -> Playlist? {
         guard let id = dto.id, let name = dto.name else { return nil }
         let duration: TimeInterval? = dto.runTimeTicks.map { TimeInterval($0) / 10_000_000.0 }
+        let userData = dto.userData.map { mapUserData($0) }
+        let dateAdded = dto.dateCreated.flatMap { parseDate($0) }
         return Playlist(
             id: PlaylistID(id),
             name: name,
             overview: dto.overview,
-            itemCount: nil,
-            duration: duration
+            itemCount: dto.childCount,
+            duration: duration,
+            userData: userData,
+            dateAdded: dateAdded
         )
     }
 

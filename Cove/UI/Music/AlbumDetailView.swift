@@ -238,21 +238,24 @@ struct AlbumDetailView: View {
 
                     ForEach(Array(discTracks.enumerated()), id: \.element.id) { localIndex, track in
                         let globalIndex = globalTrackIndex(for: track)
-                        TrackRow(
+                        let row = TrackRow(
                             track: track,
                             isCurrentTrack: isCurrentTrack(track),
                             isPlaying: isCurrentTrack(track) && appState.audioPlayer.isPlaying
                         ) {
                             playAllTracks(startingAt: globalIndex)
                         }
-                        .contextMenu {
-                            if isOffline {
+
+                        if isOffline {
+                            row.contextMenu {
                                 Button(role: .destructive) {
                                     Task { await deleteOfflineTrack(track) }
                                 } label: {
                                     Label("Remove Download", systemImage: "trash")
                                 }
                             }
+                        } else {
+                            row.trackContextMenu(track: track)
                         }
 
                         if localIndex < discTracks.count - 1 {

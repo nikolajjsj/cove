@@ -94,7 +94,7 @@ struct MovieDetailView: View {
         .navigationTitle(item.title)
         .toolbarBackground(.hidden, for: .navigationBar)
         #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

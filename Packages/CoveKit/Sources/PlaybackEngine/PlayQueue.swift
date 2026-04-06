@@ -19,6 +19,7 @@ public final class PlayQueue {
 
     public private(set) var tracks: [Track] = []
     public private(set) var currentIndex: Int = 0
+    public private(set) var context: PlayContext?
     public var shuffleEnabled: Bool = false
     public var repeatMode: RepeatMode = .off
 
@@ -61,10 +62,11 @@ public final class PlayQueue {
     // MARK: - Queue Operations
 
     /// Load a new set of tracks and begin at the specified index.
-    public func load(tracks: [Track], startingAt index: Int = 0) {
+    public func load(tracks: [Track], startingAt index: Int = 0, context: PlayContext? = nil) {
         self.originalOrder = tracks
         self.tracks = tracks
         self.currentIndex = tracks.isEmpty ? 0 : min(index, tracks.count - 1)
+        self.context = context
 
         if shuffleEnabled {
             applyShuffle()
@@ -220,6 +222,7 @@ public final class PlayQueue {
         tracks = []
         originalOrder = []
         currentIndex = 0
+        context = nil
     }
 
     // MARK: - Private

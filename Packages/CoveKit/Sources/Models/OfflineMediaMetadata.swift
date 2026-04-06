@@ -265,6 +265,24 @@ extension OfflineMediaMetadata {
         )
     }
 
+    /// Create metadata from a `Playlist`.
+    public static func from(
+        playlist: Playlist,
+        serverId: String
+    ) -> OfflineMediaMetadata {
+        OfflineMediaMetadata(
+            itemId: playlist.id.rawValue,
+            serverId: serverId,
+            mediaType: MediaType.playlist.rawValue,
+            title: playlist.name,
+            overview: playlist.overview,
+            dateAdded: playlist.dateAdded,
+            isFavorite: playlist.userData?.isFavorite,
+            trackCount: playlist.itemCount,
+            duration: playlist.duration
+        )
+    }
+
     /// Create metadata from a `Season`.
     public static func from(
         season: Season,

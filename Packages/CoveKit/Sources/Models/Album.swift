@@ -9,6 +9,9 @@ public struct Album: Identifiable, Codable, Hashable, Sendable {
     public let genre: String?
     public let trackCount: Int?
     public let duration: TimeInterval?
+    public let userData: UserData?
+    public let genres: [String]?
+    public let dateAdded: Date?
 
     public init(
         id: AlbumID,
@@ -18,7 +21,10 @@ public struct Album: Identifiable, Codable, Hashable, Sendable {
         year: Int? = nil,
         genre: String? = nil,
         trackCount: Int? = nil,
-        duration: TimeInterval? = nil
+        duration: TimeInterval? = nil,
+        userData: UserData? = nil,
+        genres: [String]? = nil,
+        dateAdded: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -28,5 +34,8 @@ public struct Album: Identifiable, Codable, Hashable, Sendable {
         self.genre = genre
         self.trackCount = trackCount
         self.duration = duration
+        self.userData = userData
+        self.genres = genres
+        self.dateAdded = dateAdded
     }
 }

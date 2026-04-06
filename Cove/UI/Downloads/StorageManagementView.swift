@@ -258,6 +258,7 @@ struct StorageManagementView: View {
         case .book: "Books"
         case .podcast: "Podcasts"
         case .collection: "Collections"
+        case .genre: "Genres"
         }
     }
 
@@ -274,6 +275,7 @@ struct StorageManagementView: View {
         case .book: "book"
         case .podcast: "antenna.radiowaves.left.and.right"
         case .collection: "rectangle.stack.fill"
+        case .genre: "guitars"
         }
     }
 }

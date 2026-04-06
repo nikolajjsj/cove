@@ -4,24 +4,30 @@ import MediaServerKit
 import Models
 import SwiftUI
 
-struct AlbumListView: View {
+struct GenreDetailView: View {
+    let genreItem: MediaItem
     let library: MediaLibrary?
-    var sortField: SortField = .name
-    var sortOrder: Models.SortOrder = .ascending
-    var isFavoriteFilter: Bool = false
     @Environment(AppState.self) private var appState
     @State private var loader = PagedCollectionLoader<MediaItem>()
 
-    /// Number of items to fetch per page.
     private let pageSize = 40
+
+    /// Resolves the music library — uses the explicitly provided one, or falls back
+    /// to the first music library found in AppState (covers the NavigationRouter case
+    /// where library is nil).
+    private var resolvedLibrary: MediaLibrary? {
+        library ?? appState.libraries.first { $0.collectionType == .music }
+    }
 
     var body: some View {
         Group {
             mainContent
         }
-        .task(id: "\(library?.id.rawValue ?? "")-\(sortField)-\(sortOrder)-\(isFavoriteFilter)") {
-            await loadFirstPage()
-        }
+        .navigationTitle(genreItem.title)
+        #if os(iOS)
+            .navigationBarTitleDisplayMode(.large)
+        #endif
+        .task(id: genreItem.id) { await loadFirstPage() }
     }
 
     // MARK: - Main Content
@@ -42,7 +48,7 @@ struct AlbumListView: View {
             ContentUnavailableView(
                 "No Albums",
                 systemImage: "square.stack",
-                description: Text("Your music library doesn't contain any albums yet.")
+                description: Text("No albums found in this genre.")
             )
         case .loaded:
             scrollContent
@@ -57,8 +63,9 @@ struct AlbumListView: View {
             ) {
                 ForEach(loader.items) { album in
                     NavigationLink(value: album) {
-                        AlbumCard(
+                        GenreAlbumCard(
                             title: album.title,
+                            subtitle: album.genres?.first,
                             imageURL: imageURL(for: album)
                         )
                     }
@@ -90,7 +97,7 @@ struct AlbumListView: View {
     // MARK: - Data Loading
 
     private func loadFirstPage() async {
-        guard let library else {
+        guard let library = resolvedLibrary else {
             loader.reset()
             return
         }
@@ -98,9 +105,9 @@ struct AlbumListView: View {
         let provider = appState.provider
 
         await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
-            let sort = SortOptions(field: sortField, order: sortOrder)
+            let sort = SortOptions(field: .name, order: .ascending)
             let filter = FilterOptions(
-                isFavorite: isFavoriteFilter ? true : Optional<Bool>.none,
+                genres: [genreItem.title],
                 limit: limit,
                 startIndex: startIndex,
                 includeItemTypes: ["MusicAlbum"]
@@ -123,10 +130,11 @@ struct AlbumListView: View {
     }
 }
 
-// MARK: - Album Card
+// MARK: - Genre Album Card
 
-private struct AlbumCard: View {
+private struct GenreAlbumCard: View {
     let title: String
+    let subtitle: String?
     let imageURL: URL?
 
     var body: some View {
@@ -139,14 +147,24 @@ private struct AlbumCard: View {
                 .fontWeight(.medium)
                 .lineLimit(2, reservesSpace: true)
                 .foregroundStyle(.primary)
+
+            if let subtitle {
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 #Preview {
     NavigationStack {
-        AlbumListView(library: nil)
-            .environment(AppState())
+        GenreDetailView(
+            genreItem: MediaItem(id: ItemID("preview"), title: "Rock", mediaType: .genre),
+            library: nil
+        )
+        .environment(AppState())
     }
 }

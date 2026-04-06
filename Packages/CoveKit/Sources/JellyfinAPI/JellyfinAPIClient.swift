@@ -623,6 +623,136 @@ public final class JellyfinAPIClient: Sendable {
             url: url, method: .get, headers: authHeaders, queryItems: queryItems,
             cachePolicy: .cacheFirst(maxAge: 30))
     }
+
+    // MARK: - Music Features
+
+    /// Fetch lyrics for a track.
+    /// Returns the raw lyrics response from `/Audio/{itemId}/Lyrics`.
+    public func getLyrics(itemId: String) async throws -> LyricsResponse {
+        let url = baseURL.appendingPathComponent("Audio/\(itemId)/Lyrics")
+        logger.debug("Fetching lyrics for item \(itemId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders,
+            cachePolicy: .cacheFirst(maxAge: 3600))
+    }
+
+    /// Mark an item as a favorite.
+    public func addFavorite(userId: String, itemId: String) async throws {
+        let url = baseURL.appendingPathComponent("Users/\(userId)/FavoriteItems/\(itemId)")
+        logger.debug("Adding favorite for item \(itemId)")
+        try await httpClient.request(
+            url: url, method: .post, headers: authHeaders)
+    }
+
+    /// Remove an item from favorites.
+    public func removeFavorite(userId: String, itemId: String) async throws {
+        let url = baseURL.appendingPathComponent("Users/\(userId)/FavoriteItems/\(itemId)")
+        logger.debug("Removing favorite for item \(itemId)")
+        try await httpClient.request(
+            url: url, method: .delete, headers: authHeaders)
+    }
+
+    /// Fetch an instant mix (radio) seeded from an item.
+    public func getInstantMix(
+        itemId: String,
+        userId: String,
+        limit: Int = 50
+    ) async throws -> ItemsResult {
+        let url = baseURL.appendingPathComponent("Items/\(itemId)/InstantMix")
+        let queryItems = [
+            URLQueryItem(name: "UserId", value: userId),
+            URLQueryItem(name: "Limit", value: String(limit)),
+            URLQueryItem(
+                name: "Fields", value: "Overview,Genres,DateCreated,UserData,ProductionYear"),
+        ]
+        logger.debug("Fetching instant mix for item \(itemId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .networkOnly)
+    }
+
+    // MARK: - Playlist CRUD
+
+    /// Create a new playlist.
+    public func createPlaylist(
+        userId: String,
+        name: String,
+        trackIds: [String] = []
+    ) async throws -> CreatePlaylistResponse {
+        let url = baseURL.appendingPathComponent("Playlists")
+        let body = CreatePlaylistRequest(
+            name: name,
+            userId: userId,
+            ids: trackIds,
+            mediaType: "Audio"
+        )
+        let rawBody = try Self.pascalCaseEncoder.encode(body)
+        logger.debug("Creating playlist '\(name)'")
+        return try await httpClient.request(
+            url: url, method: .post, headers: authHeaders, rawBody: rawBody)
+    }
+
+    /// Add tracks to an existing playlist.
+    public func addToPlaylist(
+        playlistId: String,
+        trackIds: [String]
+    ) async throws {
+        let url = baseURL.appendingPathComponent("Playlists/\(playlistId)/Items")
+        let queryItems = [
+            URLQueryItem(name: "Ids", value: trackIds.joined(separator: ","))
+        ]
+        logger.debug("Adding \(trackIds.count) tracks to playlist \(playlistId)")
+        try await httpClient.request(
+            url: url, method: .post, headers: authHeaders, queryItems: queryItems)
+    }
+
+    /// Remove tracks from a playlist by their entry IDs.
+    public func removeFromPlaylist(
+        playlistId: String,
+        entryIds: [String]
+    ) async throws {
+        let url = baseURL.appendingPathComponent("Playlists/\(playlistId)/Items")
+        let queryItems = [
+            URLQueryItem(name: "EntryIds", value: entryIds.joined(separator: ","))
+        ]
+        logger.debug("Removing \(entryIds.count) entries from playlist \(playlistId)")
+        try await httpClient.request(
+            url: url, method: .delete, headers: authHeaders, queryItems: queryItems)
+    }
+
+    /// Get items in a playlist.
+    public func getPlaylistItems(
+        playlistId: String,
+        userId: String
+    ) async throws -> ItemsResult {
+        let url = baseURL.appendingPathComponent("Playlists/\(playlistId)/Items")
+        let queryItems = [
+            URLQueryItem(name: "UserId", value: userId),
+            URLQueryItem(
+                name: "Fields", value: "Overview,Genres,DateCreated,UserData,ProductionYear"),
+        ]
+        logger.debug("Fetching items for playlist \(playlistId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 60))
+    }
+
+    /// Update an item (e.g., rename a playlist).
+    public func updateItem(itemId: String, name: String) async throws {
+        let url = baseURL.appendingPathComponent("Items/\(itemId)")
+        let body = UpdateItemRequest(name: name)
+        logger.debug("Updating item \(itemId) name to '\(name)'")
+        try await httpClient.request(
+            url: url, method: .post, headers: authHeaders, body: body)
+    }
+
+    /// Delete an item (e.g., delete a playlist).
+    public func deleteItem(itemId: String) async throws {
+        let url = baseURL.appendingPathComponent("Items/\(itemId)")
+        logger.debug("Deleting item \(itemId)")
+        try await httpClient.request(
+            url: url, method: .delete, headers: authHeaders)
+    }
 }
 
 // MARK: - Thread-safe token storage
@@ -737,5 +867,62 @@ private struct PlaybackInfoRequest: Encodable, Sendable {
         case enableDirectStream = "EnableDirectStream"
         case enableTranscoding = "EnableTranscoding"
         case maxStreamingBitrate = "MaxStreamingBitrate"
+    }
+}
+
+// MARK: - Music Feature DTOs
+
+/// Response from the lyrics endpoint.
+public struct LyricsResponse: Codable, Sendable {
+    public let lyrics: [LyricLineDto]?
+
+    enum CodingKeys: String, CodingKey {
+        case lyrics = "Lyrics"
+    }
+}
+
+public struct LyricLineDto: Codable, Sendable {
+    public let start: Int64?
+    public let text: String?
+
+    enum CodingKeys: String, CodingKey {
+        case start = "Start"
+        case text = "Text"
+    }
+}
+
+/// Request body for creating a playlist.
+struct CreatePlaylistRequest: Encodable, Sendable {
+    let name: String
+    let userId: String
+    let ids: [String]
+    let mediaType: String
+
+    enum CodingKeys: String, CodingKey {
+        case name = "Name"
+        case userId = "UserId"
+        case ids = "Ids"
+        case mediaType = "MediaType"
+    }
+}
+
+/// Response from creating a playlist.
+public struct CreatePlaylistResponse: Codable, Sendable {
+    public let id: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id = "Id"
+    }
+}
+
+/// Request body for updating an item name.
+/// Uses lowercase coding keys so the HTTPClient's `.convertToSnakeCase`
+/// encoder passes them through unchanged. Jellyfin's server uses
+/// case-insensitive JSON deserialization, so "name" matches "Name".
+struct UpdateItemRequest: Encodable, Sendable {
+    let name: String
+
+    enum CodingKeys: String, CodingKey {
+        case name = "name"
     }
 }

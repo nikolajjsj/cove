@@ -6,6 +6,9 @@ import SwiftUI
 
 struct ArtistListView: View {
     let library: MediaLibrary?
+    var sortField: SortField = .name
+    var sortOrder: Models.SortOrder = .ascending
+    var isFavoriteFilter: Bool = false
     @Environment(AppState.self) private var appState
     @State private var loader = PagedCollectionLoader<MediaItem>()
 
@@ -16,7 +19,9 @@ struct ArtistListView: View {
         Group {
             mainContent
         }
-        .task(id: library?.id) { await loadFirstPage() }
+        .task(id: "\(library?.id.rawValue ?? "")-\(sortField)-\(sortOrder)-\(isFavoriteFilter)") {
+            await loadFirstPage()
+        }
     }
 
     // MARK: - Main Content
@@ -53,6 +58,7 @@ struct ArtistListView: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .artistContextMenu(artist: artist)
                         .onAppear { loader.onItemAppeared(artist) }
                     }
                 }
@@ -88,8 +94,9 @@ struct ArtistListView: View {
         let provider = appState.provider
 
         await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
-            let sort = SortOptions(field: .name, order: .ascending)
+            let sort = SortOptions(field: sortField, order: sortOrder)
             let filter = FilterOptions(
+                isFavorite: isFavoriteFilter ? true : Optional<Bool>.none,
                 limit: limit,
                 startIndex: startIndex,
                 includeItemTypes: ["MusicArtist"]

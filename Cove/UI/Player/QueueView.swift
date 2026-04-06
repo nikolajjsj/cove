@@ -1,32 +1,42 @@
 import JellyfinProvider
+import MediaServerKit
 import Models
 import PlaybackEngine
 import SwiftUI
-import MediaServerKit
 
+/// Queue view used as Page 3 of the paged player.
+/// Shows the current track, play context, and up-next tracks with
+/// swipe-to-delete and drag-to-reorder.
 struct QueueView: View {
     @Environment(AppState.self) private var appState
+    @State private var showClearConfirmation = false
 
     var body: some View {
         let player = appState.audioPlayer
         let queue = player.queue
 
-        NavigationStack {
-            Group {
-                if queue.tracks.isEmpty {
-                    ContentUnavailableView(
-                        "Queue Empty",
-                        systemImage: "music.note.list",
-                        description: Text("Add some tracks to get started.")
-                    )
-                } else {
-                    queueList(player: player, queue: queue)
-                }
+        Group {
+            if queue.tracks.isEmpty {
+                ContentUnavailableView(
+                    "Queue Empty",
+                    systemImage: "music.note.list",
+                    description: Text("Add some tracks to get started.")
+                )
+            } else {
+                queueList(player: player, queue: queue)
             }
-            .navigationTitle("Queue")
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
+        }
+        .confirmationDialog(
+            "Clear Up Next?",
+            isPresented: $showClearConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Clear All", role: .destructive) {
+                clearUpNext(queue: queue)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will remove all upcoming tracks from the queue.")
         }
     }
 
@@ -35,6 +45,14 @@ struct QueueView: View {
     @ViewBuilder
     private func queueList(player: AudioPlaybackManager, queue: PlayQueue) -> some View {
         List {
+            // MARK: Playing From
+
+            if let context = queue.context {
+                Section {
+                    playingFromRow(context: context)
+                }
+            }
+
             // MARK: Now Playing
 
             if let currentTrack = queue.currentTrack {
@@ -54,10 +72,7 @@ struct QueueView: View {
             if !upNext.isEmpty {
                 Section {
                     ForEach(Array(upNext.enumerated()), id: \.element.id) { offset, track in
-                        trackRow(
-                            track: track,
-                            index: offset + 1
-                        )
+                        trackRow(track: track)
                     }
                     .onDelete { offsets in
                         deleteUpNextTracks(at: offsets, queue: queue)
@@ -72,19 +87,63 @@ struct QueueView: View {
                             .textCase(.uppercase)
                             .foregroundStyle(.secondary)
 
+                        Text("· \(upNext.count) \(upNext.count == 1 ? "track" : "tracks")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary.opacity(0.7))
+
                         Spacer()
 
-                        Text("\(upNext.count) track\(upNext.count == 1 ? "" : "s")")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+                        Button("Clear") {
+                            showClearConfirmation = true
+                        }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.red)
                     }
                 }
             }
         }
         .listStyle(.plain)
-        #if os(iOS)
-            .environment(\.editMode, .constant(.active))
-        #endif
+        .scrollContentBackground(.hidden)
+    }
+
+    // MARK: - Playing From Row
+
+    @ViewBuilder
+    private func playingFromRow(context: PlayContext) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: contextIcon(for: context.type))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("Playing from ")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                + Text(context.title)
+                .font(.subheadline.bold())
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            if context.id != nil {
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.vertical, 4)
+        .listRowBackground(Color.white.opacity(0.06))
+    }
+
+    private func contextIcon(for type: PlayContextType) -> String {
+        switch type {
+        case .album: "square.stack"
+        case .playlist: "music.note.list"
+        case .artist: "music.mic"
+        case .genre: "guitars"
+        case .songs: "music.note"
+        case .radio: "dot.radiowaves.left.and.right"
+        case .unknown: "music.note"
+        }
     }
 
     // MARK: - Now Playing Row
@@ -92,7 +151,6 @@ struct QueueView: View {
     @ViewBuilder
     private func nowPlayingRow(track: Track, isPlaying: Bool) -> some View {
         HStack(spacing: 12) {
-            // Animated indicator or artwork thumbnail
             MediaImage.trackThumbnail(url: artworkURL(for: track))
                 .frame(width: 44, height: 44)
 
@@ -106,20 +164,19 @@ struct QueueView: View {
                     Text(artistName)
                         .font(.caption)
                         .lineLimit(1)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary.opacity(0.7))
                 }
             }
 
             Spacer()
 
-            // Playing indicator
             Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.fill")
                 .font(.caption)
                 .foregroundStyle(Color.accentColor)
                 .symbolEffect(.variableColor.iterative, isActive: isPlaying)
         }
         .padding(.vertical, 2)
-        .listRowBackground(Color.accentColor.opacity(0.08))
+        .listRowBackground(Color.accentColor.opacity(0.1))
         .deleteDisabled(true)
         .moveDisabled(true)
     }
@@ -127,9 +184,8 @@ struct QueueView: View {
     // MARK: - Track Row
 
     @ViewBuilder
-    private func trackRow(track: Track, index: Int) -> some View {
+    private func trackRow(track: Track) -> some View {
         HStack(spacing: 12) {
-            // Small artwork thumbnail
             MediaImage.trackThumbnail(url: artworkURL(for: track))
                 .frame(width: 40, height: 40)
 
@@ -143,7 +199,7 @@ struct QueueView: View {
                     Text(artistName)
                         .font(.caption)
                         .lineLimit(1)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary.opacity(0.6))
                 }
             }
 
@@ -152,32 +208,38 @@ struct QueueView: View {
             if let duration = track.duration {
                 Text(TimeFormatting.playbackPosition(duration))
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.primary.opacity(0.4))
             }
         }
         .padding(.vertical, 2)
+        .listRowBackground(Color.clear)
     }
 
     // MARK: - Actions
 
-    /// Delete tracks from the Up Next section.
-    /// Offsets are relative to the upNext array, so we shift them
-    /// to absolute queue indices (currentIndex + 1 + offset).
     private func deleteUpNextTracks(at offsets: IndexSet, queue: PlayQueue) {
-        // Remove in reverse order so indices stay valid
         for offset in offsets.sorted().reversed() {
             let absoluteIndex = queue.currentIndex + 1 + offset
             queue.remove(at: absoluteIndex)
         }
     }
 
-    /// Move tracks within the Up Next section.
-    /// Source and destination are relative to upNext, so we shift them.
     private func moveUpNextTracks(from source: IndexSet, to destination: Int, queue: PlayQueue) {
         guard let sourceIndex = source.first else { return }
         let absoluteSource = queue.currentIndex + 1 + sourceIndex
         let absoluteDestination = queue.currentIndex + 1 + destination
         queue.move(from: absoluteSource, to: absoluteDestination)
+    }
+
+    private func clearUpNext(queue: PlayQueue) {
+        let upNextCount = queue.upNext.count
+        for _ in 0..<upNextCount {
+            let removeIndex = queue.currentIndex + 1
+            if queue.tracks.indices.contains(removeIndex) {
+                queue.remove(at: removeIndex)
+            }
+        }
+        appState.showToast("Queue cleared", icon: "checkmark.circle.fill")
     }
 
     // MARK: - Helpers

@@ -121,6 +121,7 @@ struct DownloadRowView: View {
         case .book: "book"
         case .podcast: "antenna.radiowaves.left.and.right"
         case .collection: "rectangle.stack.fill"
+        case .genre: "guitars"
         }
     }
 
@@ -181,6 +182,7 @@ struct DownloadRowView: View {
         case .book: "Book"
         case .podcast: "Podcast"
         case .collection: "Collection"
+        case .genre: "Genre"
         }
     }
 

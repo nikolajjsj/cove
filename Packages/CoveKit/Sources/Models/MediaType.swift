@@ -10,6 +10,7 @@ public enum MediaType: String, Codable, Sendable {
     case track
     case playlist
     case collection
+    case genre
     case book  // Future
     case podcast  // Future
 }

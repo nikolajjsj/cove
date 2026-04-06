@@ -59,6 +59,7 @@ struct LibraryItemCard: View {
         case .season: "tv"
         case .book: "book"
         case .podcast: "mic"
+        case .genre: "guitars"
         }
     }
 }

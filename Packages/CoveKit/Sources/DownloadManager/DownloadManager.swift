@@ -270,6 +270,70 @@ public final class DownloadManagerService: @unchecked Sendable {
         return group
     }
 
+    /// Batch-enqueue all tracks in a playlist as a single download group.
+    @discardableResult
+    public func enqueuePlaylist(
+        playlistItemId: ItemID,
+        tracks: [(itemId: ItemID, title: String, remoteURL: URL, expectedBytes: Int64)],
+        serverId: String,
+        groupTitle: String
+    ) async throws -> DownloadGroup {
+        // Create or fetch existing group
+        let group: DownloadGroup
+        if let existing = try await groupRepository?.fetch(
+            itemId: playlistItemId, serverId: serverId)
+        {
+            group = existing
+        } else {
+            group = DownloadGroup(
+                itemId: playlistItemId,
+                serverId: serverId,
+                mediaType: .playlist,
+                title: groupTitle
+            )
+            try await groupRepository?.save(group)
+        }
+
+        // Enqueue each track with the group ID
+        for track in tracks {
+            // Skip if already enqueued
+            if let existing = try await downloadRepository.fetch(
+                itemId: track.itemId, serverId: serverId)
+            {
+                logger.info(
+                    "Track \(track.itemId.rawValue) already exists: state=\(existing.state.rawValue)"
+                )
+                continue
+            }
+
+            let item = DownloadItem(
+                id: UUID().uuidString,
+                itemId: track.itemId,
+                serverId: serverId,
+                title: track.title,
+                mediaType: .track,
+                state: .queued,
+                progress: 0,
+                totalBytes: track.expectedBytes,
+                downloadedBytes: 0,
+                localFilePath: nil,
+                remoteURL: track.remoteURL.absoluteString,
+                parentId: playlistItemId,
+                groupId: group.id,
+                artworkURL: nil,
+                errorMessage: nil,
+                createdAt: Date(),
+                completedAt: nil
+            )
+            try await downloadRepository.save(item)
+        }
+
+        logger.info(
+            "Enqueued \(tracks.count) tracks for playlist '\(groupTitle)' [group: \(group.id)]")
+        await startNextDownloadsIfNeeded()
+        return group
+    }
+
     /// Enqueue all episodes in a season as a download group.
     ///
     /// - Parameters:

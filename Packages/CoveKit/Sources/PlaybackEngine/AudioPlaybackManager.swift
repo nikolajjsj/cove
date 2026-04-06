@@ -15,6 +15,16 @@ public final class AudioPlaybackManager {
     public private(set) var duration: TimeInterval = 0
     public let queue: PlayQueue = PlayQueue()
 
+    /// The active sleep timer mode, or nil if no timer is set.
+    public private(set) var sleepTimerMode: SleepTimerMode?
+    /// The date when the sleep timer will fire. Nil if no timer.
+    public private(set) var sleepTimerEndDate: Date?
+    /// Remaining seconds on the sleep timer.
+    public var sleepTimerRemaining: TimeInterval {
+        guard let endDate = sleepTimerEndDate else { return 0 }
+        return max(endDate.timeIntervalSinceNow, 0)
+    }
+
     /// Closure that resolves a Track to a streaming URL. Set by the app layer.
     public var streamURLResolver: (@Sendable (Track) -> URL?)?
 
@@ -32,6 +42,9 @@ public final class AudioPlaybackManager {
 
     /// Whether playback was active before an audio session interruption began.
     @ObservationIgnored private var wasPlayingBeforeInterruption: Bool = false
+
+    /// Task running the sleep timer countdown.
+    @ObservationIgnored private var sleepTimerTask: Task<Void, Never>?
 
     /// Task listening for audio session interruption notifications.
     @ObservationIgnored private nonisolated(unsafe) var interruptionTask: Task<Void, Never>?
@@ -144,6 +157,41 @@ public final class AudioPlaybackManager {
                 )
             }
         }
+    }
+
+    /// Start a sleep timer.
+    public func setSleepTimer(_ mode: SleepTimerMode) {
+        cancelSleepTimer()
+        sleepTimerMode = mode
+
+        switch mode {
+        case .minutes(let minutes):
+            sleepTimerEndDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
+            sleepTimerTask = Task { [weak self] in
+                while let self, let endDate = self.sleepTimerEndDate {
+                    guard !Task.isCancelled else { return }
+                    if Date.now >= endDate {
+                        self.pause()
+                        self.cancelSleepTimer()
+                        return
+                    }
+                    try? await Task.sleep(for: .seconds(1))
+                }
+            }
+        case .endOfTrack:
+            sleepTimerEndDate = nil  // No fixed end date
+        // The endOfTrack handling is done in handleTrackEnd
+        }
+
+        logger.info("Sleep timer set: \(String(describing: mode))")
+    }
+
+    /// Cancel any active sleep timer.
+    public func cancelSleepTimer() {
+        sleepTimerTask?.cancel()
+        sleepTimerTask = nil
+        sleepTimerMode = nil
+        sleepTimerEndDate = nil
     }
 
     /// Stop playback entirely and clear the queue.
@@ -317,6 +365,17 @@ public final class AudioPlaybackManager {
         tokenToTrack.removeValue(forKey: token)
 
         logger.debug("Track ended, handling advancement")
+
+        // Check if sleep timer should stop playback at end of track
+        if sleepTimerMode == .endOfTrack {
+            cancelSleepTimer()
+            isPlaying = false
+            currentTime = 0
+            duration = 0
+            updateNowPlaying()
+            logger.info("Sleep timer: paused at end of track")
+            return
+        }
 
         // Repeat-one: replay the same track by rebuilding
         if queue.repeatMode == .one {

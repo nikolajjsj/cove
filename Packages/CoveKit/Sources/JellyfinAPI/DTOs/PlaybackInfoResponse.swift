@@ -55,6 +55,7 @@ public struct MediaStreamInfo: Codable, Sendable {
     public let width: Int?
     public let channels: Int?
     public let bitRate: Int?
+    public let sampleRate: Int?
     public let videoRange: String?
     public let videoRangeType: String?
 
@@ -74,6 +75,7 @@ public struct MediaStreamInfo: Codable, Sendable {
         case width = "Width"
         case channels = "Channels"
         case bitRate = "BitRate"
+        case sampleRate = "SampleRate"
         case videoRange = "VideoRange"
         case videoRangeType = "VideoRangeType"
     }

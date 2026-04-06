@@ -1,3 +1,4 @@
+import MediaServerKit
 import Models
 import SwiftUI
 
@@ -19,6 +20,8 @@ enum NavigationRouter {
             ArtistDetailView(artistItem: item)
         case .album:
             AlbumDetailView(albumItem: item)
+        case .genre:
+            GenreDetailView(genreItem: item, library: nil)
         default:
             Text(item.title)
                 .navigationTitle(item.title)
@@ -42,6 +45,12 @@ enum NavigationRouter {
         AlbumDetailView(albumItem: MediaItem(id: album.id, title: album.title, mediaType: .album))
     }
 
+    /// Returns the detail view for a given playlist.
+    @ViewBuilder
+    static func destination(for playlist: Playlist) -> some View {
+        PlaylistDetailView(playlist: playlist)
+    }
+
     /// Returns the detail view for a given person.
     @ViewBuilder
     static func destination(for person: Person) -> some View {
@@ -62,6 +71,9 @@ private struct NavigationDestinations: ViewModifier {
             }
             .navigationDestination(for: Album.self) { album in
                 NavigationRouter.destination(for: album)
+            }
+            .navigationDestination(for: Playlist.self) { playlist in
+                NavigationRouter.destination(for: playlist)
             }
             .navigationDestination(for: Person.self) { person in
                 NavigationRouter.destination(for: person)

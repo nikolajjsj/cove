@@ -124,6 +124,8 @@ struct ArtistDetailView: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .albumContextMenu(
+                            album: MediaItem(id: album.id, title: album.title, mediaType: .album))
                     }
                 }
                 .padding(.horizontal)

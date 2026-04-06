@@ -10,7 +10,7 @@ public struct SortOptions: Sendable {
     }
 }
 
-public enum SortField: String, Codable, Sendable {
+public enum SortField: String, Codable, Hashable, Sendable {
     case name
     case dateAdded
     case dateCreated
@@ -22,9 +22,10 @@ public enum SortField: String, Codable, Sendable {
     case random
     case albumArtist
     case album
+    case playCount
 }
 
-public enum SortOrder: String, Codable, Sendable {
+public enum SortOrder: String, Codable, Hashable, Sendable {
     case ascending
     case descending
 }

@@ -6,10 +6,11 @@ import SwiftUI
 struct AppShellView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @State private var selectedTab: AppTab = .home
     @State private var showFullPlayer = false
 
     var body: some View {
+        @Bindable var appState = appState
+
         Group {
             if sizeClass == .compact {
                 compactLayout
@@ -25,6 +26,7 @@ struct AppShellView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: appState.isOffline)
+        .toastOverlay(toast: $appState.currentToast)
         .sheet(isPresented: $showFullPlayer) {
             AudioPlayerView()
         }
@@ -33,10 +35,12 @@ struct AppShellView: View {
     // MARK: - iPhone (compact) — TabView
 
     private var compactLayout: some View {
-        TabView(selection: $selectedTab) {
+        @Bindable var appState = appState
+
+        return TabView(selection: $appState.selectedTab) {
             ForEach(availableTabs, id: \.self) { tab in
                 Tab(tab.title, systemImage: tab.icon, value: tab) {
-                    NavigationStack {
+                    NavigationStack(path: navigationPathBinding(for: tab)) {
                         tab.destination(appState: appState)
                             .navigationTitle(tab.title)
                             .withNavigationDestinations()
@@ -54,17 +58,19 @@ struct AppShellView: View {
     // MARK: - iPad / Mac (regular) — Sidebar
 
     private var regularLayout: some View {
-        NavigationSplitView {
+        @Bindable var appState = appState
+
+        return NavigationSplitView {
             #if !os(iOS)
-                List(availableTabs, id: \.self, selection: $selectedTab) { tab in
+                List(availableTabs, id: \.self, selection: $appState.selectedTab) { tab in
                     Label(tab.title, systemImage: tab.icon)
                 }
                 .navigationTitle("Cove")
             #endif
         } detail: {
-            NavigationStack {
-                selectedTab.destination(appState: appState)
-                    .navigationTitle(selectedTab.title)
+            NavigationStack(path: navigationPathBinding(for: appState.selectedTab)) {
+                appState.selectedTab.destination(appState: appState)
+                    .navigationTitle(appState.selectedTab.title)
                     .withNavigationDestinations()
             }
         }
@@ -102,69 +108,15 @@ struct AppShellView: View {
         tabs.append(.settings)
         return tabs
     }
-}
 
-// MARK: - Tab Enum
+    // MARK: - Navigation Path Binding
 
-enum AppTab: Hashable {
-    case home
-    case search
-    case music
-    case movies
-    case tvShows
-    case downloads
-    case settings
-
-    var title: String {
-        switch self {
-        case .home: "Home"
-        case .search: "Search"
-        case .music: "Music"
-        case .movies: "Movies"
-        case .tvShows: "TV Shows"
-        case .downloads: "Downloads"
-        case .settings: "Settings"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .home: "house"
-        case .search: "magnifyingglass"
-        case .music: "music.note"
-        case .movies: "film"
-        case .tvShows: "tv"
-        case .downloads: "arrow.down.circle"
-        case .settings: "gear"
-        }
-    }
-
-    @ViewBuilder
-    func destination(appState: AppState) -> some View {
-        switch self {
-        case .home:
-            HomeView()
-        case .search:
-            SearchView()
-        case .music:
-            MusicLibraryView(library: appState.libraries.first { $0.collectionType == .music })
-        case .movies:
-            LibraryGridView(library: appState.libraries.first { $0.collectionType == .movies })
-        case .tvShows:
-            LibraryGridView(library: appState.libraries.first { $0.collectionType == .tvshows })
-        case .downloads:
-            if let downloadManager = appState.downloadManager {
-                DownloadsView(downloadManager: downloadManager)
-            } else {
-                ContentUnavailableView(
-                    "Downloads Unavailable",
-                    systemImage: "arrow.down.circle.dotted",
-                    description: Text(
-                        "Download functionality requires local storage to be available.")
-                )
-            }
-        case .settings:
-            SettingsView()
-        }
+    /// Creates a `Binding<NavigationPath>` for a given tab, backed by `appState.navigationPaths`.
+    private func navigationPathBinding(for tab: AppTab) -> Binding<NavigationPath> {
+        @Bindable var appState = appState
+        return Binding(
+            get: { appState.navigationPaths[tab] ?? NavigationPath() },
+            set: { appState.navigationPaths[tab] = $0 }
+        )
     }
 }

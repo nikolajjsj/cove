@@ -7,6 +7,7 @@ import Models
 import Networking
 import Persistence
 import PlaybackEngine
+import SwiftUI
 
 @Observable
 final class AppState {
@@ -17,6 +18,28 @@ final class AppState {
     var isLoading = false
     var error: AppError?
     var isOffline = false
+
+    // MARK: - Navigation
+
+    /// The currently selected tab in the app shell.
+    var selectedTab: AppTab = .home
+
+    /// Per-tab navigation paths for controlled NavigationStacks.
+    /// Enables dismiss-then-navigate from the player and deep linking.
+    var navigationPaths: [AppTab: NavigationPath] = [
+        .home: NavigationPath(),
+        .search: NavigationPath(),
+        .music: NavigationPath(),
+        .movies: NavigationPath(),
+        .tvShows: NavigationPath(),
+        .downloads: NavigationPath(),
+        .settings: NavigationPath(),
+    ]
+
+    // MARK: - Toast
+
+    /// The currently displayed toast message, if any.
+    var currentToast: ToastMessage?
 
     let provider = JellyfinServerProvider()
     let audioPlayer = AudioPlaybackManager()
@@ -369,7 +392,66 @@ final class AppState {
         )
     }
 
-    /// Check if an item has been downloaded.
+    /// Download all tracks in a playlist for offline playback.
+    func downloadPlaylist(
+        playlist: Playlist,
+        tracks: [Track]
+    ) async throws {
+        guard let downloadManager, let connection = activeConnection,
+            let metadataRepo = offlineMetadataRepository
+        else { return }
+
+        let serverId = connection.id.uuidString
+        let storage = DownloadStorage.shared
+
+        // 1. Save and download artwork for the playlist
+        var playlistMeta = OfflineMediaMetadata.from(playlist: playlist, serverId: serverId)
+        let _ = try? storage.prepareParentDirectory(
+            serverId: serverId, mediaType: .playlist, itemId: playlist.id
+        )
+
+        if let primaryURL = provider.imageURL(
+            for: playlist.id, type: .primary, maxSize: CGSize(width: 600, height: 600)
+        ) {
+            let dest = storage.primaryImageURL(
+                serverId: serverId, mediaType: .playlist, itemId: playlist.id)
+            if await storage.downloadImage(from: primaryURL, to: dest) {
+                playlistMeta.primaryImagePath = storage.relativePrimaryImagePath(
+                    serverId: serverId, mediaType: .playlist, itemId: playlist.id
+                )
+            }
+        }
+
+        try await metadataRepo.save(playlistMeta)
+
+        // 2. Save track metadata and resolve download URLs (preserve playlist order)
+        var trackTuples: [(itemId: ItemID, title: String, remoteURL: URL, expectedBytes: Int64)] =
+            []
+
+        for track in tracks {
+            let trackMeta = OfflineMediaMetadata.from(track: track, serverId: serverId)
+            try await metadataRepo.save(trackMeta)
+
+            // Resolve download URL
+            let trackItem = MediaItem(id: track.id, title: track.title, mediaType: .track)
+            let downloadInfo = try await provider.downloadInfo(
+                for: trackItem, profile: provider.deviceProfile())
+            trackTuples.append(
+                (
+                    itemId: track.id, title: track.title, remoteURL: downloadInfo.url,
+                    expectedBytes: downloadInfo.expectedBytes ?? 0
+                ))
+        }
+
+        // 3. Batch enqueue via download manager
+        _ = try await downloadManager.enqueuePlaylist(
+            playlistItemId: playlist.id,
+            tracks: trackTuples,
+            serverId: serverId,
+            groupTitle: playlist.name
+        )
+    }
+
     func downloadState(for itemId: ItemID) async -> DownloadState? {
         guard let downloadManager, let connection = activeConnection else { return nil }
         let item = try? await downloadManager.download(
@@ -486,6 +568,30 @@ final class AppState {
         }
     }
 
+    // MARK: - Toast
+
+    /// Show a brief toast/snackbar message.
+    /// - Parameters:
+    ///   - message: The text to display.
+    ///   - icon: An SF Symbol name for the leading icon.
+    func showToast(_ message: String, icon: String = "checkmark.circle.fill") {
+        currentToast = ToastMessage(message: message, icon: icon)
+    }
+
+    /// Dismiss the current toast.
+    func dismissToast() {
+        currentToast = nil
+    }
+
+    // MARK: - Navigation Helpers
+
+    /// Navigate to a specific destination by switching tabs and appending to the navigation path.
+    /// Intended to be called from the player or other modal contexts before dismissing.
+    func navigate(to tab: AppTab, destination: any Hashable) {
+        selectedTab = tab
+        navigationPaths[tab, default: NavigationPath()].append(destination)
+    }
+
     // MARK: - Offline Sync
 
     private func syncOfflineReports() async {
@@ -516,5 +622,18 @@ final class AppState {
 
         // Clean up old synced reports
         await offlineSyncManager.cleanup()
+    }
+}
+
+// MARK: - Toast Message
+
+/// A brief confirmation message shown as a toast/snackbar overlay.
+struct ToastMessage: Equatable, Identifiable {
+    let id = UUID()
+    let message: String
+    let icon: String
+
+    static func == (lhs: ToastMessage, rhs: ToastMessage) -> Bool {
+        lhs.id == rhs.id
     }
 }
