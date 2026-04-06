@@ -7,7 +7,7 @@ import os
 /// Only implements the endpoints we actually use.
 public final class JellyfinAPIClient: Sendable {
     public let httpClient: HTTPClient
-    private let baseURL: URL
+    public let baseURL: URL
     private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "JellyfinAPI")
 
     /// The current access token, set after successful authentication.
@@ -124,7 +124,8 @@ public final class JellyfinAPIClient: Sendable {
             "ProductionYear",
         ],
         searchTerm: String? = nil,
-        isFavorite: Bool? = nil
+        isFavorite: Bool? = nil,
+        personIds: [String]? = nil
     ) async throws -> ItemsResult {
         let url = baseURL.appendingPathComponent("Users/\(userId)/Items")
 
@@ -150,6 +151,10 @@ public final class JellyfinAPIClient: Sendable {
             queryItems.append(
                 URLQueryItem(name: "IsFavorite", value: isFavorite ? "true" : "false"))
         }
+        if let personIds {
+            queryItems.append(
+                URLQueryItem(name: "PersonIds", value: personIds.joined(separator: ",")))
+        }
 
         logger.debug(
             "Fetching \(includeItemTypes?.joined(separator: ", ") ?? "items") for user \(userId)")
@@ -164,7 +169,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Users/\(userId)/Items/\(itemId)")
         let fields = [
             "Overview", "Genres", "DateCreated", "UserData", "CommunityRating", "OfficialRating",
-            "ProductionYear", "People",
+            "ProductionYear", "People", "RemoteTrailers",
         ]
         let queryItems = [URLQueryItem(name: "Fields", value: fields.joined(separator: ","))]
         logger.debug("Fetching item \(itemId)")
@@ -413,6 +418,63 @@ public final class JellyfinAPIClient: Sendable {
             URLQueryItem(name: "api_key", value: token)
         ]
         return urlComponents?.url
+    }
+
+    // MARK: - Similar Items
+
+    /// Get items similar to a given item.
+    /// `GET /Items/{itemId}/Similar`
+    public func getSimilarItems(
+        itemId: String,
+        userId: String,
+        limit: Int? = nil,
+        fields: [String] = [
+            "Overview", "Genres", "UserData", "CommunityRating", "OfficialRating", "ProductionYear",
+            "People",
+        ]
+    ) async throws -> ItemsResult {
+        let url = baseURL.appendingPathComponent("Items/\(itemId)/Similar")
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "UserId", value: userId),
+            URLQueryItem(name: "Fields", value: fields.joined(separator: ",")),
+        ]
+        if let limit {
+            queryItems.append(URLQueryItem(name: "Limit", value: String(limit)))
+        }
+        logger.debug("Fetching similar items for \(itemId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 300))
+    }
+
+    // MARK: - Special Features
+
+    /// Get special features for an item (behind-the-scenes, deleted scenes, etc.).
+    /// `GET /Users/{userId}/Items/{itemId}/SpecialFeatures`
+    public func getSpecialFeatures(
+        itemId: String,
+        userId: String
+    ) async throws -> [BaseItemDto] {
+        let url = baseURL.appendingPathComponent("Users/\(userId)/Items/\(itemId)/SpecialFeatures")
+        logger.debug("Fetching special features for \(itemId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders,
+            cachePolicy: .cacheFirst(maxAge: 300))
+    }
+
+    // MARK: - Local Trailers
+
+    /// Get local trailers for an item.
+    /// `GET /Users/{userId}/Items/{itemId}/LocalTrailers`
+    public func getLocalTrailers(
+        itemId: String,
+        userId: String
+    ) async throws -> [BaseItemDto] {
+        let url = baseURL.appendingPathComponent("Users/\(userId)/Items/\(itemId)/LocalTrailers")
+        logger.debug("Fetching local trailers for \(itemId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders,
+            cachePolicy: .cacheFirst(maxAge: 300))
     }
 
     // MARK: - Shows (TV Series)

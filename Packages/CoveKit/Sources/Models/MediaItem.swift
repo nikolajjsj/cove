@@ -12,6 +12,8 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
     public let communityRating: Double?
     public let officialRating: String?
     public let criticRating: Double?
+    public let people: [Person]
+    public let remoteTrailerURLs: [URL]
     public var userData: UserData?
 
     /// Runtime in seconds, derived from `runTimeTicks`.
@@ -31,6 +33,8 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
         communityRating: Double? = nil,
         officialRating: String? = nil,
         criticRating: Double? = nil,
+        people: [Person] = [],
+        remoteTrailerURLs: [URL] = [],
         userData: UserData? = nil
     ) {
         self.id = id
@@ -44,6 +48,8 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
         self.communityRating = communityRating
         self.officialRating = officialRating
         self.criticRating = criticRating
+        self.people = people
+        self.remoteTrailerURLs = remoteTrailerURLs
         self.userData = userData
     }
 }

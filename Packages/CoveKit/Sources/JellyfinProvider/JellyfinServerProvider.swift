@@ -150,10 +150,35 @@ public final class JellyfinServerProvider: MediaServerProvider,
     public func item(id: ItemID) async throws -> MediaItem {
         let (client, userId) = try authenticatedClient()
         let dto = try await client.getItem(userId: userId, itemId: id.rawValue)
-        guard let item = JellyfinMapper.mapItem(dto) else {
+        guard let item = JellyfinMapper.mapItem(dto, baseURL: client.baseURL) else {
             throw AppError.itemNotFound(id: id)
         }
         return item
+    }
+
+    public func similarItems(for item: MediaItem, limit: Int? = nil) async throws -> [MediaItem] {
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getSimilarItems(
+            itemId: item.id.rawValue,
+            userId: userId,
+            limit: limit
+        )
+        return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+    }
+
+    public func personItems(personId: ItemID) async throws -> [MediaItem] {
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getItems(
+            userId: userId,
+            sortBy: "ProductionYear,SortName",
+            sortOrder: "Descending",
+            fields: [
+                "Overview", "Genres", "UserData", "CommunityRating", "OfficialRating",
+                "ProductionYear",
+            ],
+            personIds: [personId.rawValue]
+        )
+        return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
     }
 
     public func imageURL(for item: MediaItem, type: ImageType, maxSize: CGSize?) -> URL? {
@@ -266,6 +291,24 @@ public final class JellyfinServerProvider: MediaServerProvider,
             fields: ["Overview", "UserData", "DateCreated", "MediaSources"]
         )
         return (result.items ?? []).compactMap { JellyfinMapper.mapEpisode($0) }
+    }
+
+    public func specialFeatures(for item: MediaItem) async throws -> [MediaItem] {
+        let (client, userId) = try authenticatedClient()
+        let dtos = try await client.getSpecialFeatures(
+            itemId: item.id.rawValue,
+            userId: userId
+        )
+        return dtos.compactMap { JellyfinMapper.mapItem($0) }
+    }
+
+    public func localTrailers(for item: MediaItem) async throws -> [MediaItem] {
+        let (client, userId) = try authenticatedClient()
+        let dtos = try await client.getLocalTrailers(
+            itemId: item.id.rawValue,
+            userId: userId
+        )
+        return dtos.compactMap { JellyfinMapper.mapItem($0) }
     }
 
     public func resumeItems() async throws -> [MediaItem] {

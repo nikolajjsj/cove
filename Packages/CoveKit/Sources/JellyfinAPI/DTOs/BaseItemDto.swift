@@ -31,6 +31,8 @@ public struct BaseItemDto: Codable, Sendable {
     public let people: [BaseItemPerson]?
     public let childCount: Int?
     public let status: String?
+    public let remoteTrailers: [RemoteTrailerDto]?
+    public let localTrailerCount: Int?
 
     public init(
         id: String? = nil,
@@ -60,7 +62,9 @@ public struct BaseItemDto: Codable, Sendable {
         collectionType: String? = nil,
         people: [BaseItemPerson]? = nil,
         childCount: Int? = nil,
-        status: String? = nil
+        status: String? = nil,
+        remoteTrailers: [RemoteTrailerDto]? = nil,
+        localTrailerCount: Int? = nil
     ) {
         self.id = id
         self.name = name
@@ -90,6 +94,8 @@ public struct BaseItemDto: Codable, Sendable {
         self.people = people
         self.childCount = childCount
         self.status = status
+        self.remoteTrailers = remoteTrailers
+        self.localTrailerCount = localTrailerCount
     }
 
     enum CodingKeys: String, CodingKey {
@@ -121,6 +127,17 @@ public struct BaseItemDto: Codable, Sendable {
         case people = "People"
         case childCount = "ChildCount"
         case status = "Status"
+        case remoteTrailers = "RemoteTrailers"
+        case localTrailerCount = "LocalTrailerCount"
+    }
+}
+
+/// A remote trailer URL from Jellyfin.
+public struct RemoteTrailerDto: Codable, Sendable {
+    public let url: String?
+
+    enum CodingKeys: String, CodingKey {
+        case url = "Url"
     }
 }
 

@@ -18,6 +18,12 @@ public protocol MediaServerProvider: Sendable {
 
     func item(id: ItemID) async throws -> MediaItem
 
+    // Similar items
+    func similarItems(for item: MediaItem, limit: Int?) async throws -> [MediaItem]
+
+    // Person filmography
+    func personItems(personId: ItemID) async throws -> [MediaItem]
+
     // Images
     func imageURL(for item: MediaItem, type: ImageType, maxSize: CGSize?) -> URL?
 

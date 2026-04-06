@@ -7,4 +7,6 @@ public protocol VideoProvider: MediaServerProvider {
     func episodes(season: SeasonID) async throws -> [Episode]
     func resumeItems() async throws -> [MediaItem]
     func streamURL(for item: MediaItem, profile: DeviceProfile?) async throws -> StreamInfo
+    func specialFeatures(for item: MediaItem) async throws -> [MediaItem]
+    func localTrailers(for item: MediaItem) async throws -> [MediaItem]
 }

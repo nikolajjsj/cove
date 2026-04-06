@@ -12,13 +12,26 @@ enum JellyfinMapper {
     }
 
     /// Map BaseItemDto to MediaItem.
-    static func mapItem(_ dto: BaseItemDto) -> MediaItem? {
+    static func mapItem(_ dto: BaseItemDto, baseURL: URL? = nil) -> MediaItem? {
         guard let id = dto.id, let name = dto.name else { return nil }
         let mediaType = mapMediaType(dto.type)
         let userData = dto.userData.map { mapUserData($0) }
 
         // Parse dateCreated
         let dateAdded = dto.dateCreated.flatMap { parseDate($0) }
+
+        // Map people
+        let people: [Person]
+        if let baseURL, let dtoPersons = dto.people {
+            people = dtoPersons.compactMap { mapPerson($0, baseURL: baseURL) }
+        } else {
+            people = []
+        }
+
+        // Map remote trailer URLs
+        let remoteTrailerURLs: [URL] = (dto.remoteTrailers ?? []).compactMap { trailer in
+            trailer.url.flatMap { URL(string: $0) }
+        }
 
         return MediaItem(
             id: ItemID(id),
@@ -32,7 +45,40 @@ enum JellyfinMapper {
             communityRating: dto.communityRating,
             officialRating: dto.officialRating,
             criticRating: dto.criticRating,
+            people: people,
+            remoteTrailerURLs: remoteTrailerURLs,
             userData: userData
+        )
+    }
+
+    /// Map BaseItemPerson to Person domain model.
+    /// Requires the API client's base URL to construct person image URLs.
+    static func mapPerson(_ dto: BaseItemPerson, baseURL: URL) -> Person? {
+        guard let id = dto.id, let name = dto.name else { return nil }
+
+        // Construct image URL: /Items/{personId}/Images/Primary
+        var imageURL: URL? = nil
+        if dto.primaryImageTag != nil {
+            var components = URLComponents(
+                url: baseURL.appendingPathComponent("Items/\(id)/Images/Primary"),
+                resolvingAgainstBaseURL: false
+            )
+            components?.queryItems = [
+                URLQueryItem(name: "maxWidth", value: "200"),
+                URLQueryItem(name: "maxHeight", value: "200"),
+            ]
+            if let tag = dto.primaryImageTag {
+                components?.queryItems?.append(URLQueryItem(name: "tag", value: tag))
+            }
+            imageURL = components?.url
+        }
+
+        return Person(
+            id: ItemID(id),
+            name: name,
+            role: dto.role,
+            type: dto.type,
+            imageURL: imageURL
         )
     }
 
