@@ -2,10 +2,10 @@ import CoveUI
 import DownloadManager
 import ImageService
 import JellyfinProvider
+import MediaServerKit
 import Models
 import PlaybackEngine
 import SwiftUI
-import MediaServerKit
 
 struct MovieDetailView: View {
     let item: MediaItem
@@ -34,7 +34,7 @@ struct MovieDetailView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     playButton
 
-                    // Metadata pills row
+                    // Metadata pills row (ratings + media info)
                     metadataPills
 
                     // Overview
@@ -42,9 +42,22 @@ struct MovieDetailView: View {
                         overviewSection(overview)
                     }
 
+                    // External Links (IMDb, TMDB)
+                    if let providerIds = displayItem.providerIds, providerIds.hasAny {
+                        ExternalLinksSection(
+                            providerIds: providerIds,
+                            mediaType: item.mediaType
+                        )
+                    }
+
                     // Genres
                     if let genres = item.genres, !genres.isEmpty {
                         genresTags(genres)
+                    }
+
+                    // Studios
+                    if let studios = displayItem.studios, !studios.isEmpty {
+                        StudiosSection(studios: studios)
                     }
 
                     // Cast & Crew
@@ -118,7 +131,23 @@ struct MovieDetailView: View {
                 Text(item.title)
                     .font(.system(.title, design: .default, weight: .bold))
                     .foregroundStyle(.primary)
+
+                // Original title (if different from the main title)
+                if let originalTitle = displayItem.originalTitle,
+                    !originalTitle.isEmpty,
+                    originalTitle != item.title
+                {
+                    Text(originalTitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary.opacity(0.8))
+                }
+
                 heroSubtitleLine
+
+                // Tagline
+                if let tagline = displayItem.tagline, !tagline.isEmpty {
+                    TaglineView(tagline: tagline)
+                }
             }
         }
     }
@@ -147,7 +176,13 @@ struct MovieDetailView: View {
     private var heroSubtitleParts: [String] {
         var parts: [String] = []
 
-        if let year = item.productionYear {
+        // Use premiere date if available, otherwise fall back to production year
+        if let premiereDate = displayItem.premiereDate {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            parts.append(formatter.string(from: premiereDate))
+        } else if let year = item.productionYear {
             parts.append(String(year))
         }
 
@@ -172,12 +207,40 @@ struct MovieDetailView: View {
     private func buildMetadataPills() -> [MetadataPill] {
         var pills: [MetadataPill] = []
 
-        if let pill = MetadataPill.communityRating(item.communityRating ?? 0) {
+        // Community rating — branded as "IMDb" when IMDB provider ID is present
+        let ratingSource: String? = displayItem.providerIds?.imdb != nil ? "IMDb" : nil
+        if let pill = MetadataPill.communityRating(item.communityRating ?? 0, source: ratingSource)
+        {
             pills.append(pill)
         }
 
-        if let pill = MetadataPill.criticRating(item.criticRating ?? 0) {
+        // Critic rating — branded as "RT" when available
+        let criticSource: String? = (item.criticRating ?? 0) > 0 ? "RT" : nil
+        if let pill = MetadataPill.criticRating(item.criticRating ?? 0, source: criticSource) {
             pills.append(pill)
+        }
+
+        // Media info pills from streams
+        if let streams = displayItem.mediaStreams {
+            // Resolution pill from the first video stream
+            if let videoStream = streams.first(where: { $0.type == .video }) {
+                if let pill = MetadataPill.resolution(width: videoStream.width ?? 0) {
+                    pills.append(pill)
+                }
+                if let pill = MetadataPill.hdr(
+                    videoRange: videoStream.videoRange,
+                    videoRangeType: videoStream.videoRangeType
+                ) {
+                    pills.append(pill)
+                }
+            }
+
+            // Audio channels pill from the first audio stream
+            if let audioStream = streams.first(where: { $0.type == .audio }) {
+                if let pill = MetadataPill.audioChannels(audioStream.channels ?? 0) {
+                    pills.append(pill)
+                }
+            }
         }
 
         if let userData = item.userData {

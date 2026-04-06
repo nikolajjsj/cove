@@ -7,6 +7,11 @@ public struct MediaStream: Codable, Hashable, Sendable {
     public let language: String?
     public let title: String?
     public let isExternal: Bool
+    public let width: Int?
+    public let height: Int?
+    public let channels: Int?
+    public let videoRange: String?
+    public let videoRangeType: String?
 
     public init(
         index: Int,
@@ -14,7 +19,12 @@ public struct MediaStream: Codable, Hashable, Sendable {
         codec: String,
         language: String? = nil,
         title: String? = nil,
-        isExternal: Bool = false
+        isExternal: Bool = false,
+        width: Int? = nil,
+        height: Int? = nil,
+        channels: Int? = nil,
+        videoRange: String? = nil,
+        videoRangeType: String? = nil
     ) {
         self.index = index
         self.type = type
@@ -22,5 +32,10 @@ public struct MediaStream: Codable, Hashable, Sendable {
         self.language = language
         self.title = title
         self.isExternal = isExternal
+        self.width = width
+        self.height = height
+        self.channels = channels
+        self.videoRange = videoRange
+        self.videoRangeType = videoRangeType
     }
 }

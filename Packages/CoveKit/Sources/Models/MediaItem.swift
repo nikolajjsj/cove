@@ -12,6 +12,13 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
     public let communityRating: Double?
     public let officialRating: String?
     public let criticRating: Double?
+    public let providerIds: ProviderIds?
+    public let studios: [String]?
+    public let tagline: String?
+    public let originalTitle: String?
+    public let premiereDate: Date?
+    public let endDate: Date?
+    public let mediaStreams: [MediaStream]?
     public let people: [Person]
     public let remoteTrailerURLs: [URL]
     public var userData: UserData?
@@ -33,6 +40,13 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
         communityRating: Double? = nil,
         officialRating: String? = nil,
         criticRating: Double? = nil,
+        providerIds: ProviderIds? = nil,
+        studios: [String]? = nil,
+        tagline: String? = nil,
+        originalTitle: String? = nil,
+        premiereDate: Date? = nil,
+        endDate: Date? = nil,
+        mediaStreams: [MediaStream]? = nil,
         people: [Person] = [],
         remoteTrailerURLs: [URL] = [],
         userData: UserData? = nil
@@ -48,6 +62,13 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
         self.communityRating = communityRating
         self.officialRating = officialRating
         self.criticRating = criticRating
+        self.providerIds = providerIds
+        self.studios = studios
+        self.tagline = tagline
+        self.originalTitle = originalTitle
+        self.premiereDate = premiereDate
+        self.endDate = endDate
+        self.mediaStreams = mediaStreams
         self.people = people
         self.remoteTrailerURLs = remoteTrailerURLs
         self.userData = userData

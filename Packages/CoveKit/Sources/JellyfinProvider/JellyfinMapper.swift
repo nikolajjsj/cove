@@ -33,6 +33,20 @@ enum JellyfinMapper {
             trailer.url.flatMap { URL(string: $0) }
         }
 
+        // Map new detail fields
+        let providerIds = ProviderIds(raw: dto.providerIds)
+        let studios: [String]? = dto.studios?.compactMap { $0.name }
+        let tagline = dto.taglines?.first
+        let premiereDate = dto.premiereDate.flatMap { parseDate($0) }
+        let endDate = dto.endDate.flatMap { parseDate($0) }
+
+        let mediaStreams: [MediaStream]?
+        if let streams = dto.mediaSources?.first?.mediaStreams {
+            mediaStreams = mapMediaStreams(streams)
+        } else {
+            mediaStreams = nil
+        }
+
         return MediaItem(
             id: ItemID(id),
             title: name,
@@ -45,6 +59,13 @@ enum JellyfinMapper {
             communityRating: dto.communityRating,
             officialRating: dto.officialRating,
             criticRating: dto.criticRating,
+            providerIds: providerIds,
+            studios: studios,
+            tagline: tagline,
+            originalTitle: dto.originalTitle,
+            premiereDate: premiereDate,
+            endDate: endDate,
+            mediaStreams: mediaStreams,
             people: people,
             remoteTrailerURLs: remoteTrailerURLs,
             userData: userData
@@ -263,7 +284,12 @@ enum JellyfinMapper {
                 codec: codec,
                 language: dto.language,
                 title: dto.displayTitle ?? dto.title,
-                isExternal: dto.isExternal ?? false
+                isExternal: dto.isExternal ?? false,
+                width: dto.width,
+                height: dto.height,
+                channels: dto.channels,
+                videoRange: dto.videoRange,
+                videoRangeType: dto.videoRangeType
             )
         }
     }

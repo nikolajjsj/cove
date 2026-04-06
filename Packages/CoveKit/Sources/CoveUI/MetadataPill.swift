@@ -52,21 +52,29 @@ public struct MetadataPill: Hashable, Sendable {
 
 extension MetadataPill {
 
-    /// Creates a community-rating pill (★ 8.5) with a yellow tint.
-    public static func communityRating(_ rating: Double) -> MetadataPill? {
+    /// Creates a community-rating pill (★ 8.5 or ★ IMDb 8.5) with a yellow tint.
+    /// - Parameters:
+    ///   - rating: The community rating value.
+    ///   - source: An optional source label (e.g. "IMDb") prepended to the rating.
+    public static func communityRating(_ rating: Double, source: String? = nil) -> MetadataPill? {
         guard rating > 0 else { return nil }
         let formatted =
             rating.truncatingRemainder(dividingBy: 1) == 0
             ? String(format: "%.0f", rating)
             : String(format: "%.1f", rating)
-        return MetadataPill(icon: "star.fill", label: formatted, tint: .yellow)
+        let label = source.map { "\($0) \(formatted)" } ?? formatted
+        return MetadataPill(icon: "star.fill", label: label, tint: .yellow)
     }
 
-    /// Creates a critic-rating pill (❤ 92%) tinted green (≥ 60) or red (< 60).
-    public static func criticRating(_ score: Double) -> MetadataPill? {
+    /// Creates a critic-rating pill (❤ 92% or ❤ RT 92%) tinted green (≥ 60) or red (< 60).
+    /// - Parameters:
+    ///   - score: The critic rating percentage.
+    ///   - source: An optional source label (e.g. "RT") prepended to the score.
+    public static func criticRating(_ score: Double, source: String? = nil) -> MetadataPill? {
         guard score > 0 else { return nil }
         let tint: Color = score >= 60 ? .green : .red
-        return MetadataPill(icon: "heart.fill", label: "\(Int(score))%", tint: tint)
+        let label = source.map { "\($0) \(Int(score))%" } ?? "\(Int(score))%"
+        return MetadataPill(icon: "heart.fill", label: label, tint: tint)
     }
 
     /// Creates a "Played" pill with a green checkmark.
@@ -89,5 +97,57 @@ extension MetadataPill {
     public static func itemCount(_ count: Int) -> MetadataPill {
         let label = "\(count) \(count == 1 ? "item" : "items")"
         return MetadataPill(icon: "rectangle.stack.fill", label: label, tint: nil)
+    }
+
+    /// Creates a video resolution pill (e.g. "4K", "1080p").
+    public static func resolution(width: Int) -> MetadataPill? {
+        let label: String
+        if width >= 3840 {
+            label = "4K"
+        } else if width >= 1920 {
+            label = "1080p"
+        } else if width >= 1280 {
+            label = "720p"
+        } else if width > 0 {
+            label = "SD"
+        } else {
+            return nil
+        }
+        return MetadataPill(icon: "tv", label: label, tint: nil)
+    }
+
+    /// Creates an HDR pill when HDR content is detected.
+    public static func hdr(videoRange: String?, videoRangeType: String?) -> MetadataPill? {
+        // Prefer the more specific videoRangeType
+        if let rangeType = videoRangeType?.lowercased() {
+            switch rangeType {
+            case "dovi", "dolbyvision":
+                return MetadataPill(icon: "sparkles", label: "Dolby Vision", tint: .purple)
+            case "hdr10plus":
+                return MetadataPill(icon: "sparkles", label: "HDR10+", tint: .orange)
+            case "hdr10":
+                return MetadataPill(icon: "sparkles", label: "HDR10", tint: .orange)
+            default:
+                break
+            }
+        }
+        // Fall back to videoRange
+        if let range = videoRange?.uppercased(), range == "HDR" {
+            return MetadataPill(icon: "sparkles", label: "HDR", tint: .orange)
+        }
+        return nil
+    }
+
+    /// Creates an audio channels pill (e.g. "5.1", "7.1", "Stereo").
+    public static func audioChannels(_ channels: Int) -> MetadataPill? {
+        let label: String
+        switch channels {
+        case 8: label = "7.1"
+        case 6: label = "5.1"
+        case 2: label = "Stereo"
+        case 1: label = "Mono"
+        default: return nil
+        }
+        return MetadataPill(icon: "speaker.wave.2.fill", label: label, tint: nil)
     }
 }

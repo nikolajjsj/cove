@@ -33,6 +33,12 @@ public struct BaseItemDto: Codable, Sendable {
     public let status: String?
     public let remoteTrailers: [RemoteTrailerDto]?
     public let localTrailerCount: Int?
+    public let providerIds: [String: String]?
+    public let studios: [StudioDto]?
+    public let taglines: [String]?
+    public let originalTitle: String?
+    public let endDate: String?
+    public let mediaSources: [MediaSourceInfo]?
 
     public init(
         id: String? = nil,
@@ -64,7 +70,13 @@ public struct BaseItemDto: Codable, Sendable {
         childCount: Int? = nil,
         status: String? = nil,
         remoteTrailers: [RemoteTrailerDto]? = nil,
-        localTrailerCount: Int? = nil
+        localTrailerCount: Int? = nil,
+        providerIds: [String: String]? = nil,
+        studios: [StudioDto]? = nil,
+        taglines: [String]? = nil,
+        originalTitle: String? = nil,
+        endDate: String? = nil,
+        mediaSources: [MediaSourceInfo]? = nil
     ) {
         self.id = id
         self.name = name
@@ -96,6 +108,12 @@ public struct BaseItemDto: Codable, Sendable {
         self.status = status
         self.remoteTrailers = remoteTrailers
         self.localTrailerCount = localTrailerCount
+        self.providerIds = providerIds
+        self.studios = studios
+        self.taglines = taglines
+        self.originalTitle = originalTitle
+        self.endDate = endDate
+        self.mediaSources = mediaSources
     }
 
     enum CodingKeys: String, CodingKey {
@@ -129,6 +147,23 @@ public struct BaseItemDto: Codable, Sendable {
         case status = "Status"
         case remoteTrailers = "RemoteTrailers"
         case localTrailerCount = "LocalTrailerCount"
+        case providerIds = "ProviderIds"
+        case studios = "Studios"
+        case taglines = "Taglines"
+        case originalTitle = "OriginalTitle"
+        case endDate = "EndDate"
+        case mediaSources = "MediaSources"
+    }
+}
+
+/// A studio associated with a Jellyfin item.
+public struct StudioDto: Codable, Sendable {
+    public let name: String?
+    public let id: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name = "Name"
+        case id = "Id"
     }
 }
 

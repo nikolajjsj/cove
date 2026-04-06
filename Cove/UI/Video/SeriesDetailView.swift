@@ -73,13 +73,33 @@ struct SeriesDetailView: View {
                 // MARK: - Content beneath the hero
 
                 VStack(alignment: .leading, spacing: 16) {
+                    // Metadata pills
+                    metadataPills
+
                     // Overview
                     if let overview = item.overview, !overview.isEmpty {
                         overviewSection(overview)
                     }
 
-                    // Metadata pills
-                    metadataPills
+                    // External Links (IMDb, TMDB, TVDB)
+                    if !isOffline,
+                        let providerIds = displayItem.providerIds, providerIds.hasAny
+                    {
+                        ExternalLinksSection(
+                            providerIds: providerIds,
+                            mediaType: item.mediaType
+                        )
+                    }
+
+                    // Genres
+                    if let genres = displayItem.genres, !genres.isEmpty {
+                        genresTags(genres)
+                    }
+
+                    // Studios
+                    if let studios = displayItem.studios, !studios.isEmpty {
+                        StudiosSection(studios: studios)
+                    }
                 }
                 .padding(.horizontal)
                 .padding(.top, 16)
@@ -224,7 +244,23 @@ struct SeriesDetailView: View {
                 Text(item.title)
                     .font(.system(.title, design: .default, weight: .bold))
                     .foregroundStyle(.primary)
+
+                // Original title (if different from the main title)
+                if let originalTitle = displayItem.originalTitle,
+                    !originalTitle.isEmpty,
+                    originalTitle != item.title
+                {
+                    Text(originalTitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary.opacity(0.8))
+                }
+
                 heroSubtitleLine
+
+                // Tagline
+                if let tagline = displayItem.tagline, !tagline.isEmpty {
+                    TaglineView(tagline: tagline)
+                }
             }
         }
     }
@@ -253,8 +289,20 @@ struct SeriesDetailView: View {
     private var heroSubtitleParts: [String] {
         var parts: [String] = []
 
-        if let year = item.productionYear {
-            parts.append(String(year))
+        // Year range for series: "2019 – 2023" or "2019 – Present"
+        if let startYear = item.productionYear {
+            if let endDate = displayItem.endDate {
+                let calendar = Calendar.current
+                let endYear = calendar.component(.year, from: endDate)
+                if endYear != startYear {
+                    parts.append("\(startYear) – \(endYear)")
+                } else {
+                    parts.append(String(startYear))
+                }
+            } else {
+                // No end date — series is still running
+                parts.append("\(startYear) – Present")
+            }
         }
 
         if let rating = item.officialRating, !rating.isEmpty {
@@ -279,11 +327,16 @@ struct SeriesDetailView: View {
     private func buildMetadataPills() -> [MetadataPill] {
         var pills: [MetadataPill] = []
 
-        if let pill = MetadataPill.communityRating(item.communityRating ?? 0) {
+        // Community rating — branded as "IMDb" when IMDB provider ID is present
+        let ratingSource: String? = displayItem.providerIds?.imdb != nil ? "IMDb" : nil
+        if let pill = MetadataPill.communityRating(item.communityRating ?? 0, source: ratingSource)
+        {
             pills.append(pill)
         }
 
-        if let pill = MetadataPill.criticRating(item.criticRating ?? 0) {
+        // Critic rating — branded as "RT" when available
+        let criticSource: String? = (item.criticRating ?? 0) > 0 ? "RT" : nil
+        if let pill = MetadataPill.criticRating(item.criticRating ?? 0, source: criticSource) {
             pills.append(pill)
         }
 
@@ -549,7 +602,31 @@ struct SeriesDetailView: View {
 
     // MARK: - Image Helpers
 
-    private func backdropURL(for item: MediaItem) -> URL? {
+    // MARK: - Genre Tags
+
+    @ViewBuilder
+    private func genresTags(_ genres: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Genres")
+                .font(.headline)
+
+            FlowLayout(spacing: 8) {
+                ForEach(genres, id: \.self) { genre in
+                    Text(genre)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(.tertiarySystemFill))
+                        )
+                }
+            }
+        }
+    }
+
+    func backdropURL(for item: MediaItem) -> URL? {
         if offlineServerId != nil {
             if let path = offlineSeriesMetadata?.backdropImagePath {
                 return DownloadStorage.shared.localImageURL(relativePath: path)

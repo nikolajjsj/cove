@@ -179,7 +179,8 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Users/\(userId)/Items/\(itemId)")
         let fields = [
             "Overview", "Genres", "DateCreated", "UserData", "CommunityRating", "OfficialRating",
-            "ProductionYear", "People", "RemoteTrailers",
+            "ProductionYear", "People", "RemoteTrailers", "ProviderIds", "Studios", "Taglines",
+            "OriginalTitle", "EndDate", "MediaSources", "PremiereDate",
         ]
         let queryItems = [URLQueryItem(name: "Fields", value: fields.joined(separator: ","))]
         logger.debug("Fetching item \(itemId)")
