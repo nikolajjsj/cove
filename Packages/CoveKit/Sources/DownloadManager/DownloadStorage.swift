@@ -1,5 +1,6 @@
 import Foundation
 import Models
+import UniformTypeIdentifiers
 import os
 
 /// Manages the on-disk file structure for downloaded media.
@@ -42,43 +43,48 @@ public struct DownloadStorage: Sendable {
         downloadsDirectory.appendingPathComponent(serverId, isDirectory: true)
     }
 
-    /// Derives a file extension from a remote URL string, falling back to a sensible default
-    /// based on the media type.
-    public func fileExtension(for remoteURL: String, mediaType: MediaType) -> String {
-        if let url = URL(string: remoteURL) {
-            let ext = url.pathExtension.lowercased()
+    /// Determines the file extension from an HTTP response.
+    ///
+    /// Resolution order:
+    /// 1. `response.suggestedFilename` (parses `Content-Disposition` for us).
+    /// 2. `response.mimeType` mapped to an extension via `UTType`.
+    /// 3. Returns `nil` if neither approach yields a valid extension — the
+    ///    caller should fail the download with a clear error message.
+    public func fileExtension(from response: HTTPURLResponse) -> String? {
+        // 1. Try the suggested filename (derived from Content-Disposition)
+        if let suggested = response.suggestedFilename {
+            let ext = (suggested as NSString).pathExtension.lowercased()
             if !ext.isEmpty && ext.count <= 10 {
                 return ext
             }
         }
-        // Sensible defaults per media type
-        switch mediaType {
-        case .movie, .episode:
-            return "mp4"
-        case .track:
-            return "m4a"
-        case .book:
-            return "epub"
-        case .podcast:
-            return "mp3"
-        case .series, .season, .album, .artist, .playlist, .collection:
-            return "mp4"
+
+        // 2. Fall back to UTType MIME → extension mapping
+        if let mime = response.mimeType?.lowercased(),
+            mime != "application/octet-stream",
+            let utType = UTType(mimeType: mime),
+            let ext = utType.preferredFilenameExtension
+        {
+            return ext
         }
+
+        return nil
     }
 
     /// Returns the full file URL where the media file should be stored for a given download item.
-    public func mediaFileURL(for item: DownloadItem) -> URL {
+    public func mediaFileURL(for item: DownloadItem, fileExtension ext: String) -> URL {
         let dir = itemDirectory(
-            serverId: item.serverId, mediaType: item.mediaType, itemId: item.itemId)
-        let ext = fileExtension(for: item.remoteURL, mediaType: item.mediaType)
+            serverId: item.serverId,
+            mediaType: item.mediaType,
+            itemId: item.itemId
+        )
         return dir.appendingPathComponent("media.\(ext)")
     }
 
     /// Returns the relative path (from `downloadsDirectory`) for a given download item's media file.
     ///
     /// This is the value persisted in `DownloadItem.localFilePath`.
-    public func relativeFilePath(for item: DownloadItem) -> String {
-        let ext = fileExtension(for: item.remoteURL, mediaType: item.mediaType)
+    public func relativeFilePath(for item: DownloadItem, fileExtension ext: String) -> String {
         return "\(item.serverId)/\(item.mediaType.rawValue)/\(item.itemId.rawValue)/media.\(ext)"
     }
 
@@ -117,10 +123,12 @@ public struct DownloadStorage: Sendable {
     ///   - item: The download item that owns this file.
     /// - Returns: The relative file path suitable for storing in `DownloadItem.localFilePath`.
     @discardableResult
-    public func moveToPermamentStorage(from temporaryURL: URL, for item: DownloadItem) throws
+    public func moveToPermamentStorage(
+        from temporaryURL: URL, for item: DownloadItem, fileExtension ext: String
+    ) throws
         -> String
     {
-        let destination = mediaFileURL(for: item)
+        let destination = mediaFileURL(for: item, fileExtension: ext)
         let fm = FileManager.default
 
         // Ensure the parent directory exists
@@ -140,7 +148,7 @@ public struct DownloadStorage: Sendable {
         resourceValues.isExcludedFromBackup = true
         try itemDir.setResourceValues(resourceValues)
 
-        let relativePath = relativeFilePath(for: item)
+        let relativePath = relativeFilePath(for: item, fileExtension: ext)
         logger.info("Moved download to permanent storage: \(relativePath)")
         return relativePath
     }

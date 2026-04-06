@@ -722,7 +722,7 @@ public final class DownloadManagerService: @unchecked Sendable {
 
     /// Called by the delegate when the file has been downloaded to a temporary location.
     internal func handleDownloadFinished(
-        taskIdentifier: Int, location: URL
+        taskIdentifier: Int, location: URL, response: URLResponse?
     ) {
         guard let downloadID = state.withLock({ $0.taskToDownloadID[taskIdentifier] }) else {
             logger.warning(
@@ -764,9 +764,23 @@ public final class DownloadManagerService: @unchecked Sendable {
                 return
             }
 
+            // Resolve file extension from HTTP response
+            guard let httpResponse = response as? HTTPURLResponse,
+                let ext = storage.fileExtension(from: httpResponse)
+            else {
+                logger.error(
+                    "Cannot determine file type for download \(downloadID) — no usable Content-Type or filename in server response"
+                )
+                try? fm.removeItem(at: stagedFile)
+                try? await downloadRepository.updateState(
+                    id: downloadID, state: .failed,
+                    errorMessage: "Unable to determine file type from server response")
+                return
+            }
+
             do {
                 let relativePath = try storage.moveToPermamentStorage(
-                    from: stagedFile, for: item)
+                    from: stagedFile, for: item, fileExtension: ext)
                 try await downloadRepository.markCompleted(
                     id: downloadID, localFilePath: relativePath)
                 logger.info("Download completed: \(item.title) → \(relativePath)")
@@ -908,7 +922,8 @@ private final class SessionDelegate: NSObject,
         didFinishDownloadingTo location: URL
     ) {
         service.handleDownloadFinished(
-            taskIdentifier: downloadTask.taskIdentifier, location: location)
+            taskIdentifier: downloadTask.taskIdentifier, location: location,
+            response: downloadTask.response)
     }
 
     func urlSession(
