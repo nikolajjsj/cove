@@ -1,3 +1,4 @@
+import CoveUI
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -6,77 +7,102 @@ import SwiftUI
 struct AlbumListView: View {
     let library: MediaLibrary?
     @Environment(AppState.self) private var appState
-    @State private var albums: [MediaItem] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
+    @State private var loader = PagedCollectionLoader<MediaItem>()
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
-    ]
+    /// Number of items to fetch per page.
+    private let pageSize = 40
 
     var body: some View {
         Group {
-            if isLoading {
-                ProgressView("Loading albums…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage {
-                ContentUnavailableView(
-                    "Unable to Load Albums",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(errorMessage)
-                )
-            } else if albums.isEmpty {
-                ContentUnavailableView(
-                    "No Albums",
-                    systemImage: "square.stack",
-                    description: Text("Your music library doesn't contain any albums yet.")
-                )
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(albums) { album in
-                            NavigationLink(value: album) {
-                                AlbumCard(
-                                    title: album.title,
-                                    imageURL: imageURL(for: album)
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
+            mainContent
+        }
+        .task(id: library?.id) { await loadFirstPage() }
+    }
+
+    // MARK: - Main Content
+
+    @ViewBuilder
+    private var mainContent: some View {
+        switch loader.phase {
+        case .loading:
+            ProgressView("Loading albums…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let message):
+            ContentUnavailableView(
+                "Unable to Load Albums",
+                systemImage: "exclamationmark.triangle",
+                description: Text(message)
+            )
+        case .empty:
+            ContentUnavailableView(
+                "No Albums",
+                systemImage: "square.stack",
+                description: Text("Your music library doesn't contain any albums yet.")
+            )
+        case .loaded:
+            scrollContent
+        }
+    }
+
+    private var scrollContent: some View {
+        ScrollView {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)],
+                spacing: 20
+            ) {
+                ForEach(loader.items) { album in
+                    NavigationLink(value: album) {
+                        AlbumCard(
+                            title: album.title,
+                            imageURL: imageURL(for: album)
+                        )
                     }
-                    .padding()
+                    .buttonStyle(.plain)
+                    .onAppear { loader.onItemAppeared(album) }
                 }
             }
-        }
-        .task(id: library?.id) {
-            await loadAlbums()
+            .padding()
+
+            if loader.isLoadingMore {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .padding(.vertical, 16)
+                    Spacer()
+                }
+            }
+
+            if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
+                Text("\(loader.totalCount) \(loader.totalCount == 1 ? "album" : "albums")")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+                    .padding(.bottom, 24)
+            }
         }
     }
 
     // MARK: - Data Loading
 
-    private func loadAlbums() async {
+    private func loadFirstPage() async {
         guard let library else {
-            isLoading = false
-            errorMessage = "No music library available."
+            loader.reset()
             return
         }
-        isLoading = true
-        errorMessage = nil
-        do {
+
+        let provider = appState.provider
+
+        await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
             let sort = SortOptions(field: .name, order: .ascending)
-            let filter = FilterOptions()
-            let items = try await appState.provider.items(
-                in: library,
-                sort: sort,
-                filter: filter
+            let filter = FilterOptions(
+                limit: limit,
+                startIndex: startIndex,
+                includeItemTypes: ["MusicAlbum"]
             )
-            albums = items.filter { $0.mediaType == .album }
-        } catch {
-            errorMessage = error.localizedDescription
-            albums = []
+            let result = try await provider.pagedItems(
+                in: library, sort: sort, filter: filter
+            )
+            return .init(items: result.items, totalCount: result.totalCount)
         }
-        isLoading = false
     }
 
     // MARK: - Helpers

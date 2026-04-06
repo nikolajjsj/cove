@@ -1,3 +1,4 @@
+import CoveUI
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -6,77 +7,98 @@ import SwiftUI
 struct ArtistListView: View {
     let library: MediaLibrary?
     @Environment(AppState.self) private var appState
-    @State private var artists: [MediaItem] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
+    @State private var loader = PagedCollectionLoader<MediaItem>()
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
-    ]
+    /// Number of items to fetch per page.
+    private let pageSize = 40
 
     var body: some View {
         Group {
-            if isLoading {
-                ProgressView("Loading artists…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage {
-                ContentUnavailableView(
-                    "Unable to Load Artists",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(errorMessage)
-                )
-            } else if artists.isEmpty {
-                ContentUnavailableView(
-                    "No Artists",
-                    systemImage: "music.mic",
-                    description: Text("Your music library doesn't contain any artists yet.")
-                )
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(artists) { artist in
-                            NavigationLink(value: artist) {
-                                ArtistCard(
-                                    name: artist.title,
-                                    imageURL: imageURL(for: artist)
-                                )
-                            }
-                            .buttonStyle(.plain)
+            mainContent
+        }
+        .task(id: library?.id) { await loadFirstPage() }
+    }
+
+    // MARK: - Main Content
+
+    @ViewBuilder
+    private var mainContent: some View {
+        switch loader.phase {
+        case .loading:
+            ProgressView("Loading artists…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let message):
+            ContentUnavailableView(
+                "Unable to Load Artists",
+                systemImage: "exclamationmark.triangle",
+                description: Text(message)
+            )
+        case .empty:
+            ContentUnavailableView(
+                "No Artists",
+                systemImage: "music.mic",
+                description: Text("Your music library doesn't contain any artists yet.")
+            )
+        case .loaded:
+            ScrollView {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)],
+                    spacing: 20
+                ) {
+                    ForEach(loader.items) { artist in
+                        NavigationLink(value: artist) {
+                            ArtistCard(
+                                name: artist.title,
+                                imageURL: imageURL(for: artist)
+                            )
                         }
+                        .buttonStyle(.plain)
+                        .onAppear { loader.onItemAppeared(artist) }
                     }
-                    .padding()
+                }
+                .padding()
+
+                if loader.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding(.vertical, 16)
+                        Spacer()
+                    }
+                }
+
+                if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
+                    Text("\(loader.totalCount) \(loader.totalCount == 1 ? "artist" : "artists")")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                        .padding(.bottom, 24)
                 }
             }
-        }
-        .task(id: library?.id) {
-            await loadArtists()
         }
     }
 
     // MARK: - Data Loading
 
-    private func loadArtists() async {
+    private func loadFirstPage() async {
         guard let library else {
-            isLoading = false
-            errorMessage = "No music library available."
+            loader.reset()
             return
         }
-        isLoading = true
-        errorMessage = nil
-        do {
+
+        let provider = appState.provider
+
+        await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
             let sort = SortOptions(field: .name, order: .ascending)
-            let filter = FilterOptions()
-            let items = try await appState.provider.items(
-                in: library,
-                sort: sort,
-                filter: filter
+            let filter = FilterOptions(
+                limit: limit,
+                startIndex: startIndex,
+                includeItemTypes: ["MusicArtist"]
             )
-            artists = items.filter { $0.mediaType == .artist }
-        } catch {
-            errorMessage = error.localizedDescription
-            artists = []
+            let result = try await provider.pagedItems(
+                in: library, sort: sort, filter: filter
+            )
+            return .init(items: result.items, totalCount: result.totalCount)
         }
-        isLoading = false
     }
 
     // MARK: - Helpers
