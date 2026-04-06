@@ -85,11 +85,10 @@ struct QueueView: View {
                         Text("Up Next")
                             .font(.caption.weight(.semibold))
                             .textCase(.uppercase)
-                            .foregroundStyle(.secondary)
 
                         Text("· \(upNext.count) \(upNext.count == 1 ? "track" : "tracks")")
                             .font(.caption)
-                            .foregroundStyle(.secondary.opacity(0.7))
+                            .foregroundStyle(.secondary)
 
                         Spacer()
 
