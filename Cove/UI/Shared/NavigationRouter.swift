@@ -41,6 +41,12 @@ enum NavigationRouter {
     static func destination(for album: Album) -> some View {
         AlbumDetailView(albumItem: MediaItem(id: album.id, title: album.title, mediaType: .album))
     }
+
+    /// Returns the detail view for a given person.
+    @ViewBuilder
+    static func destination(for person: Person) -> some View {
+        PersonDetailView(person: person)
+    }
 }
 
 // MARK: - Navigation Destinations Modifier
@@ -56,6 +62,9 @@ private struct NavigationDestinations: ViewModifier {
             }
             .navigationDestination(for: Album.self) { album in
                 NavigationRouter.destination(for: album)
+            }
+            .navigationDestination(for: Person.self) { person in
+                NavigationRouter.destination(for: person)
             }
             .navigationDestination(for: SearchSeeAllRoute.self) { route in
                 SearchSeeAllView(

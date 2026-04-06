@@ -13,6 +13,7 @@ struct MovieDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var isOverviewExpanded = false
+    @State private var detailedItem: MediaItem?
 
     private let overviewLineLimit = 4
 
@@ -44,11 +45,34 @@ struct MovieDetailView: View {
                     if let genres = item.genres, !genres.isEmpty {
                         genresTags(genres)
                     }
+
+                    // Cast & Crew
+                    if !displayItem.people.isEmpty {
+                        CastCrewRail(people: displayItem.people)
+                    }
+
+                    // Trailers
+                    MediaItemRail(title: "Trailers") { [item] in
+                        try await appState.provider.localTrailers(for: item)
+                    }
+
+                    // Special Features
+                    MediaItemRail(title: "Special Features") { [item] in
+                        try await appState.provider.specialFeatures(for: item)
+                    }
+
+                    // More Like This
+                    MediaItemRail(title: "More Like This") { [item] in
+                        try await appState.provider.similarItems(for: item, limit: 12)
+                    }
                 }
                 .padding(.horizontal)
                 .padding(.top, 20)
-                .padding(.bottom, 40)
+                .padding(.bottom, 32)
             }
+        }
+        .task {
+            await fetchFullItem()
         }
         .ignoresSafeArea(edges: .top)
         .navigationTitle(item.title)
@@ -73,6 +97,23 @@ struct MovieDetailView: View {
                     )
                 }
             }
+        }
+    }
+
+    /// The fully-fetched item (with people & remote trailers), falling back to the navigation item.
+    private var displayItem: MediaItem {
+        detailedItem ?? item
+    }
+
+    // MARK: - Full Item Fetch
+
+    private func fetchFullItem() async {
+        do {
+            let full = try await appState.provider.item(id: item.id)
+            guard !Task.isCancelled else { return }
+            detailedItem = full
+        } catch {
+            // Silently fall back to the navigation item — people/trailers just won't show.
         }
     }
 

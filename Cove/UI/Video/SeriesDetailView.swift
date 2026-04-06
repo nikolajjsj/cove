@@ -52,6 +52,12 @@ struct SeriesDetailView: View {
     @State private var offlineEpisodeDownloads: [DownloadItem] = []
     @State private var showDeleteSeriesConfirmation = false
     @State private var episodeToDelete: DownloadItem?
+    @State private var detailedItem: MediaItem?
+
+    /// The fully-fetched item (with people data), falling back to the navigation item.
+    private var displayItem: MediaItem {
+        detailedItem ?? item
+    }
 
     private var coordinator: VideoPlayerCoordinator {
         appState.videoPlayerCoordinator
@@ -111,6 +117,28 @@ struct SeriesDetailView: View {
 
                     episodeListSection
                         .padding(.top, 8)
+                }
+                // MARK: - Additional Content
+
+                if !isOffline {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Cast & Crew
+                        if !displayItem.people.isEmpty {
+                            CastCrewRail(people: displayItem.people)
+                        }
+
+                        // Special Features
+                        MediaItemRail(title: "Special Features") { [item] in
+                            try await appState.provider.specialFeatures(for: item)
+                        }
+
+                        // More Like This
+                        MediaItemRail(title: "More Like This") { [item] in
+                            try await appState.provider.similarItems(for: item, limit: 12)
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 20)
                 }
             }
             .padding(.bottom, 32)
@@ -180,6 +208,9 @@ struct SeriesDetailView: View {
         }
         .task {
             await loadSeasons()
+            if !isOffline {
+                await fetchFullItem()
+            }
         }
     }
 
@@ -393,6 +424,18 @@ struct SeriesDetailView: View {
     }
 
     // MARK: - Data Loading
+
+    // MARK: - Full Item Fetch
+
+    private func fetchFullItem() async {
+        do {
+            let full = try await appState.provider.item(id: item.id)
+            guard !Task.isCancelled else { return }
+            detailedItem = full
+        } catch {
+            // Silently fall back to the navigation item — people just won't show.
+        }
+    }
 
     private func loadSeasons() async {
         isLoadingSeasons = true
