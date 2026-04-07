@@ -19,9 +19,10 @@ public final class VideoPlaybackManager {
     public private(set) var duration: TimeInterval = 0
     public private(set) var isBuffering: Bool = false
     public private(set) var subtitleTracks: [SubtitleTrack] = []
-    public var selectedSubtitleIndex: Int? = nil {
-        didSet { applySubtitleSelection() }
-    }
+    public private(set) var selectedSubtitleIndex: Int? = nil
+
+    /// The current subtitle text to display as an overlay (for external/sideloaded subtitles).
+    public private(set) var currentSubtitleText: String? = nil
 
     // Audio tracks
     public private(set) var audioTracks: [AudioTrack] = []
@@ -81,6 +82,11 @@ public final class VideoPlaybackManager {
     /// AVMediaSelectionGroup for audio tracks (populated on .readyToPlay).
     @ObservationIgnored private nonisolated(unsafe) var audibleSelectionGroup:
         AVMediaSelectionGroup?
+
+    /// Parsed external subtitle cues (populated by `loadExternalSubtitle`).
+    @ObservationIgnored private var externalSubtitleCues: [SubtitleCue] = []
+    /// Task that fetches and parses an external subtitle file.
+    @ObservationIgnored private var externalSubtitleTask: Task<Void, Never>?
 
     #if os(iOS)
         @ObservationIgnored private nonisolated(unsafe) var pipController:
@@ -279,8 +285,38 @@ public final class VideoPlaybackManager {
     // MARK: - Track Selection
 
     /// Select a subtitle track by index, or nil to disable subtitles.
-    public func selectSubtitle(at index: Int?) {
+    /// When AVPlayer doesn't expose a legible media-selection group (common for
+    /// Jellyfin external-delivery subtitles), pass the WebVTT URL so the manager
+    /// can fetch, parse, and overlay them.
+    public func selectSubtitle(at index: Int?, externalURL: URL? = nil) {
+        // Cancel any in-flight external subtitle fetch
+        externalSubtitleTask?.cancel()
+        externalSubtitleTask = nil
+        externalSubtitleCues = []
+        currentSubtitleText = nil
+
         selectedSubtitleIndex = index
+
+        guard let index else {
+            // Turning off subtitles — deselect native track if available
+            if let group = legibleSelectionGroup, let playerItem = player.currentItem {
+                playerItem.select(nil, in: group)
+                logger.info("Subtitles disabled")
+            }
+            return
+        }
+
+        // Always use external subtitle loading — the server subtitle list
+        // uses server stream indices which don't map 1:1 to AVPlayer's
+        // legible group option indices, and the Jellyfin /Subtitles endpoint
+        // reliably converts any format to VTT on the fly.
+        if let url = externalURL {
+            externalSubtitleTask = Task { [weak self] in
+                await self?.loadExternalSubtitle(from: url)
+            }
+        } else {
+            logger.warning("No legible group and no external URL for subtitle index \(index)")
+        }
     }
 
     /// Select an audio track by index, or nil for default.
@@ -332,6 +368,10 @@ public final class VideoPlaybackManager {
         currentItem = nil
         subtitleTracks = []
         selectedSubtitleIndex = nil
+        externalSubtitleTask?.cancel()
+        externalSubtitleTask = nil
+        externalSubtitleCues = []
+        currentSubtitleText = nil
         audioTracks = []
         selectedAudioTrackIndex = nil
         showNextEpisodeCountdown = false
@@ -398,6 +438,9 @@ public final class VideoPlaybackManager {
                 if let dur = self.player.currentItem?.duration, dur.isNumeric, !dur.isIndefinite {
                     self.duration = dur.seconds
                 }
+
+                // Update external subtitle overlay text
+                self.updateExternalSubtitleText()
 
                 // Check for next episode countdown trigger (30s from end)
                 self.checkNextEpisodeCountdown()
@@ -500,24 +543,15 @@ public final class VideoPlaybackManager {
     private func discoverMediaSelectionTracks(_ playerItem: AVPlayerItem) {
         let asset = playerItem.asset
 
-        // Discover subtitle / closed-caption tracks
+        // Store the legible selection group for reference, but keep the
+        // authoritative subtitle list from the server metadata.  AVPlayer
+        // often discovers only a subset (e.g. HLS-embedded tracks) which
+        // would hide external/sidecar subtitles the server knows about.
         if let legibleGroup = asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
             self.legibleSelectionGroup = legibleGroup
-
-            let discovered = legibleGroup.options.enumerated().map { index, option in
-                SubtitleTrack(
-                    id: index,
-                    title: option.displayName,
-                    language: option.locale?.languageCode,
-                    isExternal: option.mediaType == .text,
-                    url: nil
-                )
-            }
-
-            if !discovered.isEmpty {
-                subtitleTracks = discovered
-                logger.info("Discovered \(discovered.count) subtitle track(s) from AVAsset")
-            }
+            logger.info(
+                "Discovered legible group with \(legibleGroup.options.count) option(s) from AVAsset (keeping server subtitle list)"
+            )
         }
 
         // Discover audio tracks
@@ -550,18 +584,45 @@ public final class VideoPlaybackManager {
 
     // MARK: - Track Selection (internal)
 
-    /// Applies the current `selectedSubtitleIndex` to the AVPlayer.
-    private func applySubtitleSelection() {
-        guard let playerItem = player.currentItem, let group = legibleSelectionGroup else { return }
+    // MARK: - External Subtitle Loading
 
-        if let index = selectedSubtitleIndex, index < group.options.count {
-            let option = group.options[index]
-            playerItem.select(option, in: group)
-            logger.info("Selected subtitle track: \(option.displayName)")
-        } else {
-            // Off — deselect all subtitles
-            playerItem.select(nil, in: group)
-            logger.info("Subtitles disabled")
+    /// Fetch a WebVTT/SRT subtitle file and parse it into cues for overlay rendering.
+    private func loadExternalSubtitle(from url: URL) async {
+        logger.info("Fetching external subtitle: \(url.absoluteString)")
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard !Task.isCancelled else { return }
+            guard let content = String(data: data, encoding: .utf8) else {
+                logger.error("External subtitle data is not valid UTF-8")
+                return
+            }
+            let cues = WebVTTParser.parse(content)
+            guard !Task.isCancelled else { return }
+            externalSubtitleCues = cues
+            logger.info("Loaded \(cues.count) external subtitle cue(s)")
+            // Immediately update the displayed text for the current time
+            updateExternalSubtitleText()
+        } catch {
+            if !Task.isCancelled {
+                logger.error("Failed to load external subtitle: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Update `currentSubtitleText` based on the current playback time and loaded cues.
+    private func updateExternalSubtitleText() {
+        guard !externalSubtitleCues.isEmpty else {
+            if currentSubtitleText != nil { currentSubtitleText = nil }
+            return
+        }
+        let time = currentTime
+        // Find the first cue that spans the current time
+        let activeCue = externalSubtitleCues.first { cue in
+            time >= cue.startTime && time < cue.endTime
+        }
+        let newText = activeCue?.text
+        if currentSubtitleText != newText {
+            currentSubtitleText = newText
         }
     }
 

@@ -334,7 +334,7 @@ enum JellyfinMapper {
     /// Map MediaStreamInfo DTOs to domain MediaStream models.
     static func mapMediaStreams(_ dtos: [MediaStreamInfo]) -> [MediaStream] {
         dtos.compactMap { dto -> MediaStream? in
-            guard let index = dto.index, let codec = dto.codec else { return nil }
+            guard let index = dto.index else { return nil }
             let streamType: MediaStreamType
             switch dto.type?.lowercased() {
             case "video": streamType = .video
@@ -342,6 +342,9 @@ enum JellyfinMapper {
             case "subtitle": streamType = .subtitle
             default: return nil
             }
+            // Codec is required for video/audio but optional for subtitles
+            let codec = dto.codec
+            if streamType != .subtitle && codec == nil { return nil }
             return MediaStream(
                 index: index,
                 type: streamType,

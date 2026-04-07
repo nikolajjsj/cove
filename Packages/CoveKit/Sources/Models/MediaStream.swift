@@ -3,7 +3,7 @@ import Foundation
 public struct MediaStream: Codable, Hashable, Sendable {
     public let index: Int
     public let type: MediaStreamType
-    public let codec: String
+    public let codec: String?
     public let language: String?
     public let title: String?
     public let isExternal: Bool
@@ -16,7 +16,7 @@ public struct MediaStream: Codable, Hashable, Sendable {
     public init(
         index: Int,
         type: MediaStreamType,
-        codec: String,
+        codec: String? = nil,
         language: String? = nil,
         title: String? = nil,
         isExternal: Bool = false,

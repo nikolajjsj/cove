@@ -95,6 +95,16 @@ struct VideoPlayerView: View {
                     .zIndex(2)
             }
 
+            // External subtitle text overlay
+            if let subtitleText = videoManager.currentSubtitleText {
+                VStack {
+                    Spacer()
+                    subtitleLabel(subtitleText).padding(.bottom, 12)
+                }
+                .allowsHitTesting(false)
+                .zIndex(2.5)
+            }
+
             // Custom controls overlay — always in the tree for snappy toggling.
             // We animate opacity instead of inserting/removing the view.
             controlsOverlay
@@ -463,6 +473,42 @@ struct VideoPlayerView: View {
         .tint(.white)
     }
 
+    // MARK: - Subtitle Overlay
+
+    /// White text with a black stroke outline — standard subtitle appearance.
+    @ViewBuilder
+    private func subtitleLabel(_ text: String) -> some View {
+        let outlineWidth: CGFloat = 1.2
+        ZStack {
+            // Black stroke: render the same text offset in 8 directions
+            ForEach(
+                [
+                    CGSize(width: -outlineWidth, height: -outlineWidth),
+                    CGSize(width: 0, height: -outlineWidth),
+                    CGSize(width: outlineWidth, height: -outlineWidth),
+                    CGSize(width: -outlineWidth, height: 0),
+                    CGSize(width: outlineWidth, height: 0),
+                    CGSize(width: -outlineWidth, height: outlineWidth),
+                    CGSize(width: 0, height: outlineWidth),
+                    CGSize(width: outlineWidth, height: outlineWidth),
+                ],
+                id: \.debugDescription
+            ) { offset in
+                Text(text)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.black)
+                    .multilineTextAlignment(.center)
+                    .offset(x: offset.width, y: offset.height)
+            }
+            // White fill on top
+            Text(text)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 12)
+    }
+
     // MARK: - Subtitle Menu
 
     /// Inline subtitle picker presented as a compact Menu (context-menu style).
@@ -474,7 +520,18 @@ struct VideoPlayerView: View {
                 selection: Binding(
                     get: { videoManager.selectedSubtitleIndex ?? -1 },
                     set: { newIndex in
-                        videoManager.selectSubtitle(at: newIndex == -1 ? nil : newIndex)
+                        let index = newIndex == -1 ? nil : newIndex
+                        let url: URL? = {
+                            guard let idx = index,
+                                let sourceId = streamInfo.mediaSourceId
+                            else { return nil }
+                            return authManager.provider.subtitleURL(
+                                itemId: item.id,
+                                mediaSourceId: sourceId,
+                                subtitleIndex: idx
+                            )
+                        }()
+                        videoManager.selectSubtitle(at: index, externalURL: url)
                         resetControlsTimer()
                     }
                 )
