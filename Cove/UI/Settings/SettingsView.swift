@@ -13,110 +13,61 @@ struct SettingsView: View {
     @State private var downloadCount: Int = 0
 
     var body: some View {
-        Form {
-            if let connection = authManager.activeConnection {
-                Section("Connected Server") {
-                    LabeledContent("Name", value: connection.name)
-                    LabeledContent("URL", value: connection.url.absoluteString)
-                    LabeledContent("User ID", value: connection.userId)
-                }
-            }
-
-            Section("Libraries") {
-                if appState.libraries.isEmpty {
-                    Text("No libraries found")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(appState.libraries) { library in
-                        Label(library.name, systemImage: libraryIcon(for: library.collectionType))
-                    }
-                }
-            }
-
-            if downloadCoordinator.downloadManager != nil {
-                Section("Downloads & Storage") {
-                    Toggle("Download over Cellular", isOn: $downloadOverCellular)
-
-                    Button {
-                        showStorageManagement = true
-                    } label: {
-                        HStack {
-                            Label("Manage Storage", systemImage: "internaldrive")
-                            Spacer()
-                            if totalDownloadSize > 0 {
-                                Text(
-                                    ByteCountFormatter.string(
-                                        fromByteCount: totalDownloadSize,
-                                        countStyle: .file
-                                    )
-                                )
-                                .foregroundStyle(.secondary)
-                            }
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
+        NavigationStack {
+            List {
+                if let connection = authManager.activeConnection {
+                    Section("Connected Server") {
+                        LabeledContent("Name", value: connection.name)
+                        LabeledContent("URL", value: connection.url.absoluteString)
+                        Button("Disconnect", role: .destructive) {
+                            Task { await appState.onDisconnect() }
                         }
                     }
-                    .tint(.primary)
-
-                    if downloadCount > 0 {
-                        LabeledContent(
-                            "Downloaded Items",
-                            value: "\(downloadCount)"
-                        )
+                }
+                
+                Section("Libraries") {
+                    if appState.libraries.isEmpty {
+                        Text("No libraries found")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(appState.libraries) { library in
+                            Label(library.name, systemImage: libraryIcon(for: library.collectionType))
+                        }
                     }
-
-                    networkStatusRow
+                }
+                
+                if downloadCoordinator.downloadManager != nil {
+                    Section("Downloads & Storage") {
+                        Toggle("Download over Cellular", systemImage: "cellularbars", isOn: $downloadOverCellular)
+                        
+                        if let downloadManager = downloadCoordinator.downloadManager {
+                            NavigationLink {
+                                StorageManagementView(downloadManager: downloadManager)
+                            } label: {
+                                HStack {
+                                    Label("Manage Storage", systemImage: "internaldrive")
+                                    Spacer()
+                                    if totalDownloadSize > 0 {
+                                        Text(
+                                            ByteCountFormatter.string(
+                                                fromByteCount: totalDownloadSize,
+                                                countStyle: .file
+                                            )
+                                        )
+                                        .foregroundStyle(.secondary)
+                                    }
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                        }
+                    }
                 }
             }
-
-            Section {
-                Button("Disconnect", role: .destructive) {
-                    Task { await appState.onDisconnect() }
-                }
+            .task {
+                await loadStorageInfo()
             }
-        }
-        .formStyle(.grouped)
-        .sheet(isPresented: $showStorageManagement) {
-            if let downloadManager = downloadCoordinator.downloadManager {
-                NavigationStack {
-                    StorageManagementView(downloadManager: downloadManager)
-                }
-            }
-        }
-        .task {
-            await loadStorageInfo()
-        }
-    }
-
-    // MARK: - Network Status
-
-    private var networkStatusRow: some View {
-        HStack {
-            Label("Network", systemImage: networkIcon)
-            Spacer()
-            Text(networkStatusText)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var networkIcon: String {
-        if !appState.networkMonitor.isConnected {
-            return "wifi.slash"
-        } else if appState.networkMonitor.isExpensive {
-            return "antenna.radiowaves.left.and.right"
-        } else {
-            return "wifi"
-        }
-    }
-
-    private var networkStatusText: String {
-        if !appState.networkMonitor.isConnected {
-            return "Offline"
-        } else if appState.networkMonitor.isExpensive {
-            return "Cellular"
-        } else {
-            return "Connected"
         }
     }
 
