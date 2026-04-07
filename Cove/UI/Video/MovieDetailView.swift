@@ -98,11 +98,7 @@ struct MovieDetailView: View {
             }
         }
         .ignoresSafeArea(edges: .top)
-        .navigationTitle(item.title)
         .toolbarBackground(.hidden, for: .navigationBar)
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-        #endif
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if let downloadManager = downloadCoordinator.downloadManager {
