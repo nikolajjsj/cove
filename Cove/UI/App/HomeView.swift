@@ -19,10 +19,22 @@ struct HomeView: View {
                     )
                 } else {
                     HeroBannerView()
+                    
                     ContinueWatchingSection()
+                    
                     UpNextSection()
-                    ForEach(appState.libraries.filter { $0.collectionType != .music }) { library in
-                        LibrarySection(library: library)
+
+                    if let movies = appState.libraries.first(where: { $0.collectionType == .movies }
+                    ) {
+                        LibrarySection(library: movies)
+                    }
+                    
+                    if let tvShows = appState.libraries.first(where: { $0.collectionType == .tvshows }) {
+                        LibrarySection(library: tvShows)
+                    }
+                    
+                    if let collections = appState.libraries.first(where: { $0.collectionType == .boxsets }) {
+                        LibrarySection(library: collections)
                     }
                 }
             }
