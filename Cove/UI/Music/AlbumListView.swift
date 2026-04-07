@@ -1,6 +1,3 @@
-import CoveUI
-import JellyfinProvider
-import MediaServerKit
 import Models
 import SwiftUI
 
@@ -9,110 +6,21 @@ struct AlbumListView: View {
     var sortField: SortField = .name
     var sortOrder: Models.SortOrder = .ascending
     var isFavoriteFilter: Bool = false
-    @Environment(AppState.self) private var appState
-    @State private var loader = PagedCollectionLoader<MediaItem>()
-
-    /// Number of items to fetch per page.
-    private let pageSize = 40
 
     var body: some View {
-        Group {
-            mainContent
+        PagedMediaGridView(
+            library: library,
+            itemType: "MusicAlbum",
+            sortField: sortField,
+            sortOrder: sortOrder,
+            isFavoriteFilter: isFavoriteFilter,
+            emptyTitle: "No Albums",
+            emptyIcon: "square.stack",
+            emptyMessage: "Your music library doesn't contain any albums yet.",
+            entityName: "album"
+        ) { item, imageURL in
+            AlbumCard(item: item, imageURL: imageURL)
         }
-        .task(id: "\(library?.id.rawValue ?? "")-\(sortField)-\(sortOrder)-\(isFavoriteFilter)") {
-            await loadFirstPage()
-        }
-    }
-
-    // MARK: - Main Content
-
-    @ViewBuilder
-    private var mainContent: some View {
-        switch loader.phase {
-        case .loading:
-            ProgressView("Loading albums…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .failed(let message):
-            ContentUnavailableView(
-                "Unable to Load Albums",
-                systemImage: "exclamationmark.triangle",
-                description: Text(message)
-            )
-        case .empty:
-            ContentUnavailableView(
-                "No Albums",
-                systemImage: "square.stack",
-                description: Text("Your music library doesn't contain any albums yet.")
-            )
-        case .loaded:
-            scrollContent
-        }
-    }
-
-    private var scrollContent: some View {
-        ScrollView {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)],
-                spacing: 20
-            ) {
-                ForEach(loader.items) { album in
-                    AlbumCard(item: album, imageURL: imageURL(for: album))
-                        .onAppear { loader.onItemAppeared(album) }
-                }
-            }
-            .padding()
-
-            if loader.isLoadingMore {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .padding(.vertical, 16)
-                    Spacer()
-                }
-            }
-
-            if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
-                Text("\(loader.totalCount) \(loader.totalCount == 1 ? "album" : "albums")")
-                    .font(.footnote)
-                    .foregroundStyle(.tertiary)
-                    .padding(.bottom, 24)
-            }
-        }
-    }
-
-    // MARK: - Data Loading
-
-    private func loadFirstPage() async {
-        guard let library else {
-            loader.reset()
-            return
-        }
-
-        let provider = appState.provider
-
-        await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
-            let sort = SortOptions(field: sortField, order: sortOrder)
-            let filter = FilterOptions(
-                isFavorite: isFavoriteFilter ? true : Optional<Bool>.none,
-                limit: limit,
-                startIndex: startIndex,
-                includeItemTypes: ["MusicAlbum"]
-            )
-            let result = try await provider.pagedItems(
-                in: library, sort: sort, filter: filter
-            )
-            return .init(items: result.items, totalCount: result.totalCount)
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func imageURL(for item: MediaItem) -> URL? {
-        appState.provider.imageURL(
-            for: item,
-            type: .primary,
-            maxSize: CGSize(width: 300, height: 300)
-        )
     }
 }
 
