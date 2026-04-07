@@ -5,8 +5,10 @@ import PlaybackEngine
 import SwiftUI
 
 /// Queue view used as Page 3 of the paged player.
-/// Shows the current track, play context, and up-next tracks with
-/// swipe-to-delete and drag-to-reorder.
+///
+/// Redesigned with a `ScrollView` + `LazyVStack` instead of `List` for full
+/// visual control over row backgrounds, separators, and spacing — everything
+/// blends seamlessly with the player's dominant-color gradient.
 struct QueueView: View {
     @Environment(AppState.self) private var appState
     @State private var showClearConfirmation = false
@@ -17,13 +19,9 @@ struct QueueView: View {
 
         Group {
             if queue.tracks.isEmpty {
-                ContentUnavailableView(
-                    "Queue Empty",
-                    systemImage: "music.note.list",
-                    description: Text("Add some tracks to get started.")
-                )
+                emptyState
             } else {
-                queueList(player: player, queue: queue)
+                queueContent(player: player, queue: queue)
             }
         }
         .confirmationDialog(
@@ -40,103 +38,72 @@ struct QueueView: View {
         }
     }
 
-    // MARK: - Queue List
+    // MARK: - Empty State
 
-    @ViewBuilder
-    private func queueList(player: AudioPlaybackManager, queue: PlayQueue) -> some View {
-        List {
-            // MARK: Playing From
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "music.note.list")
+                .font(.system(size: 44))
+                .foregroundStyle(.secondary.opacity(0.5))
 
-            if let context = queue.context {
-                Section {
-                    playingFromRow(context: context)
-                }
-            }
+            Text("Queue Empty")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.secondary)
 
-            // MARK: Now Playing
-
-            if let currentTrack = queue.currentTrack {
-                Section {
-                    nowPlayingRow(track: currentTrack, isPlaying: player.isPlaying)
-                } header: {
-                    Text("Now Playing")
-                        .font(.caption.weight(.semibold))
-                        .textCase(.uppercase)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            // MARK: Up Next
-
-            let upNext = queue.upNext
-            if !upNext.isEmpty {
-                Section {
-                    ForEach(Array(upNext.enumerated()), id: \.element.id) { offset, track in
-                        Button {
-                            let absoluteIndex = queue.currentIndex + 1 + offset
-                            appState.audioPlayer.skipTo(index: absoluteIndex)
-                        } label: {
-                            trackRow(track: track)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .onDelete { offsets in
-                        deleteUpNextTracks(at: offsets, queue: queue)
-                    }
-                    .onMove { source, destination in
-                        moveUpNextTracks(from: source, to: destination, queue: queue)
-                    }
-                } header: {
-                    HStack {
-                        Text("Up Next")
-                            .font(.caption.weight(.semibold))
-                            .textCase(.uppercase)
-
-                        Text("· \(upNext.count) \(upNext.count == 1 ? "track" : "tracks")")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Spacer()
-
-                        Button("Clear") {
-                            showClearConfirmation = true
-                        }
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.red)
-                    }
-                }
-            }
+            Text("Add some tracks to get started.")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Playing From Row
+    // MARK: - Queue Content
 
     @ViewBuilder
-    private func playingFromRow(context: PlayContext) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: contextIcon(for: context.type))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+    private func queueContent(player: AudioPlaybackManager, queue: PlayQueue) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                // Playing From
+                if let context = queue.context {
+                    playingFromPill(context: context)
+                        .padding(.bottom, 16)
+                }
 
-            Text("Playing from ")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                + Text(context.title)
-                .font(.subheadline.bold())
-                .foregroundStyle(.primary)
+                // Now Playing
+                if let currentTrack = queue.currentTrack {
+                    nowPlayingSection(track: currentTrack, isPlaying: player.isPlaying)
+                }
 
-            Spacer()
-
-            if context.id != nil {
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                // Up Next
+                let upNext = queue.upNext
+                if !upNext.isEmpty {
+                    upNextSection(tracks: upNext, queue: queue)
+                }
             }
+            .padding(.horizontal, 4)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
         }
-        .padding(.vertical, 4)
-        .listRowBackground(Color.white.opacity(0.06))
+        .scrollIndicators(.hidden)
+    }
+
+    // MARK: - Playing From
+
+    private func playingFromPill(context: PlayContext) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: contextIcon(for: context.type))
+                .font(.caption2)
+
+            Text("Playing from")
+                .font(.caption)
+                + Text(" \(context.title)")
+                .font(.caption.weight(.semibold))
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .background(.ultraThinMaterial, in: Capsule())
+        .frame(maxWidth: .infinity)
     }
 
     private func contextIcon(for type: PlayContextType) -> String {
@@ -151,90 +118,138 @@ struct QueueView: View {
         }
     }
 
-    // MARK: - Now Playing Row
+    // MARK: - Now Playing Section
 
-    @ViewBuilder
-    private func nowPlayingRow(track: Track, isPlaying: Bool) -> some View {
-        HStack(spacing: 12) {
-            MediaImage.trackThumbnail(url: artworkURL(for: track))
-                .frame(width: 44, height: 44)
+    private func nowPlayingSection(track: Track, isPlaying: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Now Playing")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .padding(.horizontal, 16)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(track.title)
-                    .font(.body.bold())
-                    .lineLimit(1)
-                    .foregroundStyle(Color.accentColor)
+            HStack(spacing: 14) {
+                MediaImage.trackThumbnail(url: artworkURL(for: track), cornerRadius: 8)
+                    .frame(width: 52, height: 52)
 
-                if let artistName = track.artistName {
-                    Text(artistName)
-                        .font(.caption)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(track.title)
+                        .font(.body.weight(.semibold))
                         .lineLimit(1)
-                        .foregroundStyle(.primary.opacity(0.7))
+                        .foregroundStyle(.primary)
+
+                    if let artistName = track.artistName {
+                        Text(artistName)
+                            .font(.subheadline)
+                            .lineLimit(1)
+                            .foregroundStyle(.primary.opacity(0.65))
+                    }
                 }
+
+                Spacer(minLength: 0)
+
+                // Animated equalizer
+                Image(systemName: isPlaying ? "waveform" : "speaker.fill")
+                    .font(.body)
+                    .foregroundStyle(Color.accentColor)
+                    .symbolEffect(.variableColor.iterative, isActive: isPlaying)
+                    .frame(width: 28)
             }
-
-            Spacer()
-
-            Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.fill")
-                .font(.caption)
-                .foregroundStyle(Color.accentColor)
-                .symbolEffect(.variableColor.iterative, isActive: isPlaying)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
         }
-        .padding(.vertical, 2)
-        .listRowBackground(Color.accentColor.opacity(0.1))
-        .deleteDisabled(true)
-        .moveDisabled(true)
+        .padding(.bottom, 20)
     }
 
-    // MARK: - Track Row
+    // MARK: - Up Next Section
 
-    @ViewBuilder
-    private func trackRow(track: Track) -> some View {
-        HStack(spacing: 12) {
-            MediaImage.trackThumbnail(url: artworkURL(for: track))
-                .frame(width: 40, height: 40)
+    private func upNextSection(tracks: [Track], queue: PlayQueue) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Header
+            HStack(alignment: .firstTextBaseline) {
+                Text("Up Next")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(track.title)
-                    .font(.subheadline)
-                    .lineLimit(1)
-                    .foregroundStyle(.primary)
+                Text("· \(tracks.count)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary.opacity(0.7))
 
-                if let artistName = track.artistName {
-                    Text(artistName)
-                        .font(.caption)
-                        .lineLimit(1)
-                        .foregroundStyle(.primary.opacity(0.6))
+                Spacer()
+
+                Button {
+                    showClearConfirmation = true
+                } label: {
+                    Text("Clear")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.primary.opacity(0.5))
                 }
+                .buttonStyle(.plain)
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 4)
 
-            Spacer()
-
-            if let duration = track.duration {
-                Text(TimeFormatting.playbackPosition(duration))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.primary.opacity(0.4))
+            // Track rows
+            ForEach(Array(tracks.enumerated()), id: \.element.id) { offset, track in
+                upNextRow(track: track, offset: offset, queue: queue)
             }
         }
-        .padding(.vertical, 2)
-        .listRowBackground(Color.clear)
+    }
+
+    private func upNextRow(track: Track, offset: Int, queue: PlayQueue) -> some View {
+        Button {
+            let absoluteIndex = queue.currentIndex + 1 + offset
+            appState.audioPlayer.skipTo(index: absoluteIndex)
+        } label: {
+            HStack(spacing: 12) {
+                MediaImage.trackThumbnail(url: artworkURL(for: track), cornerRadius: 6)
+                    .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(track.title)
+                        .font(.subheadline)
+                        .lineLimit(1)
+                        .foregroundStyle(.primary)
+
+                    if let artistName = track.artistName {
+                        Text(artistName)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .foregroundStyle(.primary.opacity(0.5))
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if let duration = track.duration {
+                    Text(TimeFormatting.trackTime(duration))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.primary.opacity(0.35))
+                }
+
+                // Remove button
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        let absoluteIndex = queue.currentIndex + 1 + offset
+                        queue.remove(at: absoluteIndex)
+                    }
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.body)
+                        .foregroundStyle(.primary.opacity(0.2))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Actions
-
-    private func deleteUpNextTracks(at offsets: IndexSet, queue: PlayQueue) {
-        for offset in offsets.sorted().reversed() {
-            let absoluteIndex = queue.currentIndex + 1 + offset
-            queue.remove(at: absoluteIndex)
-        }
-    }
-
-    private func moveUpNextTracks(from source: IndexSet, to destination: Int, queue: PlayQueue) {
-        guard let sourceIndex = source.first else { return }
-        let absoluteSource = queue.currentIndex + 1 + sourceIndex
-        let absoluteDestination = queue.currentIndex + 1 + destination
-        queue.move(from: absoluteSource, to: absoluteDestination)
-    }
 
     private func clearUpNext(queue: PlayQueue) {
         let upNextCount = queue.upNext.count
@@ -258,4 +273,5 @@ struct QueueView: View {
 
 #Preview {
     QueueView()
+        .environment(AppState())
 }
