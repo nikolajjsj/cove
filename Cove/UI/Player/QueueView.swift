@@ -13,6 +13,7 @@ struct QueueView: View {
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
     @State private var showClearConfirmation = false
+    @State private var draggedTrackID: String?
 
     var body: some View {
         let player = appState.audioPlayer
@@ -200,11 +201,19 @@ struct QueueView: View {
     }
 
     private func upNextRow(track: Track, offset: Int, queue: PlayQueue) -> some View {
-        Button {
+        let isDragged = draggedTrackID == track.id.rawValue
+
+        return Button {
             let absoluteIndex = queue.currentIndex + 1 + offset
             appState.audioPlayer.skipTo(index: absoluteIndex)
         } label: {
             HStack(spacing: 12) {
+                // Drag handle
+                Image(systemName: "line.3.horizontal")
+                    .font(.subheadline)
+                    .foregroundStyle(.primary.opacity(0.3))
+                    .frame(width: 20)
+
                 MediaImage.trackThumbnail(url: artworkURL(for: track), cornerRadius: 6)
                     .frame(width: 42, height: 42)
 
@@ -248,6 +257,52 @@ struct QueueView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .opacity(isDragged ? 0.4 : 1.0)
+        .draggable(track.id.rawValue) {
+            // Drag preview
+            HStack(spacing: 8) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text(track.title)
+                    .font(.subheadline)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .onAppear {
+                draggedTrackID = track.id.rawValue
+            }
+        }
+        .dropDestination(for: String.self) { droppedIDs, _ in
+            guard let sourceID = droppedIDs.first else { return false }
+
+            let upNext = queue.upNext
+
+            // Find the source offset within upNext
+            guard let sourceOffset = upNext.firstIndex(where: { $0.id.rawValue == sourceID }) else {
+                return false
+            }
+
+            let destinationOffset = offset
+
+            // Don't move to the same position
+            guard sourceOffset != destinationOffset else { return true }
+
+            // Compute absolute indices
+            let sourceAbsolute = queue.currentIndex + 1 + sourceOffset
+            let destinationAbsolute = queue.currentIndex + 1 + destinationOffset
+
+            withAnimation(.easeInOut(duration: 0.25)) {
+                queue.move(from: sourceAbsolute, to: destinationAbsolute)
+            }
+
+            draggedTrackID = nil
+            return true
+        } isTargeted: { isTargeted in
+            // Could add hover highlight here if desired
+        }
     }
 
     // MARK: - Actions
