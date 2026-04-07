@@ -2,6 +2,7 @@ import CoveUI
 import JellyfinProvider
 import MediaServerKit
 import Models
+import PlaybackEngine
 import SwiftUI
 
 struct MusicLibraryView: View {
@@ -12,7 +13,11 @@ struct MusicLibraryView: View {
         ScrollView {
             VStack(spacing: 28) {
                 if let library {
-                    // MARK: - Discovery Shelves
+                    // MARK: - Recently Played Songs
+
+                    RecentlyPlayedSongsSection(library: library)
+
+                    // MARK: - Recently Added
 
                     MusicDiscoveryShelf(
                         title: "Recently Added",
@@ -20,15 +25,11 @@ struct MusicLibraryView: View {
                         library: library
                     )
 
+                    // MARK: - Most Played
+
                     MusicDiscoveryShelf(
                         title: "Most Played",
                         sortField: .playCount,
-                        library: library
-                    )
-
-                    MusicDiscoveryShelf(
-                        title: "Recently Played",
-                        sortField: .datePlayed,
                         library: library
                     )
 
@@ -44,6 +45,148 @@ struct MusicLibraryView: View {
             .padding(.vertical, 12)
         }
         .navigationTitle("Music")
+    }
+}
+
+// MARK: - Recently Played Songs Section
+
+/// Loads recently played songs and displays them as horizontally scrolling cards.
+private struct RecentlyPlayedSongsSection: View {
+    let library: MediaLibrary
+    @Environment(AppState.self) private var appState
+    @State private var songs: [MediaItem] = []
+    @State private var isLoading = true
+
+    private let limit = 20
+
+    var body: some View {
+        if isLoading || !songs.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Recently Played")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .padding(.horizontal)
+
+                if isLoading {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(0..<5, id: \.self) { _ in
+                                RecentSongPlaceholder()
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                                Button {
+                                    playSong(at: index)
+                                } label: {
+                                    RecentSongCard(
+                                        song: song,
+                                        imageURL: imageURL(for: song)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+            }
+            .task(id: library.id) {
+                await loadSongs()
+            }
+        }
+    }
+
+    private func loadSongs() async {
+        let provider = appState.provider
+
+        do {
+            let sort = SortOptions(field: .datePlayed, order: .descending)
+            let filter = FilterOptions(
+                limit: limit,
+                includeItemTypes: ["Audio"]
+            )
+            let result = try await provider.pagedItems(
+                in: library, sort: sort, filter: filter
+            )
+            songs = result.items
+        } catch {
+            songs = []
+        }
+        isLoading = false
+    }
+
+    private func playSong(at index: Int) {
+        let tracks = songs.map { item in
+            Track(
+                id: TrackID(item.id.rawValue),
+                title: item.title,
+                duration: item.runtime,
+                userData: item.userData
+            )
+        }
+        guard !tracks.isEmpty else { return }
+        appState.audioPlayer.play(tracks: tracks, startingAt: index)
+    }
+
+    private func imageURL(for item: MediaItem) -> URL? {
+        appState.provider.imageURL(
+            for: item,
+            type: .primary,
+            maxSize: CGSize(width: 240, height: 240)
+        )
+    }
+}
+
+// MARK: - Recent Song Card
+
+private struct RecentSongCard: View {
+    let song: MediaItem
+    let imageURL: URL?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            MediaImage.artwork(url: imageURL, cornerRadius: 8)
+                .frame(width: 140, height: 140)
+                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+
+            Text(song.title)
+                .font(.caption)
+                .fontWeight(.medium)
+                .lineLimit(1)
+                .foregroundStyle(.primary)
+                .frame(width: 140, alignment: .leading)
+
+            if let genres = song.genres, let artist = genres.first {
+                Text(artist)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(width: 140, alignment: .leading)
+            }
+        }
+    }
+}
+
+private struct RecentSongPlaceholder: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.quaternary)
+                .frame(width: 140, height: 140)
+
+            RoundedRectangle(cornerRadius: 4)
+                .fill(.quaternary)
+                .frame(width: 100, height: 12)
+
+            RoundedRectangle(cornerRadius: 4)
+                .fill(.quaternary)
+                .frame(width: 60, height: 10)
+        }
     }
 }
 

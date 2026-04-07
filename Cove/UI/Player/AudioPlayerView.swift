@@ -45,7 +45,7 @@ struct AudioPlayerView: View {
     private func playerContent(track: Track) -> some View {
         VStack(spacing: 0) {
             Spacer()
-            
+
             // Swipeable pages
             TabView(selection: $currentPage) {
                 // Page 1: Artwork
@@ -61,7 +61,7 @@ struct AudioPlayerView: View {
             .animation(.easeInOut(duration: 0.3), value: currentPage)
             .aspectRatio(1, contentMode: .fit)
             .padding(24)
-            
+
             Spacer()
 
             // Persistent controls
@@ -193,9 +193,9 @@ struct AudioPlayerView: View {
     // MARK: - Helpers
 
     private func artworkURL(for track: Track) -> URL? {
-        guard let albumId = track.albumId else { return nil }
+        let itemId = track.albumId ?? track.id
         return appState.provider.imageURL(
-            for: albumId, type: .primary, maxSize: CGSize(width: 600, height: 600))
+            for: itemId, type: .primary, maxSize: CGSize(width: 600, height: 600))
     }
 }
 

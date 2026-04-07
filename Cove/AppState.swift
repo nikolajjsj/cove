@@ -541,9 +541,9 @@ final class AppState {
                 }
             }
             // Fall back to remote
-            guard let albumId = track.albumId else { return nil }
+            let itemId = track.albumId ?? track.id
             return provider.imageURL(
-                for: albumId,
+                for: itemId,
                 type: .primary,
                 maxSize: CGSize(width: 600, height: 600)
             )

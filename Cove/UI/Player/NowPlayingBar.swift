@@ -57,7 +57,8 @@ struct NowPlayingBar: View {
                             appState.audioPlayer.togglePlayPause()
                         } label: {
                             Image(
-                                systemName: appState.audioPlayer.isPlaying ? "pause.fill" : "play.fill"
+                                systemName: appState.audioPlayer.isPlaying
+                                    ? "pause.fill" : "play.fill"
                             )
                             .font(.title2)
                             .foregroundStyle(.primary)
@@ -65,9 +66,9 @@ struct NowPlayingBar: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        
+
                         // MARK: - Next Track Button
-                        
+
                         Button {
                             appState.audioPlayer.next()
                         } label: {
@@ -98,8 +99,8 @@ struct NowPlayingBar: View {
     }
 
     private func artworkURL(for track: Track) -> URL? {
-        guard let albumId = track.albumId else { return nil }
+        let itemId = track.albumId ?? track.id
         return appState.provider.imageURL(
-            for: albumId, type: .primary, maxSize: CGSize(width: 96, height: 96))
+            for: itemId, type: .primary, maxSize: CGSize(width: 96, height: 96))
     }
 }

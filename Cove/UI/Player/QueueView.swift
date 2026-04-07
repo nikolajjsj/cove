@@ -250,9 +250,9 @@ struct QueueView: View {
     // MARK: - Helpers
 
     private func artworkURL(for track: Track) -> URL? {
-        guard let albumId = track.albumId else { return nil }
+        let itemId = track.albumId ?? track.id
         return appState.provider.imageURL(
-            for: albumId, type: .primary, maxSize: CGSize(width: 96, height: 96))
+            for: itemId, type: .primary, maxSize: CGSize(width: 96, height: 96))
     }
 }
 
