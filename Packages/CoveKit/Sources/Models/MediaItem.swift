@@ -28,6 +28,15 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
     public let albumName: String?
     public let albumId: ItemID?
 
+    // Image metadata (maps image type to its cache tag; nil or missing key means that image type doesn't exist)
+    public let imageTags: [ImageType: String]?
+
+    // Episode/series metadata (for Continue Watching / Up Next cards)
+    public let seriesName: String?
+    public let seriesId: ItemID?
+    public let indexNumber: Int?
+    public let parentIndexNumber: Int?
+
     /// Runtime in seconds, derived from `runTimeTicks`.
     public var runtime: TimeInterval? {
         runTimeTicks.map { TimeInterval($0) / 10_000_000.0 }
@@ -57,7 +66,12 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
         userData: UserData? = nil,
         artistName: String? = nil,
         albumName: String? = nil,
-        albumId: ItemID? = nil
+        albumId: ItemID? = nil,
+        imageTags: [ImageType: String]? = nil,
+        seriesName: String? = nil,
+        seriesId: ItemID? = nil,
+        indexNumber: Int? = nil,
+        parentIndexNumber: Int? = nil
     ) {
         self.id = id
         self.title = title
@@ -83,5 +97,10 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
         self.artistName = artistName
         self.albumName = albumName
         self.albumId = albumId
+        self.imageTags = imageTags
+        self.seriesName = seriesName
+        self.seriesId = seriesId
+        self.indexNumber = indexNumber
+        self.parentIndexNumber = parentIndexNumber
     }
 }

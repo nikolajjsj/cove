@@ -183,13 +183,26 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
     public func imageURL(for item: MediaItem, type: ImageType, maxSize: CGSize?) -> URL? {
         guard let client = state.client else { return nil }
+
+        // If the item carries image-tag metadata, check whether this type exists.
+        // When imageTags is nil (older code paths / placeholder items), fall through
+        // and construct the URL optimistically.
+        let tag: String?
+        if let tags = item.imageTags {
+            guard let t = tags[type] else { return nil }
+            tag = t
+        } else {
+            tag = nil
+        }
+
         let maxWidth = maxSize.map { Int($0.width) }
         let maxHeight = maxSize.map { Int($0.height) }
         return client.imageURL(
             itemId: item.id.rawValue,
             imageType: JellyfinMapper.imageTypeString(type),
             maxWidth: maxWidth,
-            maxHeight: maxHeight
+            maxHeight: maxHeight,
+            tag: tag
         )
     }
 

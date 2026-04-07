@@ -101,15 +101,27 @@ struct AppShellView: View {
     // MARK: - Dynamic Tabs
 
     private var availableTabs: [AppTab] {
-        var tabs: [AppTab] = [.home, .search]
-        // On compact (iPhone), only show Home / Downloads / Settings.
-        // Library sections are reachable by tapping their header on the Home view.
-        if sizeClass != .compact {
-            let types = Set(appState.libraries.compactMap(\.collectionType))
+        var tabs: [AppTab] = [.home]
+
+        let types = Set(appState.libraries.compactMap(\.collectionType))
+
+        if sizeClass == .compact {
+            // iPhone: 5 tabs max — Home, [dynamic media tab], Search, Downloads, Settings
+            if types.contains(.music) {
+                tabs.append(.music)
+            } else if types.contains(.movies) {
+                tabs.append(.movies)
+            } else if types.contains(.tvshows) {
+                tabs.append(.tvShows)
+            }
+        } else {
+            // iPad/Mac: show all media tabs in sidebar
             if types.contains(.music) { tabs.append(.music) }
             if types.contains(.movies) { tabs.append(.movies) }
             if types.contains(.tvshows) { tabs.append(.tvShows) }
         }
+
+        tabs.append(.search)
         tabs.append(.downloads)
         tabs.append(.settings)
         return tabs

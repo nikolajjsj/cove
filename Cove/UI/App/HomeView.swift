@@ -10,9 +10,6 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
-                // Continue Watching section
-                ContinueWatchingSection()
-
                 if appState.libraries.isEmpty {
                     ContentUnavailableView(
                         "No Libraries",
@@ -20,6 +17,8 @@ struct HomeView: View {
                         description: Text("No libraries found on this server.")
                     )
                 } else {
+                    ContinueWatchingSection()
+                    UpNextSection()
                     ForEach(appState.libraries) { library in
                         LibrarySection(library: library)
                     }
@@ -27,9 +26,7 @@ struct HomeView: View {
             }
             .padding()
         }
-
     }
-
 }
 
 // MARK: - Continue Watching Section
@@ -41,11 +38,22 @@ private struct ContinueWatchingSection: View {
 
     var body: some View {
         Group {
-            if !resumeItems.isEmpty {
+            if isLoading {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Continue Watching")
-                        .font(.title2)
-                        .fontWeight(.bold)
+                    SectionHeader(title: "Continue Watching")
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: 12) {
+                            ForEach(0..<4, id: \.self) { _ in
+                                SkeletonCard.landscape(width: 240)
+                            }
+                        }
+                    }
+                }
+                .transition(.opacity)
+            } else if !resumeItems.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionHeader(title: "Continue Watching")
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: 12) {
@@ -58,16 +66,20 @@ private struct ContinueWatchingSection: View {
                         }
                     }
                 }
+                .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: isLoading)
+        .animation(.easeInOut(duration: 0.3), value: resumeItems.map(\.id))
         .task {
             await loadResumeItems()
         }
     }
 
     private func loadResumeItems() async {
-        isLoading = true
-        defer { isLoading = false }
+        let firstLoad = resumeItems.isEmpty
+        if firstLoad { isLoading = true }
+        defer { if firstLoad { isLoading = false } }
         do {
             resumeItems = try await authManager.provider.resumeItems()
         } catch {
@@ -76,104 +88,61 @@ private struct ContinueWatchingSection: View {
     }
 }
 
-// MARK: - Continue Watching Card
+// MARK: - Up Next Section
 
-private struct ContinueWatchingCard: View {
-    let item: MediaItem
+private struct UpNextSection: View {
     @Environment(AuthManager.self) private var authManager
+    @State private var nextUpItems: [MediaItem] = []
+    @State private var isLoading = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ZStack(alignment: .bottomLeading) {
-                // Backdrop/thumbnail image (landscape)
-                MediaImage.videoThumbnail(url: thumbnailURL, cornerRadius: 8)
-                    .frame(width: 240)
+        Group {
+            if isLoading {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionHeader(title: "Up Next")
 
-                // Progress bar
-                if let progress = watchProgress, progress > 0 {
-                    GeometryReader { geo in
-                        VStack {
-                            Spacer()
-                            ZStack(alignment: .leading) {
-                                Rectangle()
-                                    .fill(.ultraThinMaterial)
-                                    .frame(height: 4)
-                                Rectangle()
-                                    .fill(Color.accentColor)
-                                    .frame(width: geo.size.width * progress, height: 4)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: 12) {
+                            ForEach(0..<4, id: \.self) { _ in
+                                SkeletonCard.landscape(width: 240)
                             }
                         }
                     }
-                    .frame(width: 240)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
+                .transition(.opacity)
+            } else if !nextUpItems.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionHeader(title: "Up Next")
 
-                // Play button overlay
-                Image(systemName: "play.circle.fill")
-                    .font(.title)
-                    .foregroundStyle(.white)
-                    .shadow(radius: 4)
-                    .padding(8)
-            }
-
-            // Title
-            Text(item.title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(1)
-                .foregroundStyle(.primary)
-
-            // Remaining time
-            if let remaining = remainingTimeText {
-                Text(remaining)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: 12) {
+                            ForEach(nextUpItems) { item in
+                                NavigationLink(value: item) {
+                                    UpNextCard(item: item)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+                .transition(.opacity)
             }
         }
-        .frame(width: 240)
-    }
-
-    // MARK: - Helpers
-
-    private var thumbnailURL: URL? {
-        // Try backdrop first for landscape, fall back to primary
-        authManager.provider.imageURL(
-            for: item,
-            type: .backdrop,
-            maxSize: CGSize(width: 480, height: 270)
-        )
-            ?? authManager.provider.imageURL(
-                for: item,
-                type: .primary,
-                maxSize: CGSize(width: 480, height: 270)
-            )
-    }
-
-    private var watchProgress: Double? {
-        guard let position = item.userData?.playbackPosition, position > 0 else { return nil }
-        // We don't have total duration on MediaItem, so estimate from position
-        // If we have a rough guess, show something. Otherwise just show a small indicator.
-        // For now, just return a small value to indicate "in progress"
-        // The real progress would need runtime from the full item
-        return min(max(position / max(position * 2.5, 1), 0.05), 0.95)
-    }
-
-    private var remainingTimeText: String? {
-        guard let position = item.userData?.playbackPosition, position > 0 else { return nil }
-        let positionMinutes = Int(position) / 60
-        if positionMinutes > 0 {
-            return "\(positionMinutes) min watched"
+        .animation(.easeInOut(duration: 0.3), value: isLoading)
+        .animation(.easeInOut(duration: 0.3), value: nextUpItems.map(\.id))
+        .task {
+            await loadNextUp()
         }
-        return nil
     }
 
-    private var placeholderIcon: String {
-        switch item.mediaType {
-        case .movie: return "film"
-        case .episode: return "play.rectangle"
-        case .series: return "tv"
-        default: return "play.rectangle"
+    private func loadNextUp() async {
+        let firstLoad = nextUpItems.isEmpty
+        if firstLoad { isLoading = true }
+        defer { if firstLoad { isLoading = false } }
+        do {
+            nextUpItems = try await authManager.provider.nextUp()
+        } catch {
+            nextUpItems = []
         }
     }
 }
@@ -244,7 +213,7 @@ private struct LibrarySection: View {
             let sort = SortOptions(field: .dateAdded, order: .descending)
             let filter = FilterOptions(
                 limit: 20,
-                includeItemTypes: library.includeItemTypes,
+                includeItemTypes: library.includeItemTypes
             )
             items = try await authManager.provider.items(in: library, sort: sort, filter: filter)
         } catch {

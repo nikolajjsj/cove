@@ -47,38 +47,6 @@ struct MusicLibraryView: View {
     }
 }
 
-// MARK: - Section Header
-
-/// Reusable section header with a title and an optional "See All" navigation link.
-private struct SectionHeader<Route: Hashable>: View {
-    let title: String
-    let route: Route?
-
-    init(title: String, route: Route? = nil as MusicBrowseRoute?) {
-        self.title = title
-        self.route = route
-    }
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(.title2)
-                .fontWeight(.bold)
-
-            Spacer()
-
-            if let route {
-                NavigationLink(value: route) {
-                    Text("See All")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                }
-            }
-        }
-        .padding(.horizontal)
-    }
-}
-
 // MARK: - Recently Played Songs Section
 
 /// Loads recently played songs and displays them as horizontally scrolling cards.
@@ -192,10 +160,20 @@ private struct ArtistsShelfSection: View {
     var body: some View {
         if isLoading || !artists.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                SectionHeader(
-                    title: "Artists",
-                    route: MusicBrowseRoute.allArtists(libraryId: library.id)
-                )
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Artists")
+                        .font(.title2)
+                        .fontWeight(.bold)
+
+                    Spacer()
+
+                    NavigationLink(value: MusicBrowseRoute.allArtists(libraryId: library.id)) {
+                        Text("See All")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                }
+                .padding(.horizontal)
 
                 if isLoading {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -270,10 +248,20 @@ private struct AlbumsGridSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(
-                title: "Albums",
-                route: MusicBrowseRoute.allAlbums(libraryId: library.id)
-            )
+            HStack(alignment: .firstTextBaseline) {
+                Text("Albums")
+                    .font(.title2)
+                    .fontWeight(.bold)
+
+                Spacer()
+
+                NavigationLink(value: MusicBrowseRoute.allAlbums(libraryId: library.id)) {
+                    Text("See All")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+            }
+            .padding(.horizontal)
 
             if isLoading {
                 LazyVGrid(columns: columns, spacing: 20) {

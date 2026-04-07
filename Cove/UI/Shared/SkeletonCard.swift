@@ -73,7 +73,7 @@ extension SkeletonCard {
 
     /// Placeholder for a landscape video thumbnail.
     static func landscape(width: CGFloat = 220) -> SkeletonCard {
-        SkeletonCard(width: width, aspectRatio: 16.0 / 9.0, lineCount: 1)
+        SkeletonCard(width: width, aspectRatio: 16.0 / 9.0, lineCount: 2)
     }
 }
 

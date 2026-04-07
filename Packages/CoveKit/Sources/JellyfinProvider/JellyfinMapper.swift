@@ -47,6 +47,30 @@ enum JellyfinMapper {
             mediaStreams = nil
         }
 
+        // Map image tags so we know which image types actually exist on the server
+        var mappedImageTags: [ImageType: String]? = nil
+        if let dtoTags = dto.imageTags {
+            var tags = [ImageType: String]()
+            for (key, value) in dtoTags {
+                switch key {
+                case "Primary": tags[.primary] = value
+                case "Thumb": tags[.thumb] = value
+                case "Logo": tags[.logo] = value
+                case "Banner": tags[.banner] = value
+                case "Art": tags[.art] = value
+                case "Backdrop": tags[.backdrop] = value
+                default: break
+                }
+            }
+            // Also check backdropImageTags array
+            if let backdropTags = dto.backdropImageTags, !backdropTags.isEmpty,
+                tags[.backdrop] == nil
+            {
+                tags[.backdrop] = backdropTags.first
+            }
+            mappedImageTags = tags.isEmpty ? nil : tags
+        }
+
         return MediaItem(
             id: ItemID(id),
             title: name,
@@ -71,7 +95,12 @@ enum JellyfinMapper {
             userData: userData,
             artistName: dto.albumArtist ?? dto.artistItems?.first?.name,
             albumName: dto.album,
-            albumId: dto.albumId.map { ItemID($0) }
+            albumId: dto.albumId.map { ItemID($0) },
+            imageTags: mappedImageTags,
+            seriesName: dto.seriesName,
+            seriesId: dto.seriesId.map { ItemID($0) },
+            indexNumber: dto.indexNumber,
+            parentIndexNumber: dto.parentIndexNumber
         )
     }
 
