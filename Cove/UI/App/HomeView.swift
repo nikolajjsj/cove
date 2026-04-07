@@ -213,7 +213,8 @@ private struct LibrarySection: View {
                             ForEach(0..<6, id: \.self) { _ in
                                 SkeletonCard(
                                     width: defaultCardWidth,
-                                    aspectRatio: defaultAspectRatio
+                                    aspectRatio: defaultAspectRatio,
+                                    lineCount: 2
                                 )
                             }
                         } else {
