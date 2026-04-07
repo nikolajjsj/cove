@@ -20,7 +20,7 @@ struct HomeView: View {
                 } else {
                     ContinueWatchingSection()
                     UpNextSection()
-                    ForEach(appState.libraries) { library in
+                    ForEach(appState.libraries.filter { $0.collectionType != .music }) { library in
                         LibrarySection(library: library)
                     }
                 }
