@@ -88,7 +88,6 @@ struct AudioPlayerView: View {
 
             MediaImage.artwork(url: artworkURL(for: track), cornerRadius: 12)
                 .frame(maxWidth: 600, maxHeight: 600)
-                .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
                 .padding(.horizontal, 16)
                 .animation(.easeInOut(duration: 0.3), value: track.id)
 
