@@ -1,9 +1,10 @@
 internal import Combine
-import ImageService
 import JellyfinProvider
 import MediaServerKit
 import Models
 import SwiftUI
+
+let CORNER_RADIUS = CGFloat(16)
 
 // MARK: - Hero Banner Carousel
 
@@ -50,7 +51,7 @@ struct HeroBannerView: View {
         }
         .tabViewStyle(.page(indexDisplayMode: .always))
         .frame(height: bannerHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: CORNER_RADIUS))
         .onChange(of: currentIndex) { _, _ in
             lastInteractionDate = Date()
             lastAdvanceDate = Date()
@@ -193,7 +194,6 @@ private struct BannerPageView: View {
 
     // MARK: - Backdrop Image
 
-    @ViewBuilder
     private var backdropImage: some View {
         let backdropURL = authManager.provider.imageURL(
             for: item, type: .backdrop, maxSize: CGSize(width: 1280, height: 720)
@@ -202,24 +202,12 @@ private struct BannerPageView: View {
             for: item, type: .primary, maxSize: CGSize(width: 600, height: 900)
         )
 
-        LazyImage(url: backdropURL ?? primaryURL) { state in
-            if let image = state.image {
-                image.resizable().aspectRatio(contentMode: .fill)
-            } else if state.isLoading {
-                Rectangle()
-                    .fill(Color(.secondarySystemBackground))
-            } else {
-                // Fallback gradient when no image is available
-                LinearGradient(
-                    colors: [
-                        .blue.opacity(0.3),
-                        .purple.opacity(0.2),
-                        .black.opacity(0.8),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            }
-        }
+        return MediaImage(
+            url: backdropURL ?? primaryURL,
+            aspectRatio: nil,
+            placeholderIcon: "film",
+            cornerRadius: CORNER_RADIUS,
+            showsLoadingIndicator: false
+        )
     }
 }

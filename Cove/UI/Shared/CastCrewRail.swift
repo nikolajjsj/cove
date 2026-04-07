@@ -1,4 +1,3 @@
-import ImageService
 import Models
 import SwiftUI
 
@@ -38,28 +37,14 @@ private struct PersonCard: View {
     var body: some View {
         VStack(spacing: 8) {
             // Circular portrait
-            LazyImage(url: person.imageURL) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } else if state.isLoading {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                } else {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay {
-                            Image(systemName: "person.fill")
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
+            MediaImage(
+                url: person.imageURL,
+                placeholderIcon: "person.fill",
+                placeholderIconFont: .title3,
+                cornerRadius: .infinity,
+                showsLoadingIndicator: false
+            )
             .frame(width: 80, height: 80)
-            .clipShape(Circle())
 
             VStack {
                 // Name

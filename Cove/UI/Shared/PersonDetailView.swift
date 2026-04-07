@@ -1,5 +1,4 @@
 import CoveUI
-import ImageService
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -57,29 +56,13 @@ struct PersonDetailView: View {
     private var personHeader: some View {
         VStack(spacing: 16) {
             // Circular portrait
-            LazyImage(url: person.imageURL) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } else if state.isLoading {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay { ProgressView() }
-                } else {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay {
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 48))
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
+            MediaImage(
+                url: person.imageURL,
+                placeholderIcon: "person.fill",
+                placeholderIconFont: .system(size: 48),
+                cornerRadius: .infinity
+            )
             .frame(width: 200, height: 200)
-            .clipShape(Circle())
             .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
 
             // Name

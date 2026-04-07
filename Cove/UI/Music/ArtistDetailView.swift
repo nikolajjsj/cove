@@ -52,29 +52,13 @@ struct ArtistDetailView: View {
     private var artistHeader: some View {
         VStack(spacing: 16) {
             // Artist image (circular)
-            LazyImage(url: artistImageURL) { state in
-                if let image = state.image {
-                    image
-                        .resizable()
-                        .aspectRatio(1, contentMode: .fill)
-                } else if state.isLoading {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay { ProgressView() }
-                } else {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .aspectRatio(1, contentMode: .fill)
-                        .overlay {
-                            Image(systemName: "music.mic")
-                                .font(.system(size: 48))
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
+            MediaImage(
+                url: artistImageURL,
+                placeholderIcon: "music.mic",
+                placeholderIconFont: .system(size: 48),
+                cornerRadius: .infinity
+            )
             .frame(width: 200, height: 200)
-            .clipShape(Circle())
             .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
 
             // Artist name
