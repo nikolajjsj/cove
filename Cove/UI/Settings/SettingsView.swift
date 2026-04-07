@@ -11,6 +11,7 @@ struct SettingsView: View {
     @Default(.skipForwardInterval) var skipForwardInterval
     @Default(.skipBackwardInterval) var skipBackwardInterval
     @Default(.accentColor) var accentColorName
+    @Default(.maxStreamingQuality) var maxStreamingQuality
 
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
@@ -112,6 +113,16 @@ struct SettingsView: View {
             // MARK: - Video Playback
 
             Section("Video Playback") {
+                // Maximum streaming quality
+                Picker(selection: $maxStreamingQuality) {
+                    ForEach(StreamingQuality.allCases, id: \.self) { quality in
+                        Text(quality.label).tag(quality)
+                    }
+                } label: {
+                    Label("Streaming Quality", systemImage: "antenna.radiowaves.left.and.right")
+                }
+                .pickerStyle(.menu)
+
                 Toggle(
                     "Auto-play next episode", systemImage: "play.circle", isOn: $autoPlayNextEpisode
                 )

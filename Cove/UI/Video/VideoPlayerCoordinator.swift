@@ -1,3 +1,4 @@
+import Defaults
 import Foundation
 import JellyfinProvider
 import Models
@@ -34,6 +35,9 @@ final class VideoPlayerCoordinator {
     /// Resolved stream info for the current item.
     private(set) var streamInfo: StreamInfo?
 
+    /// Skippable segments (intro, credits, recap, etc.) for the current item.
+    private(set) var mediaSegments: [MediaSegment] = []
+
     /// Playback start position in seconds.
     private(set) var startPosition: TimeInterval = 0
 
@@ -62,6 +66,64 @@ final class VideoPlayerCoordinator {
         set { if !newValue { error = nil } }
     }
 
+    // MARK: - Quality
+
+    /// The provider used for the current session — retained for mid-playback quality switching.
+    private var activeProvider: JellyfinServerProvider?
+
+    /// The source video resolution (height) of the current item, used to build the quality picker.
+    private(set) var sourceVideoHeight: Int?
+
+    /// The source video bitrate of the current item, used to label "Original" quality.
+    private(set) var sourceVideoBitrate: Int?
+
+    /// The currently active streaming quality for this session.
+    private(set) var activeQuality: StreamingQuality = .auto
+
+    /// Whether a quality switch is in progress.
+    private(set) var isSwitchingQuality: Bool = false
+
+    /// Build a device profile constrained to the given quality tier.
+    private func profileForQuality(_ quality: StreamingQuality) -> DeviceProfile? {
+        guard let bitrate = quality.maxBitrate else { return nil }
+        return DeviceProfile.appleDevice(maxStreamingBitrate: bitrate)
+    }
+
+    /// Available quality options for the current item, based on source resolution.
+    var availableQualities: [StreamingQuality] {
+        guard let height = sourceVideoHeight else { return [.auto] }
+        var options: [StreamingQuality] = [.auto]
+        if height > 1080 { options.append(.quality1080p) }
+        if height > 720 { options.append(.quality720p) }
+        if height > 480 { options.append(.quality480p) }
+        return options
+    }
+
+    /// Switch quality mid-playback. Re-resolves the stream with a new device profile.
+    func switchQuality(
+        to quality: StreamingQuality,
+        currentTime: TimeInterval
+    ) {
+        guard let provider = activeProvider, let item = currentItem, !isSwitchingQuality else {
+            return
+        }
+
+        isSwitchingQuality = true
+        activeQuality = quality
+
+        Task {
+            defer { isSwitchingQuality = false }
+            do {
+                let profile = profileForQuality(quality)
+                let info = try await provider.streamURL(for: item, profile: profile)
+                streamInfo = info
+                startPosition = currentTime
+            } catch {
+                // Quality switch failed — keep playing at the current quality
+            }
+        }
+    }
+
     // MARK: - Play
 
     /// Resolve the stream for `item` and present the video player.
@@ -81,9 +143,25 @@ final class VideoPlayerCoordinator {
             }
 
             do {
-                let info = try await provider.streamURL(for: item, profile: nil)
+                let quality = Defaults[.maxStreamingQuality]
+                let profile = profileForQuality(quality)
+
+                async let infoTask = provider.streamURL(for: item, profile: profile)
+                async let segmentsTask = provider.mediaSegments(for: item.id)
+
+                let info = try await infoTask
+                let segments = try await segmentsTask
+
+                // Extract source video resolution for the quality picker
+                let videoStream = info.mediaStreams.first { $0.type == .video }
+                sourceVideoHeight = videoStream?.height
+                sourceVideoBitrate = videoStream?.bitrate
+                activeQuality = quality
+                activeProvider = provider
+
                 currentItem = item
                 streamInfo = info
+                mediaSegments = segments
 
                 let position = item.userData?.playbackPosition ?? 0
                 if position > 30 {
@@ -130,9 +208,26 @@ final class VideoPlayerCoordinator {
 
             do {
                 let episodeItem = try await provider.item(id: episodeId)
-                let info = try await provider.streamURL(for: episodeItem, profile: nil)
+
+                let quality = Defaults[.maxStreamingQuality]
+                let profile = profileForQuality(quality)
+
+                async let infoTask = provider.streamURL(for: episodeItem, profile: profile)
+                async let segmentsTask = provider.mediaSegments(for: episodeId)
+
+                let info = try await infoTask
+                let segments = try await segmentsTask
+
+                // Extract source video resolution for the quality picker
+                let videoStream = info.mediaStreams.first { $0.type == .video }
+                sourceVideoHeight = videoStream?.height
+                sourceVideoBitrate = videoStream?.bitrate
+                activeQuality = quality
+                activeProvider = provider
+
                 currentItem = episodeItem
                 streamInfo = info
+                mediaSegments = segments
 
                 let position = episodeItem.userData?.playbackPosition ?? 0
                 if position > 30 {
@@ -162,6 +257,11 @@ final class VideoPlayerCoordinator {
         )
         currentItem = item
         streamInfo = info
+        mediaSegments = []
+        sourceVideoHeight = nil
+        sourceVideoBitrate = nil
+        activeQuality = .auto
+        activeProvider = nil
         startPosition = item.userData?.playbackPosition ?? 0
         isPresented = true
     }
@@ -197,6 +297,11 @@ final class VideoPlayerCoordinator {
             try? await Task.sleep(for: .milliseconds(500))
             currentItem = nil
             streamInfo = nil
+            mediaSegments = []
+            sourceVideoHeight = nil
+            sourceVideoBitrate = nil
+            activeQuality = .auto
+            activeProvider = nil
             startPosition = 0
             savedPosition = 0
         }

@@ -1,5 +1,6 @@
 import Defaults
 import Foundation
+import Models
 
 extension Defaults.Keys {
     /// Whether downloads are allowed over cellular connections.
@@ -10,6 +11,10 @@ extension Defaults.Keys {
 
     /// Default playback speed (1.0 = normal). Persisted across sessions.
     static let videoPlaybackSpeed = Key<Float>("videoPlaybackSpeed", default: 1.0)
+
+    /// Maximum streaming quality for video playback.
+    /// "auto" uses the default device profile (120 Mbps, effectively direct play).
+    static let maxStreamingQuality = Key<StreamingQuality>("maxStreamingQuality", default: .auto)
 
     /// Whether to automatically play the next episode when the current one ends.
     static let autoPlayNextEpisode = Key<Bool>("autoPlayNextEpisode", default: true)
@@ -26,3 +31,7 @@ extension Defaults.Keys {
     /// The accent color name. Values: "default", "indigo", "purple", "pink", "red", "orange", "teal", "green".
     static let accentColor = Key<String>("accentColor", default: "default")
 }
+
+// MARK: - Defaults Conformance
+
+extension StreamingQuality: Defaults.Serializable {}

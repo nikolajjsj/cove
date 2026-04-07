@@ -27,7 +27,8 @@ struct RootView: View {
                 VideoPlayerView(
                     item: item,
                     streamInfo: streamInfo,
-                    startPosition: coordinator.startPosition
+                    startPosition: coordinator.startPosition,
+                    mediaSegments: coordinator.mediaSegments
                 )
                 .environment(appState)
                 .environment(authManager)

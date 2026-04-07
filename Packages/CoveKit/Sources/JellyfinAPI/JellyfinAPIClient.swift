@@ -188,7 +188,7 @@ public final class JellyfinAPIClient: Sendable {
         let fields = [
             "Overview", "Genres", "DateCreated", "UserData", "CommunityRating", "OfficialRating",
             "ProductionYear", "People", "RemoteTrailers", "ProviderIds", "Studios", "Taglines",
-            "OriginalTitle", "EndDate", "MediaSources", "PremiereDate",
+            "OriginalTitle", "EndDate", "MediaSources", "PremiereDate", "Chapters",
         ]
         let queryItems = [URLQueryItem(name: "Fields", value: fields.joined(separator: ","))]
         logger.debug("Fetching item \(itemId)")
@@ -216,6 +216,22 @@ public final class JellyfinAPIClient: Sendable {
         if let tag { queryItems.append(URLQueryItem(name: "tag", value: tag)) }
         if !queryItems.isEmpty { urlComponents?.queryItems = queryItems }
         return urlComponents?.url
+    }
+
+    /// Build a URL for a chapter image.
+    public func chapterImageURL(
+        itemId: String,
+        chapterIndex: Int,
+        tag: String,
+        maxWidth: Int = 400
+    ) -> URL {
+        var url = baseURL.appendingPathComponent("Items/\(itemId)/Images/Chapter/\(chapterIndex)")
+        url.append(queryItems: [
+            URLQueryItem(name: "tag", value: tag),
+            URLQueryItem(name: "maxWidth", value: String(maxWidth)),
+            URLQueryItem(name: "quality", value: "90"),
+        ])
+        return url
     }
 
     // MARK: - Artists
@@ -766,6 +782,24 @@ public final class JellyfinAPIClient: Sendable {
         logger.debug("Deleting item \(itemId)")
         try await httpClient.request(
             url: url, method: .delete, headers: authHeaders)
+    }
+
+    // MARK: - Media Segments
+
+    /// Fetch media segments (intro, outro, credits, etc.) for an item.
+    /// Returns empty array if the server doesn't support media segments (pre-10.9).
+    public func getMediaSegments(
+        itemId: String,
+        includeSegmentTypes: [String] = ["Intro", "Outro", "Recap", "Credits"]
+    ) async throws -> MediaSegmentQueryResult {
+        let url = baseURL.appendingPathComponent("MediaSegments/\(itemId)")
+        let queryItems = [
+            URLQueryItem(
+                name: "IncludeSegmentTypes", value: includeSegmentTypes.joined(separator: ","))
+        ]
+        logger.debug("Fetching media segments for item \(itemId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
     }
 }
 

@@ -37,6 +37,9 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
     public let indexNumber: Int?
     public let parentIndexNumber: Int?
 
+    // Chapter markers within the media item
+    public let chapters: [Chapter]
+
     /// Runtime in seconds, derived from `runTimeTicks`.
     public var runtime: TimeInterval? {
         runTimeTicks.map { TimeInterval($0) / 10_000_000.0 }
@@ -71,7 +74,8 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
         seriesName: String? = nil,
         seriesId: ItemID? = nil,
         indexNumber: Int? = nil,
-        parentIndexNumber: Int? = nil
+        parentIndexNumber: Int? = nil,
+        chapters: [Chapter] = []
     ) {
         self.id = id
         self.title = title
@@ -102,5 +106,6 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
         self.seriesId = seriesId
         self.indexNumber = indexNumber
         self.parentIndexNumber = parentIndexNumber
+        self.chapters = chapters
     }
 }

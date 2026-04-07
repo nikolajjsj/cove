@@ -71,6 +71,8 @@ enum JellyfinMapper {
             mappedImageTags = tags.isEmpty ? nil : tags
         }
 
+        let chapters = mapChapters(dto.chapters)
+
         return MediaItem(
             id: ItemID(id),
             title: name,
@@ -100,7 +102,8 @@ enum JellyfinMapper {
             seriesName: dto.seriesName,
             seriesId: dto.seriesId.map { ItemID($0) },
             indexNumber: dto.indexNumber,
-            parentIndexNumber: dto.parentIndexNumber
+            parentIndexNumber: dto.parentIndexNumber,
+            chapters: chapters
         )
     }
 
@@ -355,10 +358,55 @@ enum JellyfinMapper {
                 width: dto.width,
                 height: dto.height,
                 channels: dto.channels,
+                bitrate: dto.bitRate,
                 videoRange: dto.videoRange,
                 videoRangeType: dto.videoRangeType
             )
         }
+    }
+
+    // MARK: - Chapter Mapping
+
+    static func mapChapter(_ dto: ChapterInfoDto, index: Int) -> Chapter? {
+        guard let name = dto.name, let ticks = dto.startPositionTicks else { return nil }
+        return Chapter(
+            id: index,
+            name: name,
+            startPosition: TimeInterval(ticks) / 10_000_000.0,
+            imageTag: dto.imageTag
+        )
+    }
+
+    static func mapChapters(_ dtos: [ChapterInfoDto]?) -> [Chapter] {
+        guard let dtos else { return [] }
+        return dtos.enumerated().compactMap { index, dto in
+            mapChapter(dto, index: index)
+        }
+    }
+
+    // MARK: - Media Segment Mapping
+
+    static func mapMediaSegment(_ dto: MediaSegmentDto) -> MediaSegment? {
+        guard let id = dto.id,
+            let itemId = dto.itemId,
+            let typeString = dto.type,
+            let startTicks = dto.startTicks,
+            let endTicks = dto.endTicks
+        else { return nil }
+
+        let type = MediaSegmentType(rawValue: typeString) ?? .unknown
+        return MediaSegment(
+            id: id,
+            itemId: ItemID(itemId),
+            type: type,
+            startTime: TimeInterval(startTicks) / 10_000_000.0,
+            endTime: TimeInterval(endTicks) / 10_000_000.0
+        )
+    }
+
+    static func mapMediaSegments(_ result: MediaSegmentQueryResult) -> [MediaSegment] {
+        guard let items = result.items else { return [] }
+        return items.compactMap { mapMediaSegment($0) }
     }
 
     // MARK: - Helpers

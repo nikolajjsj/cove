@@ -10,6 +10,7 @@ public struct MediaStream: Codable, Hashable, Sendable {
     public let width: Int?
     public let height: Int?
     public let channels: Int?
+    public let bitrate: Int?
     public let videoRange: String?
     public let videoRangeType: String?
 
@@ -23,6 +24,7 @@ public struct MediaStream: Codable, Hashable, Sendable {
         width: Int? = nil,
         height: Int? = nil,
         channels: Int? = nil,
+        bitrate: Int? = nil,
         videoRange: String? = nil,
         videoRangeType: String? = nil
     ) {
@@ -35,6 +37,7 @@ public struct MediaStream: Codable, Hashable, Sendable {
         self.width = width
         self.height = height
         self.channels = channels
+        self.bitrate = bitrate
         self.videoRange = videoRange
         self.videoRangeType = videoRangeType
     }

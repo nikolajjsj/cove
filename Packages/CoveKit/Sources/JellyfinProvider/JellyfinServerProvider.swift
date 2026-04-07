@@ -208,6 +208,22 @@ public final class JellyfinServerProvider: MediaServerProvider,
         )
     }
 
+    /// Build a URL for a chapter image.
+    public func chapterImageURL(
+        itemId: ItemID,
+        chapterIndex: Int,
+        tag: String,
+        maxWidth: Int = 400
+    ) -> URL? {
+        guard let client = state.client else { return nil }
+        return client.chapterImageURL(
+            itemId: itemId.rawValue,
+            chapterIndex: chapterIndex,
+            tag: tag,
+            maxWidth: maxWidth
+        )
+    }
+
     public func search(query: String, mediaTypes: [MediaType]) async throws -> SearchResults {
         let (client, userId) = try authenticatedClient()
         let result = try await client.getItems(
@@ -409,6 +425,19 @@ public final class JellyfinServerProvider: MediaServerProvider,
             userId: userId
         )
         return dtos.compactMap { JellyfinMapper.mapItem($0) }
+    }
+
+    /// Fetch skippable segments (intro, credits, recap, etc.) for an item.
+    /// Gracefully returns an empty array if the server doesn't support segments.
+    public func mediaSegments(for itemId: ItemID) async throws -> [MediaSegment] {
+        let (client, _) = try authenticatedClient()
+        do {
+            let result = try await client.getMediaSegments(itemId: itemId.rawValue)
+            return JellyfinMapper.mapMediaSegments(result)
+        } catch {
+            // Server might not support MediaSegments (pre-10.9) — fail silently
+            return []
+        }
     }
 
     public func resumeItems() async throws -> [MediaItem] {

@@ -9,6 +9,7 @@ struct VideoPlayerView: View {
     let item: MediaItem
     let streamInfo: StreamInfo
     let startPosition: TimeInterval
+    let mediaSegments: [MediaSegment]
 
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
@@ -36,6 +37,7 @@ struct VideoPlayerView: View {
     // Center-controls skip animation triggers
     @State private var forwardSkipTrigger: Int = 0
     @State private var backwardSkipTrigger: Int = 0
+    @State private var showChapterList = false
 
     // Landscape orientation
     #if os(iOS)
@@ -105,6 +107,10 @@ struct VideoPlayerView: View {
                 .zIndex(2.5)
             }
 
+            // Skip segment button (intro, credits, recap)
+            skipSegmentButton
+                .zIndex(2.8)
+
             // Custom controls overlay — always in the tree for snappy toggling.
             // We animate opacity instead of inserting/removing the view.
             controlsOverlay
@@ -150,6 +156,31 @@ struct VideoPlayerView: View {
                 hasStartedPlaying = true
                 scheduleControlsHide()
             }
+        }
+        .onChange(of: coordinator.isSwitchingQuality) { wasSwitching, isSwitching in
+            // When a quality switch completes, reload the player with the new stream
+            if wasSwitching && !isSwitching, let newInfo = coordinator.streamInfo {
+                videoManager.loadAndPlay(
+                    item: item,
+                    streamInfo: newInfo,
+                    startPosition: coordinator.startPosition
+                )
+            }
+        }
+        .sheet(isPresented: $showChapterList) {
+            ChapterListSheet(
+                chapters: item.chapters,
+                currentTime: videoManager.currentTime,
+                duration: videoManager.duration,
+                itemId: item.id,
+                onSelectChapter: { chapter in
+                    videoManager.seek(to: chapter.startPosition)
+                    showChapterList = false
+                    resetControlsTimer()
+                }
+            )
+            .environment(authManager)
+            .presentationDetents([.medium, .large])
         }
 
     }
@@ -242,6 +273,20 @@ struct VideoPlayerView: View {
             }
 
             Spacer()
+
+            if !item.chapters.isEmpty {
+                Button {
+                    showChapterList = true
+                    controlsTimer?.cancel()
+                } label: {
+                    Image(systemName: "list.bullet.rectangle")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
 
             // Aspect ratio toggle
             Button {
@@ -370,6 +415,11 @@ struct VideoPlayerView: View {
 
                 Spacer()
 
+                // Quality picker
+                if coordinator.availableQualities.count > 1 {
+                    qualityMenu
+                }
+
                 // Speed picker — inline Menu instead of a full sheet
                 speedMenu
 
@@ -391,6 +441,50 @@ struct VideoPlayerView: View {
                 #endif
             }
         }
+    }
+
+    // MARK: - Quality Menu
+
+    private var qualityMenu: some View {
+        Menu {
+            Picker(
+                "Quality",
+                selection: Binding(
+                    get: { coordinator.activeQuality },
+                    set: { newQuality in
+                        coordinator.switchQuality(
+                            to: newQuality,
+                            currentTime: videoManager.currentTime
+                        )
+                        resetControlsTimer()
+                    }
+                )
+            ) {
+                ForEach(coordinator.availableQualities, id: \.self) { quality in
+                    Text(qualityLabel(for: quality)).tag(quality)
+                }
+            }
+        } label: {
+            Image(systemName: coordinator.activeQuality == .auto ? "dial.low" : "dial.high")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(
+                    coordinator.activeQuality == .auto ? .white : Color.accentColor
+                )
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+    }
+
+    private func qualityLabel(for quality: StreamingQuality) -> String {
+        if quality == .auto, let height = coordinator.sourceVideoHeight {
+            let resolution = height >= 2160 ? "4K" : "\(height)p"
+            if let bitrate = coordinator.sourceVideoBitrate {
+                let mbps = String(format: "%.0f", Double(bitrate) / 1_000_000)
+                return "Auto (\(resolution) · \(mbps) Mbps)"
+            }
+            return "Auto (\(resolution))"
+        }
+        return quality.label
     }
 
     // MARK: - Speed Menu
@@ -609,6 +703,48 @@ struct VideoPlayerView: View {
     }
 
     // MARK: - Next Episode Countdown
+
+    // MARK: - Skip Segment Button
+
+    @ViewBuilder
+    private var skipSegmentButton: some View {
+        if let segment = activeSkippableSegment {
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button {
+                        videoManager.seek(to: segment.endTime)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "forward.fill")
+                                .font(.subheadline)
+                            Text(segment.skipButtonLabel)
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(.white, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                }
+                .padding(.trailing, 24)
+                .padding(.bottom, 100)
+            }
+            .animation(.spring(duration: 0.4), value: activeSkippableSegment?.id)
+        }
+    }
+
+    /// The currently active skippable segment based on playback position.
+    private var activeSkippableSegment: MediaSegment? {
+        mediaSegments.first { $0.contains(time: videoManager.currentTime) }
+    }
 
     @ViewBuilder
     private func nextEpisodeCountdownView(next: MediaItem) -> some View {
