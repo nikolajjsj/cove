@@ -134,6 +134,8 @@ public final class JellyfinAPIClient: Sendable {
         ],
         searchTerm: String? = nil,
         isFavorite: Bool? = nil,
+        isPlayed: Bool? = nil,
+        genres: [String]? = nil,
         personIds: [String]? = nil
     ) async throws -> ItemsResult {
         let url = baseURL.appendingPathComponent("Users/\(userId)/Items")
@@ -159,6 +161,14 @@ public final class JellyfinAPIClient: Sendable {
         if let isFavorite {
             queryItems.append(
                 URLQueryItem(name: "IsFavorite", value: isFavorite ? "true" : "false"))
+        }
+        if let isPlayed {
+            queryItems.append(
+                URLQueryItem(name: "IsPlayed", value: isPlayed ? "true" : "false"))
+        }
+        if let genres {
+            queryItems.append(
+                URLQueryItem(name: "Genres", value: genres.joined(separator: "|")))
         }
         if let personIds {
             queryItems.append(

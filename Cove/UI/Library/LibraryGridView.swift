@@ -15,12 +15,67 @@ struct LibraryGridView: View {
     @State private var searchHasMore = false
     @State private var isSearchLoadingMore = false
 
+    // MARK: - Sort & Filter State
+
+    @State private var sortField: SortField = .name
+    @State private var sortOrder: Models.SortOrder = .ascending
+    @State private var watchedFilter: WatchedFilter = .all
+
     /// Number of items to fetch per page.
     private let pageSize = 40
 
     private let columns = [
         GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16)
     ]
+
+    // MARK: - Watched Filter
+
+    private enum WatchedFilter: String, Hashable, CaseIterable {
+        case all
+        case unwatched
+        case watched
+
+        var label: String {
+            switch self {
+            case .all: "All"
+            case .unwatched: "Unwatched"
+            case .watched: "Watched"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .all: "line.3.horizontal.decrease.circle"
+            case .unwatched: "eye.slash"
+            case .watched: "eye"
+            }
+        }
+    }
+
+    // MARK: - Computed Helpers
+
+    private var sortOptions: SortOptions {
+        SortOptions(field: sortField, order: sortOrder)
+    }
+
+    private var isPlayedFilter: Bool? {
+        switch watchedFilter {
+        case .all: nil
+        case .unwatched: false
+        case .watched: true
+        }
+    }
+
+    private var sortFieldLabel: String {
+        switch sortField {
+        case .name: "Name"
+        case .dateAdded: "Date Added"
+        case .premiereDate: "Release Date"
+        case .communityRating: "Rating"
+        case .runtime: "Runtime"
+        default: "Name"
+        }
+    }
 
     var body: some View {
         Group {
@@ -31,16 +86,88 @@ struct LibraryGridView: View {
             }
         }
         .searchable(text: $searchText, prompt: "Search this library…")
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                sortMenu
+            }
+        }
         .task(id: library?.id) {
             await loadFirstPage()
         }
         .task(id: searchText) {
             await performLibrarySearch()
         }
+        .onChange(of: sortField) { _, _ in
+            reloadAfterFilterChange()
+        }
+        .onChange(of: sortOrder) { _, _ in
+            reloadAfterFilterChange()
+        }
+        .onChange(of: watchedFilter) { _, _ in
+            reloadAfterFilterChange()
+        }
     }
 
     private var isActivelySearching: Bool {
         searchText.trimmingCharacters(in: .whitespaces).count >= 2
+    }
+
+    // MARK: - Sort Menu
+
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort By", selection: $sortField) {
+                Text("Name").tag(SortField.name)
+                Text("Date Added").tag(SortField.dateAdded)
+                Text("Release Date").tag(SortField.premiereDate)
+                Text("Rating").tag(SortField.communityRating)
+                Text("Runtime").tag(SortField.runtime)
+            }
+
+            Divider()
+
+            Picker("Order", selection: $sortOrder) {
+                Label("Ascending", systemImage: "arrow.up")
+                    .tag(Models.SortOrder.ascending)
+                Label("Descending", systemImage: "arrow.down")
+                    .tag(Models.SortOrder.descending)
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+        }
+    }
+
+    // MARK: - Filter Chip Bar
+
+    @ViewBuilder
+    private var filterChipBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                watchedChip
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var watchedChip: some View {
+        Menu {
+            Picker("Status", selection: $watchedFilter) {
+                ForEach(WatchedFilter.allCases, id: \.self) { filter in
+                    Label(filter.label, systemImage: filter.systemImage)
+                        .tag(filter)
+                }
+            }
+        } label: {
+            Label(
+                watchedFilter == .all ? "Watched Status" : watchedFilter.label,
+                systemImage: watchedFilter.systemImage
+            )
+            .font(.subheadline)
+        }
+        .buttonStyle(.bordered)
+        .tint(watchedFilter != .all ? .accentColor : .secondary)
+        .buttonBorderShape(.capsule)
     }
 
     // MARK: - Main Content
@@ -72,6 +199,8 @@ struct LibraryGridView: View {
 
     private var scrollContent: some View {
         ScrollView {
+            filterChipBar
+
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(loader.items) { item in
                     NavigationLink(value: item) {
@@ -83,7 +212,7 @@ struct LibraryGridView: View {
                     }
                 }
             }
-            .padding()
+            .padding(.horizontal)
 
             if loader.isLoadingMore {
                 HStack {
@@ -155,6 +284,26 @@ struct LibraryGridView: View {
         Task { await loadNextSearchPage() }
     }
 
+    // MARK: - Filter Change Reload
+
+    /// Resets the loader and search state, then reloads content using the
+    /// current sort and filter settings. Called from `.onChange` handlers
+    /// so that every sort/filter picker change is immediately reflected.
+    private func reloadAfterFilterChange() {
+        loader.reset()
+        searchResults = []
+        searchTotalCount = 0
+        searchHasMore = false
+
+        Task {
+            if isActivelySearching {
+                await performLibrarySearch()
+            } else {
+                await loadFirstPage()
+            }
+        }
+    }
+
     // MARK: - Data Loading
 
     private func loadFirstPage() async {
@@ -164,10 +313,12 @@ struct LibraryGridView: View {
         }
 
         let provider = authManager.provider
+        let sort = sortOptions
+        let played = isPlayedFilter
 
         await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
-            let sort = SortOptions(field: .name, order: .ascending)
             let filter = FilterOptions(
+                isPlayed: played,
                 limit: limit,
                 startIndex: startIndex,
                 includeItemTypes: library.includeItemTypes
@@ -196,8 +347,9 @@ struct LibraryGridView: View {
             try await Task.sleep(for: .milliseconds(300))
         } catch { return }
 
-        let sort = SortOptions(field: .name, order: .ascending)
+        let sort = sortOptions
         let filter = FilterOptions(
+            isPlayed: isPlayedFilter,
             limit: pageSize,
             startIndex: 0,
             searchTerm: query,
@@ -224,8 +376,9 @@ struct LibraryGridView: View {
 
         isSearchLoadingMore = true
 
-        let sort = SortOptions(field: .name, order: .ascending)
+        let sort = sortOptions
         let filter = FilterOptions(
+            isPlayed: isPlayedFilter,
             limit: pageSize,
             startIndex: searchResults.count,
             searchTerm: query,
