@@ -146,6 +146,18 @@ public final class PlayQueue {
         return tracks[currentIndex]
     }
 
+    /// Jump to the track at the given absolute index.
+    ///
+    /// Unlike `advance()` / `goBack()`, this ignores repeat mode and moves
+    /// directly to the requested position.  Returns the track at that index,
+    /// or `nil` if the index is out of bounds.
+    @discardableResult
+    public func skipTo(index: Int) -> Track? {
+        guard tracks.indices.contains(index) else { return nil }
+        currentIndex = index
+        return tracks[currentIndex]
+    }
+
     /// Insert a track immediately after the current track.
     public func addNext(_ track: Track) {
         let insertIndex = min(currentIndex + 1, tracks.count)

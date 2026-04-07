@@ -121,6 +121,22 @@ public final class AudioPlaybackManager {
         logger.info("Skipped to next track: \(self.queue.currentTrack?.title ?? "unknown")")
     }
 
+    /// Jump to a specific index in the queue and start playing.
+    public func skipTo(index: Int) {
+        guard queue.skipTo(index: index) != nil else {
+            logger.info("Cannot skip to index \(index) — out of bounds")
+            return
+        }
+
+        rebuildPlayerQueue()
+        playerBackend.play()
+        isPlaying = true
+        currentTime = 0
+        updateDuration()
+        updateNowPlaying()
+        logger.info("Skipped to index \(index): \(self.queue.currentTrack?.title ?? "unknown")")
+    }
+
     /// Go to the previous track, or restart the current track if more than 3 seconds in.
     public func previous() {
         if currentTime > 3 {

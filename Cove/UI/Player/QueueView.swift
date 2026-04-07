@@ -72,7 +72,13 @@ struct QueueView: View {
             if !upNext.isEmpty {
                 Section {
                     ForEach(Array(upNext.enumerated()), id: \.element.id) { offset, track in
-                        trackRow(track: track)
+                        Button {
+                            let absoluteIndex = queue.currentIndex + 1 + offset
+                            appState.audioPlayer.skipTo(index: absoluteIndex)
+                        } label: {
+                            trackRow(track: track)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .onDelete { offsets in
                         deleteUpNextTracks(at: offsets, queue: queue)
