@@ -124,49 +124,12 @@ struct MovieDetailView: View {
 
     private var heroSection: some View {
         HeroSection(imageURL: backdropURL) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(item.title)
-                    .font(.system(.title, design: .default, weight: .bold))
-                    .foregroundStyle(.primary)
-
-                // Original title (if different from the main title)
-                if let originalTitle = displayItem.originalTitle,
-                    !originalTitle.isEmpty,
-                    originalTitle != item.title
-                {
-                    Text(originalTitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary.opacity(0.8))
-                }
-
-                heroSubtitleLine
-
-                // Tagline
-                if let tagline = displayItem.tagline, !tagline.isEmpty {
-                    TaglineView(tagline: tagline)
-                }
-            }
-        }
-    }
-
-    // MARK: - Hero Subtitle (year · rating · runtime)
-
-    @ViewBuilder
-    private var heroSubtitleLine: some View {
-        let parts = heroSubtitleParts
-        if !parts.isEmpty {
-            HStack(spacing: 6) {
-                ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
-                    if index > 0 {
-                        Text("·")
-                            .foregroundStyle(.secondary)
-                            .font(.subheadline)
-                    }
-                    Text(part)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            VideoHeroOverlay(
+                title: item.title,
+                originalTitle: displayItem.originalTitle,
+                subtitleParts: heroSubtitleParts,
+                tagline: displayItem.tagline
+            )
         }
     }
 
@@ -202,20 +165,11 @@ struct MovieDetailView: View {
     }
 
     private func buildMetadataPills() -> [MetadataPill] {
-        var pills: [MetadataPill] = []
-
-        // Community rating — branded as "IMDb" when IMDB provider ID is present
-        let ratingSource: String? = displayItem.providerIds?.imdb != nil ? "IMDb" : nil
-        if let pill = MetadataPill.communityRating(item.communityRating ?? 0, source: ratingSource)
-        {
-            pills.append(pill)
-        }
-
-        // Critic rating — branded as "RT" when available
-        let criticSource: String? = (item.criticRating ?? 0) > 0 ? "RT" : nil
-        if let pill = MetadataPill.criticRating(item.criticRating ?? 0, source: criticSource) {
-            pills.append(pill)
-        }
+        var pills = MetadataPill.ratingPills(
+            communityRating: item.communityRating,
+            criticRating: item.criticRating,
+            hasImdb: displayItem.providerIds?.imdb != nil
+        )
 
         // Media info pills from streams
         if let streams = displayItem.mediaStreams {

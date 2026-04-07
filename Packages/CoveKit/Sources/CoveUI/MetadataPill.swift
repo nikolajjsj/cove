@@ -150,4 +150,35 @@ extension MetadataPill {
         }
         return MetadataPill(icon: "speaker.wave.2.fill", label: label, tint: nil)
     }
+
+    /// Creates the standard community-rating and critic-rating pills with
+    /// source branding (e.g. "IMDb", "RT") when provider IDs are available.
+    ///
+    /// This consolidates the shared rating-pill logic used by movie and series
+    /// detail views.
+    ///
+    /// - Parameters:
+    ///   - communityRating: The community rating value (e.g. 8.5).
+    ///   - criticRating: The critic rating percentage (e.g. 92).
+    ///   - hasImdb: Whether an IMDb provider ID is present (brands the rating as "IMDb").
+    /// - Returns: An array of 0–2 pills depending on which ratings are non-zero.
+    public static func ratingPills(
+        communityRating: Double?,
+        criticRating: Double?,
+        hasImdb: Bool = false
+    ) -> [MetadataPill] {
+        var pills: [MetadataPill] = []
+
+        let ratingSource: String? = hasImdb ? "IMDb" : nil
+        if let pill = MetadataPill.communityRating(communityRating ?? 0, source: ratingSource) {
+            pills.append(pill)
+        }
+
+        let criticSource: String? = (criticRating ?? 0) > 0 ? "RT" : nil
+        if let pill = MetadataPill.criticRating(criticRating ?? 0, source: criticSource) {
+            pills.append(pill)
+        }
+
+        return pills
+    }
 }
