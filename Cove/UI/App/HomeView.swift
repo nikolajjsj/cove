@@ -18,6 +18,7 @@ struct HomeView: View {
                         description: Text("No libraries found on this server.")
                     )
                 } else {
+                    HeroBannerView()
                     ContinueWatchingSection()
                     UpNextSection()
                     ForEach(appState.libraries.filter { $0.collectionType != .music }) { library in

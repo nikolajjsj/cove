@@ -539,6 +539,40 @@ public final class JellyfinAPIClient: Sendable {
             url: url, method: .get, headers: authHeaders, queryItems: queryItems)
     }
 
+    // MARK: - Suggestions
+
+    /// Get suggested items for a user.
+    /// `GET /Users/{userId}/Suggestions`
+    public func getSuggestions(
+        userId: String,
+        mediaTypes: [String]? = ["Video"],
+        type: [String]? = ["Movie", "Series"],
+        limit: Int? = 5,
+        fields: [String] = [
+            "Overview", "Genres", "DateCreated", "UserData", "CommunityRating", "OfficialRating",
+            "ProductionYear",
+        ]
+    ) async throws -> ItemsResult {
+        let url = baseURL.appendingPathComponent("Users/\(userId)/Suggestions")
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "Fields", value: fields.joined(separator: ","))
+        ]
+        if let mediaTypes {
+            queryItems.append(
+                URLQueryItem(name: "MediaType", value: mediaTypes.joined(separator: ",")))
+        }
+        if let type {
+            queryItems.append(URLQueryItem(name: "Type", value: type.joined(separator: ",")))
+        }
+        if let limit {
+            queryItems.append(URLQueryItem(name: "Limit", value: String(limit)))
+        }
+        logger.debug("Fetching suggestions for user \(userId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 600))
+    }
+
     // MARK: - Special Features
 
     /// Get special features for an item (behind-the-scenes, deleted scenes, etc.).

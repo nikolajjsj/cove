@@ -168,6 +168,27 @@ public final class JellyfinServerProvider: MediaServerProvider,
         return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
     }
 
+    public func suggestedItems(limit: Int = 8) async throws -> [MediaItem] {
+        let (client, userId) = try authenticatedClient()
+        do {
+            // Try the Suggestions endpoint (Jellyfin 10.7+)
+            let result = try await client.getSuggestions(userId: userId, limit: limit)
+            let items = (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+            if !items.isEmpty { return items }
+        } catch {
+            // Suggestions endpoint not available — fall through to fallback
+        }
+        // Fallback: random unplayed movies and series
+        let result = try await client.getItems(
+            userId: userId,
+            includeItemTypes: ["Movie", "Series"],
+            sortBy: "Random",
+            limit: limit,
+            isPlayed: false
+        )
+        return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+    }
+
     public func personItems(personId: ItemID) async throws -> [MediaItem] {
         let (client, userId) = try authenticatedClient()
         let result = try await client.getItems(
