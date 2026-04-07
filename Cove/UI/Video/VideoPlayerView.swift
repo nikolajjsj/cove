@@ -25,10 +25,6 @@ struct VideoPlayerView: View {
     // Controls stay visible until this becomes true.
     @State private var hasStartedPlaying = false
 
-    // Sheets
-    @State private var showSubtitlePicker = false
-    @State private var showAudioTrackPicker = false
-
     // Seeking (slider-driven)
     @State private var isSeeking = false
     @State private var seekTime: TimeInterval = 0
@@ -145,16 +141,7 @@ struct VideoPlayerView: View {
                 scheduleControlsHide()
             }
         }
-        .sheet(isPresented: $showSubtitlePicker) {
-            subtitlePickerSheet
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showAudioTrackPicker) {
-            audioTrackPickerSheet
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-        }
+
     }
 
     // MARK: - Controls Overlay
@@ -376,35 +363,14 @@ struct VideoPlayerView: View {
                 // Speed picker — inline Menu instead of a full sheet
                 speedMenu
 
-                // Audio track button (only shown when multiple tracks available)
+                // Audio track picker — inline Menu (context-menu style)
                 if videoManager.audioTracks.count > 1 {
-                    Button {
-                        showAudioTrackPicker = true
-                    } label: {
-                        Image(systemName: "waveform.circle")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+                    audioTrackMenu
                 }
 
-                // Subtitle button
+                // Subtitle picker — inline Menu (context-menu style)
                 if !videoManager.subtitleTracks.isEmpty {
-                    Button {
-                        showSubtitlePicker = true
-                    } label: {
-                        Image(
-                            systemName: videoManager.selectedSubtitleIndex != nil
-                                ? "captions.bubble.fill" : "captions.bubble"
-                        )
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+                    subtitleMenu
                 }
 
                 // AirPlay
@@ -497,129 +463,91 @@ struct VideoPlayerView: View {
         .tint(.white)
     }
 
-    // MARK: - Subtitle Picker Sheet
+    // MARK: - Subtitle Menu
 
-    @ViewBuilder
-    private var subtitlePickerSheet: some View {
-        NavigationStack {
-            List {
-                // "Off" option
-                Button {
-                    videoManager.selectSubtitle(at: nil)
-                    showSubtitlePicker = false
-                } label: {
-                    HStack {
-                        Text("Off")
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        if videoManager.selectedSubtitleIndex == nil {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(Color.accentColor)
-                                .fontWeight(.semibold)
-                        }
+    /// Inline subtitle picker presented as a compact Menu (context-menu style).
+    /// Uses -1 as a sentinel for "Off" since Picker needs a hashable, non-optional tag.
+    private var subtitleMenu: some View {
+        Menu {
+            Picker(
+                "Subtitles",
+                selection: Binding(
+                    get: { videoManager.selectedSubtitleIndex ?? -1 },
+                    set: { newIndex in
+                        videoManager.selectSubtitle(at: newIndex == -1 ? nil : newIndex)
+                        resetControlsTimer()
                     }
-                }
+                )
+            ) {
+                Text("Off").tag(-1)
 
-                // Subtitle tracks
                 ForEach(videoManager.subtitleTracks) { track in
-                    Button {
-                        videoManager.selectSubtitle(at: track.id)
-                        showSubtitlePicker = false
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(track.title)
-                                    .foregroundStyle(.primary)
-                                if let language = track.language {
-                                    Text(
-                                        Locale.current.localizedString(
-                                            forLanguageCode: language) ?? language
-                                    )
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                }
-                            }
-                            Spacer()
-                            if videoManager.selectedSubtitleIndex == track.id {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(Color.accentColor)
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                    }
+                    subtitleTrackLabel(for: track)
+                        .tag(track.id)
                 }
             }
-            .navigationTitle("Subtitles")
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        showSubtitlePicker = false
-                    }
-                }
-            }
+        } label: {
+            Image(
+                systemName: videoManager.selectedSubtitleIndex != nil
+                    ? "captions.bubble.fill" : "captions.bubble"
+            )
+            .font(.body.weight(.semibold))
+            .foregroundStyle(.white)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
         }
     }
 
-    // MARK: - Audio Track Picker Sheet
-
+    /// Label for a single subtitle track option inside the picker.
     @ViewBuilder
-    private var audioTrackPickerSheet: some View {
-        NavigationStack {
-            List {
+    private func subtitleTrackLabel(for track: SubtitleTrack) -> some View {
+        if let language = track.language,
+            let localized = Locale.current.localizedString(forLanguageCode: language)
+        {
+            Text("\(track.title) — \(localized)")
+        } else {
+            Text(track.title)
+        }
+    }
+
+    // MARK: - Audio Track Menu
+
+    /// Inline audio track picker presented as a compact Menu (context-menu style).
+    private var audioTrackMenu: some View {
+        Menu {
+            Picker(
+                "Audio Track",
+                selection: Binding(
+                    get: { videoManager.selectedAudioTrackIndex ?? 0 },
+                    set: { newIndex in
+                        videoManager.selectAudioTrack(at: newIndex)
+                        resetControlsTimer()
+                    }
+                )
+            ) {
                 ForEach(videoManager.audioTracks) { track in
-                    Button {
-                        videoManager.selectAudioTrack(at: track.id)
-                        showAudioTrackPicker = false
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack(spacing: 6) {
-                                    Text(track.title)
-                                        .foregroundStyle(.primary)
-                                    if track.isDefault {
-                                        Text("Default")
-                                            .font(.caption2.weight(.medium))
-                                            .foregroundStyle(.secondary)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(
-                                                Capsule().fill(.quaternary)
-                                            )
-                                    }
-                                }
-                                if let language = track.language {
-                                    Text(
-                                        Locale.current.localizedString(
-                                            forLanguageCode: language) ?? language
-                                    )
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                }
-                            }
-                            Spacer()
-                            if videoManager.selectedAudioTrackIndex == track.id {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(Color.accentColor)
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                    }
+                    audioTrackLabel(for: track)
+                        .tag(track.id)
                 }
             }
-            .navigationTitle("Audio")
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        showAudioTrackPicker = false
-                    }
-                }
-            }
+        } label: {
+            Image(systemName: "waveform.circle")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+    }
+
+    /// Label for a single audio track option inside the picker.
+    @ViewBuilder
+    private func audioTrackLabel(for track: AudioTrack) -> some View {
+        if let language = track.language,
+            let localized = Locale.current.localizedString(forLanguageCode: language)
+        {
+            Text("\(track.title) — \(localized)" + (track.isDefault ? " (Default)" : ""))
+        } else {
+            Text(track.title + (track.isDefault ? " (Default)" : ""))
         }
     }
 
