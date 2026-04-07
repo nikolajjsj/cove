@@ -17,14 +17,12 @@ struct PlaylistContextMenuModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .contextMenu {
-                // Play
                 Button {
                     Task { await playPlaylist(shuffle: false) }
                 } label: {
                     Label("Play", systemImage: "play.fill")
                 }
 
-                // Shuffle
                 Button {
                     Task { await playPlaylist(shuffle: true) }
                 } label: {
@@ -33,14 +31,12 @@ struct PlaylistContextMenuModifier: ViewModifier {
 
                 Divider()
 
-                // Play Next
                 Button {
                     Task { await queuePlaylist(next: true) }
                 } label: {
                     Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
                 }
 
-                // Play Later
                 Button {
                     Task { await queuePlaylist(next: false) }
                 } label: {
@@ -49,7 +45,6 @@ struct PlaylistContextMenuModifier: ViewModifier {
 
                 Divider()
 
-                // Rename
                 Button {
                     renameText = playlist.name
                     showRenameAlert = true
@@ -57,7 +52,6 @@ struct PlaylistContextMenuModifier: ViewModifier {
                     Label("Rename…", systemImage: "pencil")
                 }
 
-                // Delete
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
                 } label: {
@@ -101,19 +95,7 @@ struct PlaylistContextMenuModifier: ViewModifier {
     private func queuePlaylist(next: Bool) async {
         do {
             let tracks = try await appState.provider.playlistTracks(playlist: playlist.id)
-            guard !tracks.isEmpty else { return }
-            for track in tracks {
-                if next {
-                    appState.audioPlayer.queue.addNext(track)
-                } else {
-                    appState.audioPlayer.queue.addToEnd(track)
-                }
-            }
-            let message = next ? "Playing Next" : "Added to Up Next"
-            let icon =
-                next
-                ? "text.line.first.and.arrowtriangle.forward" : "text.line.last.and.arrowtriangle.forward"
-            appState.showToast(message, icon: icon)
+            appState.queueTracks(tracks, next: next)
         } catch {
             // Silently fail
         }
@@ -143,8 +125,6 @@ struct PlaylistContextMenuModifier: ViewModifier {
 }
 
 extension View {
-    /// Attaches a playlist context menu with Play, Shuffle, Play Next/Later,
-    /// Rename, and Delete actions.
     func playlistContextMenu(
         playlist: Playlist,
         onRenamed: (() -> Void)? = nil,

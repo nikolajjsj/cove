@@ -11,18 +11,21 @@ struct ArtistContextMenuModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .contextMenu {
-                // Start Radio
                 Button {
-                    Task { await startRadio() }
+                    Task { await appState.startRadio(for: artist.id) }
                 } label: {
                     Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
                 }
 
                 Divider()
 
-                // Favorite / Unfavorite
                 Button {
-                    Task { await toggleFavorite() }
+                    Task {
+                        await appState.toggleFavorite(
+                            itemId: artist.id,
+                            isFavorite: artist.userData?.isFavorite == true
+                        )
+                    }
                 } label: {
                     let isFav = artist.userData?.isFavorite == true
                     Label(
@@ -32,36 +35,9 @@ struct ArtistContextMenuModifier: ViewModifier {
                 }
             }
     }
-
-    // MARK: - Actions
-
-    private func startRadio() async {
-        do {
-            let tracks = try await appState.provider.instantMix(for: artist.id, limit: 50)
-            guard !tracks.isEmpty else { return }
-            appState.audioPlayer.play(tracks: tracks, startingAt: 0)
-            appState.showToast("Radio started", icon: "dot.radiowaves.left.and.right")
-        } catch {
-            // Silently fail
-        }
-    }
-
-    private func toggleFavorite() async {
-        let isFav = artist.userData?.isFavorite == true
-        do {
-            try await appState.provider.setFavorite(itemId: artist.id, isFavorite: !isFav)
-            appState.showToast(
-                isFav ? "Removed from Favorites" : "Added to Favorites",
-                icon: isFav ? "heart" : "heart.fill"
-            )
-        } catch {
-            // Silently fail
-        }
-    }
 }
 
 extension View {
-    /// Attaches an artist context menu with Radio and Favorite actions.
     func artistContextMenu(artist: MediaItem) -> some View {
         modifier(ArtistContextMenuModifier(artist: artist))
     }

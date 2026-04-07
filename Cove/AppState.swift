@@ -592,6 +592,51 @@ final class AppState {
         navigationPaths[tab, default: NavigationPath()].append(destination)
     }
 
+    // MARK: - Common Media Actions
+
+    /// Toggle the favorite state for any media item.
+    func toggleFavorite(itemId: ItemID, isFavorite: Bool) async {
+        do {
+            try await provider.setFavorite(itemId: itemId, isFavorite: !isFavorite)
+            showToast(
+                isFavorite ? "Removed from Favorites" : "Added to Favorites",
+                icon: isFavorite ? "heart" : "heart.fill"
+            )
+        } catch {
+            // Silently fail — UI will be stale but recoverable on next load
+        }
+    }
+
+    /// Start an instant-mix radio station seeded from any item.
+    func startRadio(for itemId: ItemID) async {
+        do {
+            let tracks = try await provider.instantMix(for: itemId, limit: 50)
+            guard !tracks.isEmpty else { return }
+            audioPlayer.play(tracks: tracks, startingAt: 0)
+            showToast("Radio started", icon: "dot.radiowaves.left.and.right")
+        } catch {
+            // Silently fail
+        }
+    }
+
+    /// Queue an array of tracks to play next or at the end.
+    func queueTracks(_ tracks: [Track], next: Bool) {
+        guard !tracks.isEmpty else { return }
+        for track in tracks {
+            if next {
+                audioPlayer.queue.addNext(track)
+            } else {
+                audioPlayer.queue.addToEnd(track)
+            }
+        }
+        let message = next ? "Playing Next" : "Added to Up Next"
+        let icon =
+            next
+            ? "text.line.first.and.arrowtriangle.forward"
+            : "text.line.last.and.arrowtriangle.forward"
+        showToast(message, icon: icon)
+    }
+
     // MARK: - Offline Sync
 
     private func syncOfflineReports() async {
