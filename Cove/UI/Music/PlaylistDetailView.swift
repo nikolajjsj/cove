@@ -153,27 +153,11 @@ struct PlaylistDetailView: View {
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        HStack(spacing: 16) {
-            Button {
-                playAllTracks(startingAt: 0)
-            } label: {
-                Label("Play", systemImage: "play.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(tracks.isEmpty)
-
-            Button {
-                playShuffled()
-            } label: {
-                Label("Shuffle", systemImage: "shuffle")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .disabled(tracks.isEmpty)
-        }
+        PlayShuffleButtons(
+            isDisabled: tracks.isEmpty,
+            onPlay: { playAllTracks(startingAt: 0) },
+            onShuffle: { playShuffled() }
+        )
     }
 
     // MARK: - Track List

@@ -199,30 +199,11 @@ struct AlbumDetailView: View {
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        HStack(spacing: 16) {
-            Button {
-                playAllTracks(startingAt: 0)
-            } label: {
-                Label("Play", systemImage: "play.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.accentColor)
-            .disabled(tracks.isEmpty)
-
-            Button {
-                playShuffled()
-            } label: {
-                Label("Shuffle", systemImage: "shuffle")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-            }
-            .buttonStyle(.bordered)
-            .disabled(tracks.isEmpty)
-        }
+        PlayShuffleButtons(
+            isDisabled: tracks.isEmpty,
+            onPlay: { playAllTracks(startingAt: 0) },
+            onShuffle: { playShuffled() }
+        )
     }
 
     // MARK: - Track List
