@@ -1,7 +1,7 @@
+import JellyfinProvider
 import MediaServerKit
 import Models
 import SwiftUI
-import JellyfinProvider
 
 /// A landscape 16:9 card showing a video thumbnail with a centered play button overlay.
 ///
@@ -47,6 +47,7 @@ struct UpNextCard: View {
             }
         }
         .frame(width: 240)
+        .mediaContextMenu(item: item)
     }
 
     // MARK: - Helpers

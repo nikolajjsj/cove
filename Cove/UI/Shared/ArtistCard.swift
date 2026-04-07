@@ -5,7 +5,7 @@ import SwiftUI
 /// A self-contained artist card that includes navigation and context menu.
 ///
 /// Wraps a `NavigationLink(value:)` to the artist's `MediaItem` and attaches
-/// the full `.artistContextMenu(artist:)` modifier, so call-sites never need
+/// the full `.mediaContextMenu(item:)` modifier, so call-sites never need
 /// to remember to add either.
 ///
 /// Works in both grid and shelf contexts:
@@ -26,7 +26,7 @@ struct ArtistCard: View {
             cardContent
         }
         .buttonStyle(.plain)
-        .artistContextMenu(artist: item)
+        .mediaContextMenu(item: item)
     }
 
     private var cardContent: some View {

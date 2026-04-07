@@ -238,7 +238,7 @@ struct AlbumDetailView: View {
                                 }
                             }
                         } else {
-                            row.trackContextMenu(track: track)
+                            row.mediaContextMenu(track: track)
                         }
 
                         if localIndex < discTracks.count - 1 {

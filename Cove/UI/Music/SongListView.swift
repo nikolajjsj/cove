@@ -62,16 +62,7 @@ struct SongListView: View {
                     playFromIndex(index)
                 }
                 .onAppear { loader.onItemAppeared(item) }
-                .trackContextMenu(
-                    track: Track(
-                        id: TrackID(item.id.rawValue),
-                        title: item.title,
-                        albumId: item.albumId.map { AlbumID($0.rawValue) },
-                        albumName: item.albumName,
-                        artistName: item.artistName,
-                        duration: item.runtime,
-                        userData: item.userData
-                    ))
+                .mediaContextMenu(item: item)
             }
 
             if loader.isLoadingMore {

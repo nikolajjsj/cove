@@ -1,7 +1,7 @@
+import JellyfinProvider
 import MediaServerKit
 import Models
 import SwiftUI
-import JellyfinProvider
 
 /// A landscape 16:9 card showing a video thumbnail with a progress bar overlay.
 ///
@@ -63,6 +63,7 @@ struct ContinueWatchingCard: View {
             }
         }
         .frame(width: 240)
+        .mediaContextMenu(item: item)
     }
 
     // MARK: - Helpers

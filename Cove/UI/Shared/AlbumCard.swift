@@ -5,7 +5,7 @@ import SwiftUI
 /// A self-contained album card that includes navigation and context menu.
 ///
 /// Wraps a `NavigationLink(value:)` to the album's `MediaItem` and attaches
-/// the full `.albumContextMenu(album:)` modifier, so call-sites never need
+/// the full `.mediaContextMenu(item:)` modifier, so call-sites never need
 /// to remember to add either.
 ///
 /// Works in both grid and shelf contexts:
@@ -40,7 +40,7 @@ struct AlbumCard: View {
             cardContent
         }
         .buttonStyle(.plain)
-        .albumContextMenu(album: item)
+        .mediaContextMenu(item: item)
     }
 
     private var cardContent: some View {

@@ -25,6 +25,7 @@ struct LibraryItemCard: View {
                 .foregroundStyle(.primary)
         }
         .frame(maxWidth: .infinity)
+        .mediaContextMenu(item: item)
     }
 
     // MARK: - Helpers

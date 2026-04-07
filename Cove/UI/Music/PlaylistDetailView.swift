@@ -177,7 +177,7 @@ struct PlaylistDetailView: View {
                 ) {
                     playAllTracks(startingAt: index)
                 }
-                .trackContextMenu(track: track)
+                .mediaContextMenu(track: track)
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
                         Task { await removeTrack(at: index) }

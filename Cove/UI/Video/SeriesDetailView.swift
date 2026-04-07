@@ -402,7 +402,7 @@ struct SeriesDetailView: View {
         } else {
             LazyVStack(spacing: 5) {
                 ForEach(Array(episodes.enumerated()), id: \.element.id) { index, episode in
-                    EpisodeRow(
+                    let row = EpisodeRow(
                         episode: episode,
                         thumbnailURL: episodeThumbnailURL(for: episode),
                         progress: episodeProgress(for: episode),
@@ -425,8 +425,9 @@ struct SeriesDetailView: View {
                                 .overlay { ProgressView() }
                         }
                     }
-                    .contextMenu {
-                        if isOffline {
+
+                    if isOffline {
+                        row.contextMenu {
                             Button(role: .destructive) {
                                 if let dl = offlineEpisodeDownloads.first(where: {
                                     $0.itemId == episode.id
@@ -437,6 +438,12 @@ struct SeriesDetailView: View {
                                 Label("Remove Download", systemImage: "trash")
                             }
                         }
+                    } else {
+                        row.mediaContextMenu(
+                            episode: episode,
+                            seriesId: item.id,
+                            seriesName: item.title
+                        )
                     }
 
                     if index < episodes.count - 1 {

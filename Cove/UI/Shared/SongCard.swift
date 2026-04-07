@@ -5,7 +5,7 @@ import SwiftUI
 /// A self-contained song card for horizontal shelves with tap-to-play and context menu.
 ///
 /// Unlike `AlbumCard` and `ArtistCard`, tapping a song card plays it rather than
-/// navigating. The full `.trackContextMenu(track:)` is built in.
+/// navigating. The full `.mediaContextMenu(item:)` is built in.
 ///
 /// ```swift
 /// SongCard(item: song, imageURL: url) {
@@ -17,19 +17,6 @@ struct SongCard: View {
     let subtitle: String?
     let imageURL: URL?
     let onTap: () -> Void
-
-    /// The `Track` constructed from the `MediaItem`, used for the context menu.
-    private var track: Track {
-        Track(
-            id: TrackID(item.id.rawValue),
-            title: item.title,
-            albumId: item.albumId.map { AlbumID($0.rawValue) },
-            albumName: item.albumName,
-            artistName: item.artistName,
-            duration: item.runtime,
-            userData: item.userData
-        )
-    }
 
     init(
         item: MediaItem,
@@ -48,7 +35,7 @@ struct SongCard: View {
             cardContent
         }
         .buttonStyle(.plain)
-        .trackContextMenu(track: track)
+        .mediaContextMenu(item: item)
     }
 
     private var cardContent: some View {

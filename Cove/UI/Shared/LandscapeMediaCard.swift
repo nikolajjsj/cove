@@ -38,5 +38,6 @@ struct LandscapeMediaCard: View {
                 .foregroundStyle(.primary)
         }
         .frame(width: 220)
+        .mediaContextMenu(item: item)
     }
 }
