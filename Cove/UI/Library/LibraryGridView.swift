@@ -1,3 +1,4 @@
+import CoveUI
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -6,12 +7,7 @@ import SwiftUI
 struct LibraryGridView: View {
     let library: MediaLibrary?
     @Environment(AppState.self) private var appState
-    @State private var items: [MediaItem] = []
-    @State private var isLoading = true
-    @State private var isLoadingMore = false
-    @State private var totalCount = 0
-    @State private var hasMore = false
-    @State private var errorMessage: String?
+    @State private var loader = PagedCollectionLoader<MediaItem>()
     @State private var searchText = ""
     @State private var searchResults: [MediaItem] = []
     @State private var isSearchingLibrary = false
@@ -30,23 +26,8 @@ struct LibraryGridView: View {
         Group {
             if isActivelySearching {
                 searchContent
-            } else if isLoading && items.isEmpty {
-                ProgressView("Loading…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage, items.isEmpty {
-                ContentUnavailableView(
-                    "Unable to Load",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(errorMessage)
-                )
-            } else if items.isEmpty {
-                ContentUnavailableView(
-                    "No Items",
-                    systemImage: "tray",
-                    description: Text("This library is empty.")
-                )
             } else {
-                scrollContent
+                mainContent
             }
         }
         .searchable(text: $searchText, prompt: "Search this library…")
@@ -62,24 +43,49 @@ struct LibraryGridView: View {
         searchText.trimmingCharacters(in: .whitespaces).count >= 2
     }
 
+    // MARK: - Main Content
+
+    @ViewBuilder
+    private var mainContent: some View {
+        switch loader.phase {
+        case .loading:
+            ProgressView("Loading…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let message):
+            ContentUnavailableView(
+                "Unable to Load",
+                systemImage: "exclamationmark.triangle",
+                description: Text(message)
+            )
+        case .empty:
+            ContentUnavailableView(
+                "No Items",
+                systemImage: "tray",
+                description: Text("This library is empty.")
+            )
+        case .loaded:
+            scrollContent
+        }
+    }
+
     // MARK: - Scroll Content
 
     private var scrollContent: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(items) { item in
+                ForEach(loader.items) { item in
                     NavigationLink(value: item) {
                         LibraryItemCard(item: item)
                     }
                     .buttonStyle(.plain)
                     .onAppear {
-                        onItemAppeared(item)
+                        loader.onItemAppeared(item)
                     }
                 }
             }
             .padding()
 
-            if isLoadingMore {
+            if loader.isLoadingMore {
                 HStack {
                     Spacer()
                     ProgressView()
@@ -88,8 +94,8 @@ struct LibraryGridView: View {
                 }
             }
 
-            if !items.isEmpty && !hasMore && totalCount > 0 {
-                Text("\(totalCount) \(itemNoun)")
+            if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
+                Text("\(loader.totalCount) \(itemNoun)")
                     .font(.footnote)
                     .foregroundStyle(.tertiary)
                     .padding(.bottom, 24)
@@ -149,89 +155,28 @@ struct LibraryGridView: View {
         Task { await loadNextSearchPage() }
     }
 
-    // MARK: - Pagination Trigger
-
-    /// When an item appears on screen, check if we need to pre-fetch the next page.
-    /// We trigger the load when the user scrolls within the last 10 items.
-    private func onItemAppeared(_ item: MediaItem) {
-        guard hasMore, !isLoadingMore else { return }
-
-        let thresholdIndex = max(items.count - 10, 0)
-        guard let index = items.firstIndex(where: { $0.id == item.id }),
-            index >= thresholdIndex
-        else {
-            return
-        }
-
-        Task {
-            await loadNextPage()
-        }
-    }
-
     // MARK: - Data Loading
 
     private func loadFirstPage() async {
         guard let library else {
-            isLoading = false
+            loader.reset()
             return
         }
 
-        isLoading = true
-        errorMessage = nil
-        items = []
+        let provider = appState.provider
 
-        let sort = SortOptions(field: .name, order: .ascending)
-        let filter = FilterOptions(
-            limit: pageSize,
-            startIndex: 0,
-            includeItemTypes: library.includeItemTypes,
-        )
-
-        do {
-            let result = try await appState.provider.pagedItems(
+        await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
+            let sort = SortOptions(field: .name, order: .ascending)
+            let filter = FilterOptions(
+                limit: limit,
+                startIndex: startIndex,
+                includeItemTypes: library.includeItemTypes
+            )
+            let result = try await provider.pagedItems(
                 in: library, sort: sort, filter: filter
             )
-            items = result.items
-            totalCount = result.totalCount
-            hasMore = result.hasMore
-        } catch {
-            errorMessage = error.localizedDescription
-            items = []
+            return .init(items: result.items, totalCount: result.totalCount)
         }
-
-        isLoading = false
-    }
-
-    private func loadNextPage() async {
-        guard let library, hasMore, !isLoadingMore else { return }
-
-        isLoadingMore = true
-
-        let sort = SortOptions(field: .name, order: .ascending)
-        let filter = FilterOptions(
-            limit: pageSize,
-            startIndex: items.count,
-            includeItemTypes: library.includeItemTypes,
-        )
-
-        do {
-            let result = try await appState.provider.pagedItems(
-                in: library, sort: sort, filter: filter
-            )
-
-            // Deduplicate by ID in case the server shifts items between pages
-            let existingIDs = Set(items.map(\.id))
-            let newItems = result.items.filter { !existingIDs.contains($0.id) }
-
-            items.append(contentsOf: newItems)
-            totalCount = result.totalCount
-            hasMore = result.hasMore
-        } catch {
-            // On pagination failure, just stop paging — don't clear existing items
-            hasMore = false
-        }
-
-        isLoadingMore = false
     }
 
     // MARK: - Search
@@ -308,11 +253,11 @@ struct LibraryGridView: View {
     private var itemNoun: String {
         guard let collectionType = library?.collectionType else { return "items" }
         switch collectionType {
-        case .movies: return totalCount == 1 ? "movie" : "movies"
-        case .tvshows: return totalCount == 1 ? "show" : "shows"
-        case .music: return totalCount == 1 ? "item" : "items"
-        case .boxsets: return totalCount == 1 ? "collection" : "collections"
-        default: return totalCount == 1 ? "item" : "items"
+        case .movies: return loader.totalCount == 1 ? "movie" : "movies"
+        case .tvshows: return loader.totalCount == 1 ? "show" : "shows"
+        case .music: return loader.totalCount == 1 ? "item" : "items"
+        case .boxsets: return loader.totalCount == 1 ? "collection" : "collections"
+        default: return loader.totalCount == 1 ? "item" : "items"
         }
     }
 }

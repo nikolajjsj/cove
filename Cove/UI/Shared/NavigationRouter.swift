@@ -143,6 +143,8 @@ extension MediaLibrary {
             return ["Series"]
         case .boxsets:
             return ["BoxSet"]
+        case .music:
+            return ["MusicAlbum"]
         default:
             return nil
         }

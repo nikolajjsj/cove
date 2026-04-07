@@ -90,9 +90,25 @@ private struct AsyncContentModifier<Value: Sendable, TaskID: Equatable & Sendabl
 
     // MARK: - Load Implementations
 
-    /// Initial / re-triggered load: transitions through `.loading`.
+    /// Initial / re-triggered load.
+    ///
+    /// **Stale-while-revalidate:** when the phase already holds a loaded value
+    /// (e.g. `.task` re-fired on navigate-back), we skip the `.loading`
+    /// transition so the user never sees a spinner over content they already
+    /// have. The fetch runs in the background and the result is swapped in
+    /// silently. If the background fetch fails, we keep the stale data rather
+    /// than flashing an error screen.
+    ///
+    /// On a cold start (`phase.value == nil`) we behave as before: transition
+    /// through `.loading` and surface any failure via `.failed`.
     private func performInitialLoad() async {
-        phase = .loading
+        let existingValue = phase.value
+
+        // Only show the loading spinner when there is no data to display yet.
+        if existingValue == nil {
+            phase = .loading
+        }
+
         do {
             let result = try await load()
             guard !Task.isCancelled else { return }
@@ -101,6 +117,10 @@ private struct AsyncContentModifier<Value: Sendable, TaskID: Equatable & Sendabl
             // Task was replaced (id changed) or view disappeared — leave phase as-is.
         } catch {
             guard !Task.isCancelled else { return }
+            // If we already had data, keep showing it instead of flashing an error.
+            if existingValue != nil {
+                return
+            }
             phase = .failed(error)
         }
     }

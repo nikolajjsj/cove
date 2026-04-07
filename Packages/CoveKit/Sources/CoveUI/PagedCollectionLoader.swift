@@ -139,6 +139,10 @@ where Element.ID: Hashable {
         pageSize: Int = 40,
         _ fetch: @escaping PageFetcher
     ) async {
+        // If items are already loaded (e.g. `.task` re-firing on navigate-back),
+        // preserve existing data and scroll position by skipping the reload.
+        guard items.isEmpty else { return }
+
         self.pageFetcher = fetch
         self.pageSize = pageSize
         phase = .loading

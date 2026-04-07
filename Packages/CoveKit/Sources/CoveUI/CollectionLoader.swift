@@ -85,7 +85,17 @@ public final class CollectionLoader<Element: Sendable> {
     /// (e.g. by `.task(id:)` re-firing or navigation popping), the phase is left
     /// unchanged so the user never sees a "The operation was cancelled" error.
     public func load(_ fetch: @Sendable () async throws -> [Element]) async {
-        phase = .loading
+        // Stale-while-revalidate: if we already have data, skip the loading
+        // spinner and fetch silently in the background.
+        let hasExistingData: Bool
+        switch phase {
+        case .loaded, .empty:
+            hasExistingData = true
+        default:
+            hasExistingData = false
+            phase = .loading
+        }
+
         do {
             let result = try await fetch()
             guard !Task.isCancelled else { return }
@@ -96,7 +106,11 @@ public final class CollectionLoader<Element: Sendable> {
             return
         } catch {
             guard !Task.isCancelled else { return }
-            phase = .failed(error.localizedDescription)
+            // During a SWR re-fetch, keep the existing data visible instead
+            // of flashing an error the user can't act on.
+            if !hasExistingData {
+                phase = .failed(error.localizedDescription)
+            }
         }
     }
 
