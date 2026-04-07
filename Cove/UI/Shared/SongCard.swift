@@ -73,28 +73,6 @@ struct SongCard: View {
     }
 }
 
-// MARK: - Placeholder
-
-/// A loading placeholder matching the size of a song card in a horizontal shelf.
-struct SongCardPlaceholder: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.quaternary)
-                .aspectRatio(1, contentMode: .fill)
-
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(height: 12)
-
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(width: 60, height: 10)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
 // MARK: - Preview
 
 #Preview {

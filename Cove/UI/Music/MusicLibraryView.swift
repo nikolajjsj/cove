@@ -103,7 +103,7 @@ private struct RecentlyPlayedSongsSection: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(0..<5, id: \.self) { _ in
-                                SongCardPlaceholder()
+                                SkeletonCard.song
                                     .frame(width: 140)
                             }
                         }
@@ -201,7 +201,7 @@ private struct ArtistsShelfSection: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 14) {
                             ForEach(0..<6, id: \.self) { _ in
-                                ArtistCardPlaceholder()
+                                SkeletonCard.artist
                                     .frame(width: 120)
                             }
                         }
@@ -278,7 +278,7 @@ private struct AlbumsGridSection: View {
             if isLoading {
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(0..<6, id: \.self) { _ in
-                        AlbumCardPlaceholder()
+                        SkeletonCard.albumGrid
                     }
                 }
                 .padding(.horizontal)

@@ -24,10 +24,7 @@ struct MediaItemRail: View {
                     LazyHStack(spacing: 12) {
                         if isLoading {
                             ForEach(0..<5, id: \.self) { _ in
-                                SkeletonItemCard(
-                                    width: defaultCardWidth,
-                                    aspectRatio: defaultAspectRatio
-                                )
+                                SkeletonCard.poster(width: defaultCardWidth)
                             }
                             .transition(.opacity)
                         } else {
@@ -72,36 +69,10 @@ struct MediaItemRail: View {
     }
 
     private var defaultCardWidth: CGFloat { 130 }
-    private var defaultAspectRatio: CGFloat { 2.0 / 3.0 }
-
     private func cardWidth(for item: MediaItem) -> CGFloat {
         switch item.mediaType {
         case .album, .artist, .track, .playlist: 140
         default: 130
         }
-    }
-}
-
-// MARK: - Skeleton Card (for rail loading state)
-
-/// A placeholder card matching `LibraryItemCard` dimensions.
-private struct SkeletonItemCard: View {
-    let width: CGFloat
-    let aspectRatio: CGFloat
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.quaternary)
-                .aspectRatio(aspectRatio, contentMode: .fit)
-
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(height: 10)
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(width: width * 0.6, height: 10)
-        }
-        .frame(width: width)
     }
 }

@@ -65,39 +65,6 @@ struct AlbumCard: View {
     }
 }
 
-// MARK: - Placeholders
-
-/// A loading placeholder matching the size of an album card in a grid.
-struct AlbumCardPlaceholder: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.quaternary)
-                .aspectRatio(1, contentMode: .fill)
-
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(height: 12)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-/// A loading placeholder matching the size of an album card in a horizontal shelf.
-struct AlbumShelfPlaceholder: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.quaternary)
-                .frame(width: 140, height: 140)
-
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(width: 100, height: 12)
-        }
-    }
-}
-
 // MARK: - Preview
 
 #Preview {

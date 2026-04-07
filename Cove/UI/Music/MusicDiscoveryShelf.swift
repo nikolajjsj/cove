@@ -26,7 +26,7 @@ struct MusicDiscoveryShelf: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(0..<5, id: \.self) { _ in
-                                AlbumShelfPlaceholder()
+                                SkeletonCard.albumShelf()
                             }
                         }
                         .padding(.horizontal)

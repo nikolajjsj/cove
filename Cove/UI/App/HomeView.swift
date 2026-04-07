@@ -270,29 +270,3 @@ private struct LibrarySection: View {
         }
     }
 }
-
-// MARK: - Skeleton Placeholder Card
-
-/// A placeholder card that matches the exact dimensions of a real
-/// `LibraryItemCard`, reserving layout space while data loads.
-private struct SkeletonCard: View {
-    let width: CGFloat
-    let aspectRatio: CGFloat
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.quaternary)
-                .aspectRatio(aspectRatio, contentMode: .fit)
-
-            // Two lines matching .caption + .lineLimit(2, reservesSpace: true)
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(height: 10)
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(width: width * 0.6, height: 10)
-        }
-        .frame(width: width)
-    }
-}
