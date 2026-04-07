@@ -103,9 +103,6 @@ struct SettingsView: View {
                                     )
                                     .foregroundStyle(.secondary)
                                 }
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
                             }
                         }
                     }
