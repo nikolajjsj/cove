@@ -10,6 +10,7 @@ struct SettingsView: View {
     @Default(.videoPlaybackSpeed) var videoPlaybackSpeed
     @Default(.skipForwardInterval) var skipForwardInterval
     @Default(.skipBackwardInterval) var skipBackwardInterval
+    @Default(.accentColor) var accentColorName
 
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
@@ -20,6 +21,17 @@ struct SettingsView: View {
 
     private let playbackSpeedOptions: [Float] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
     private let skipIntervalOptions: [Double] = [5, 10, 15, 30]
+
+    private let accentColorOptions: [(name: String, value: String, color: Color)] = [
+        ("Default", "default", .blue),
+        ("Indigo", "indigo", .indigo),
+        ("Purple", "purple", .purple),
+        ("Pink", "pink", .pink),
+        ("Red", "red", .red),
+        ("Orange", "orange", .orange),
+        ("Teal", "teal", .teal),
+        ("Green", "green", .green),
+    ]
 
     var body: some View {
         List {
@@ -46,6 +58,25 @@ struct SettingsView: View {
                         Label(library.name, systemImage: libraryIcon(for: library.collectionType))
                     }
                 }
+            }
+
+            // MARK: - Appearance
+
+            Section("Appearance") {
+                Picker(selection: $accentColorName) {
+                    ForEach(accentColorOptions, id: \.value) { option in
+                        Label {
+                            Text(option.name)
+                        } icon: {
+                            Image(systemName: "circle.fill")
+                                .foregroundStyle(option.color)
+                        }
+                        .tag(option.value)
+                    }
+                } label: {
+                    Label("Accent Color", systemImage: "paintpalette")
+                }
+                .pickerStyle(.menu)
             }
 
             // MARK: - Downloads & Storage

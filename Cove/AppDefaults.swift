@@ -22,4 +22,7 @@ extension Defaults.Keys {
 
     /// Default skip-backward interval in seconds.
     static let skipBackwardInterval = Key<Double>("skipBackwardInterval", default: 10.0)
+
+    /// The accent color name. Values: "default", "indigo", "purple", "pink", "red", "orange", "teal", "green".
+    static let accentColor = Key<String>("accentColor", default: "default")
 }
