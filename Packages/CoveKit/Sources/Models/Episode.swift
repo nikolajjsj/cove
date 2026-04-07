@@ -9,6 +9,7 @@ public struct Episode: Identifiable, Codable, Hashable, Sendable {
     public let title: String
     public let overview: String?
     public let runtime: TimeInterval?
+    public let userData: UserData?
 
     public init(
         id: EpisodeID,
@@ -18,7 +19,8 @@ public struct Episode: Identifiable, Codable, Hashable, Sendable {
         seasonNumber: Int? = nil,
         title: String,
         overview: String? = nil,
-        runtime: TimeInterval? = nil
+        runtime: TimeInterval? = nil,
+        userData: UserData? = nil
     ) {
         self.id = id
         self.seriesId = seriesId
@@ -28,5 +30,6 @@ public struct Episode: Identifiable, Codable, Hashable, Sendable {
         self.title = title
         self.overview = overview
         self.runtime = runtime
+        self.userData = userData
     }
 }

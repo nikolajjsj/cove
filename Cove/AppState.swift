@@ -209,6 +209,19 @@ final class AppState {
         }
     }
 
+    /// Toggle the played/watched state for any media item.
+    func togglePlayed(itemId: ItemID, isPlayed: Bool) async {
+        do {
+            try await authManager.provider.setPlayed(itemId: itemId, isPlayed: !isPlayed)
+            showToast(
+                isPlayed ? "Marked as Unwatched" : "Marked as Watched",
+                icon: isPlayed ? "eye.slash" : "eye.fill"
+            )
+        } catch {
+            showToast("Couldn't update watched status", icon: "exclamationmark.triangle")
+        }
+    }
+
     /// Start an instant-mix radio station seeded from any item.
     func startRadio(for itemId: ItemID) async {
         do {

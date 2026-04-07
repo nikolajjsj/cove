@@ -639,6 +639,24 @@ public final class JellyfinAPIClient: Sendable {
             url: url, method: .delete, headers: authHeaders)
     }
 
+    // MARK: - Played Status
+
+    /// Mark an item as played.
+    public func markPlayed(userId: String, itemId: String) async throws {
+        let url = baseURL.appendingPathComponent("Users/\(userId)/PlayedItems/\(itemId)")
+        logger.debug("Marking item \(itemId) as played")
+        try await httpClient.request(
+            url: url, method: .post, headers: authHeaders)
+    }
+
+    /// Mark an item as unplayed.
+    public func markUnplayed(userId: String, itemId: String) async throws {
+        let url = baseURL.appendingPathComponent("Users/\(userId)/PlayedItems/\(itemId)")
+        logger.debug("Marking item \(itemId) as unplayed")
+        try await httpClient.request(
+            url: url, method: .delete, headers: authHeaders)
+    }
+
     /// Fetch an instant mix (radio) seeded from an item.
     public func getInstantMix(
         itemId: String,

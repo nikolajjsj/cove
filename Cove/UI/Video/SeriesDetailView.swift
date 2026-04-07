@@ -13,14 +13,21 @@ struct SeriesDetailView: View {
     /// When non-nil, the view operates in offline mode using local storage.
     private let offlineServerId: String?
 
+    @State private var isFavorite: Bool
+    @State private var isPlayed: Bool
+
     init(item: MediaItem) {
         self.item = item
         self.offlineServerId = nil
+        _isFavorite = State(initialValue: item.userData?.isFavorite ?? false)
+        _isPlayed = State(initialValue: item.userData?.isPlayed ?? false)
     }
 
     init(offlineSeriesId: String, serverId: String, title: String) {
         self.item = MediaItem(id: ItemID(offlineSeriesId), title: title, mediaType: .series)
         self.offlineServerId = serverId
+        _isFavorite = State(initialValue: false)
+        _isPlayed = State(initialValue: false)
     }
 
     private var isOffline: Bool { offlineServerId != nil }
@@ -170,24 +177,61 @@ struct SeriesDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
-            ToolbarItem {
-                if isOffline {
-                    Menu {
+            if !isOffline {
+                ToolbarItem(placement: .topBarTrailing) {
+                    if downloadCoordinator.downloadManager != nil && !seasons.isEmpty {
+                        Button {
+                            showDownloadSheet = true
+                        } label: {
+                            Image(systemName: "arrow.down.circle")
+                                .font(.title3)
+                        }
+                    }
+                }
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    if !isOffline {
+                        Button {
+                            let wasFavorite = isFavorite
+                            isFavorite.toggle()
+                            Task {
+                                await appState.toggleFavorite(
+                                    itemId: item.id, isFavorite: wasFavorite)
+                            }
+                        } label: {
+                            Label(
+                                isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                                systemImage: isFavorite ? "heart.slash" : "heart"
+                            )
+                        }
+
+                        Button {
+                            let wasPlayed = isPlayed
+                            isPlayed.toggle()
+                            Task {
+                                await appState.togglePlayed(
+                                    itemId: item.id, isPlayed: wasPlayed)
+                            }
+                        } label: {
+                            Label(
+                                isPlayed ? "Mark as Unwatched" : "Mark as Watched",
+                                systemImage: isPlayed ? "eye.slash" : "eye"
+                            )
+                        }
+                    }
+
+                    if isOffline {
                         Button(role: .destructive) {
                             showDeleteSeriesConfirmation = true
                         } label: {
                             Label("Remove All Episodes", systemImage: "trash")
                         }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
                     }
-                } else if downloadCoordinator.downloadManager != nil && !seasons.isEmpty {
-                    Button {
-                        showDownloadSheet = true
-                    } label: {
-                        Image(systemName: "arrow.down.circle")
-                            .font(.title3)
-                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
                 }
             }
         }
@@ -711,11 +755,11 @@ struct SeriesDetailView: View {
     // MARK: - Progress
 
     private func episodeProgress(for episode: Episode) -> Double? {
-        guard let runtime = episode.runtime, runtime > 0 else { return nil }
-        // We don't have direct userData on Episode, so we can't compute progress here
-        // without fetching each episode as a MediaItem. Return nil for now —
-        // the caller can enhance this later with a lookup cache.
-        return nil
+        guard let runtime = episode.runtime, runtime > 0,
+            let userData = episode.userData,
+            userData.playbackPosition > 0
+        else { return nil }
+        return min(userData.playbackPosition / runtime, 1.0)
     }
 }
 

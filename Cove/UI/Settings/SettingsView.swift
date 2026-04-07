@@ -5,6 +5,12 @@ import SwiftUI
 
 struct SettingsView: View {
     @Default(.downloadOverCellular) var downloadOverCellular
+    @Default(.autoPlayNextEpisode) var autoPlayNextEpisode
+    @Default(.forceLandscapeVideo) var forceLandscapeVideo
+    @Default(.videoPlaybackSpeed) var videoPlaybackSpeed
+    @Default(.skipForwardInterval) var skipForwardInterval
+    @Default(.skipBackwardInterval) var skipBackwardInterval
+
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
     @Environment(DownloadCoordinator.self) private var downloadCoordinator
@@ -12,62 +18,129 @@ struct SettingsView: View {
     @State private var totalDownloadSize: Int64 = 0
     @State private var downloadCount: Int = 0
 
+    private let playbackSpeedOptions: [Float] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+    private let skipIntervalOptions: [Double] = [5, 10, 15, 30]
+
     var body: some View {
-        NavigationStack {
-            List {
-                if let connection = authManager.activeConnection {
-                    Section("Connected Server") {
-                        LabeledContent("Name", value: connection.name)
-                        LabeledContent("URL", value: connection.url.absoluteString)
-                        Button("Disconnect", role: .destructive) {
-                            Task { await appState.onDisconnect() }
-                        }
+        List {
+            // MARK: - Connected Server
+
+            if let connection = authManager.activeConnection {
+                Section("Connected Server") {
+                    LabeledContent("Name", value: connection.name)
+                    LabeledContent("URL", value: connection.url.absoluteString)
+                    Button("Disconnect", role: .destructive) {
+                        Task { await appState.onDisconnect() }
                     }
                 }
-                
-                Section("Libraries") {
-                    if appState.libraries.isEmpty {
-                        Text("No libraries found")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(appState.libraries) { library in
-                            Label(library.name, systemImage: libraryIcon(for: library.collectionType))
-                        }
+            }
+
+            // MARK: - Libraries
+
+            Section("Libraries") {
+                if appState.libraries.isEmpty {
+                    Text("No libraries found")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(appState.libraries) { library in
+                        Label(library.name, systemImage: libraryIcon(for: library.collectionType))
                     }
                 }
-                
-                if downloadCoordinator.downloadManager != nil {
-                    Section("Downloads & Storage") {
-                        Toggle("Download over Cellular", systemImage: "cellularbars", isOn: $downloadOverCellular)
-                        
-                        if let downloadManager = downloadCoordinator.downloadManager {
-                            NavigationLink {
-                                StorageManagementView(downloadManager: downloadManager)
-                            } label: {
-                                HStack {
-                                    Label("Manage Storage", systemImage: "internaldrive")
-                                    Spacer()
-                                    if totalDownloadSize > 0 {
-                                        Text(
-                                            ByteCountFormatter.string(
-                                                fromByteCount: totalDownloadSize,
-                                                countStyle: .file
-                                            )
+            }
+
+            // MARK: - Downloads & Storage
+
+            if downloadCoordinator.downloadManager != nil {
+                Section("Downloads & Storage") {
+                    Toggle(
+                        "Download over Cellular", systemImage: "cellularbars",
+                        isOn: $downloadOverCellular)
+
+                    if let downloadManager = downloadCoordinator.downloadManager {
+                        NavigationLink {
+                            StorageManagementView(downloadManager: downloadManager)
+                        } label: {
+                            HStack {
+                                Label("Manage Storage", systemImage: "internaldrive")
+                                Spacer()
+                                if totalDownloadSize > 0 {
+                                    Text(
+                                        ByteCountFormatter.string(
+                                            fromByteCount: totalDownloadSize,
+                                            countStyle: .file
                                         )
-                                        .foregroundStyle(.secondary)
-                                    }
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption)
-                                        .foregroundStyle(.tertiary)
+                                    )
+                                    .foregroundStyle(.secondary)
                                 }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
                             }
                         }
                     }
                 }
             }
-            .task {
-                await loadStorageInfo()
+
+            // MARK: - Video Playback
+
+            Section("Video Playback") {
+                Toggle(
+                    "Auto-play next episode", systemImage: "play.circle", isOn: $autoPlayNextEpisode
+                )
+
+                #if os(iOS)
+                    Toggle(
+                        "Force landscape", systemImage: "rectangle.landscape.rotate",
+                        isOn: $forceLandscapeVideo)
+                #endif
+
+                Picker(selection: $videoPlaybackSpeed) {
+                    ForEach(playbackSpeedOptions, id: \.self) { speed in
+                        if speed == 1.0 {
+                            Text("1× (Normal)").tag(speed)
+                        } else {
+                            Text("\(speed, specifier: "%g")×").tag(speed)
+                        }
+                    }
+                } label: {
+                    Label("Default playback speed", systemImage: "gauge.with.needle")
+                }
+                .pickerStyle(.menu)
+
+                Picker(selection: $skipForwardInterval) {
+                    ForEach(skipIntervalOptions, id: \.self) { interval in
+                        Text("\(Int(interval))s").tag(interval)
+                    }
+                } label: {
+                    Label("Skip forward interval", systemImage: "goforward")
+                }
+                .pickerStyle(.menu)
+
+                Picker(selection: $skipBackwardInterval) {
+                    ForEach(skipIntervalOptions, id: \.self) { interval in
+                        Text("\(Int(interval))s").tag(interval)
+                    }
+                } label: {
+                    Label("Skip backward interval", systemImage: "gobackward")
+                }
+                .pickerStyle(.menu)
             }
+
+            // MARK: - About
+
+            Section("About") {
+                LabeledContent("App", value: "Cove")
+
+                if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"]
+                    as? String,
+                    let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
+                {
+                    LabeledContent("Version", value: "\(version) (\(build))")
+                }
+            }
+        }
+        .task {
+            await loadStorageInfo()
         }
     }
 

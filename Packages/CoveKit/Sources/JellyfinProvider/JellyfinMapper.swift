@@ -317,6 +317,7 @@ enum JellyfinMapper {
     static func mapEpisode(_ dto: BaseItemDto) -> Episode? {
         guard let id = dto.id, let name = dto.name else { return nil }
         let runtime: TimeInterval? = dto.runTimeTicks.map { TimeInterval($0) / 10_000_000.0 }
+        let userData = dto.userData.map { mapUserData($0) }
         return Episode(
             id: EpisodeID(id),
             seriesId: dto.seriesId.map { SeriesID($0) },
@@ -325,7 +326,8 @@ enum JellyfinMapper {
             seasonNumber: dto.parentIndexNumber,
             title: name,
             overview: dto.overview,
-            runtime: runtime
+            runtime: runtime,
+            userData: userData
         )
     }
 

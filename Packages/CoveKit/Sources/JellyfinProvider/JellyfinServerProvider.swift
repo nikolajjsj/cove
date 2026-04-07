@@ -342,6 +342,15 @@ public final class JellyfinServerProvider: MediaServerProvider,
         }
     }
 
+    public func setPlayed(itemId: ItemID, isPlayed: Bool) async throws {
+        let (client, userId) = try authenticatedClient()
+        if isPlayed {
+            try await client.markPlayed(userId: userId, itemId: itemId.rawValue)
+        } else {
+            try await client.markUnplayed(userId: userId, itemId: itemId.rawValue)
+        }
+    }
+
     public func instantMix(for itemId: ItemID, limit: Int = 50) async throws -> [Track] {
         let (client, userId) = try authenticatedClient()
         let result = try await client.getInstantMix(

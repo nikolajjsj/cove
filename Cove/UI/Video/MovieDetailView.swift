@@ -16,6 +16,14 @@ struct MovieDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var detailLoader = DetailItemLoader()
+    @State private var isFavorite: Bool
+    @State private var isPlayed: Bool
+
+    init(item: MediaItem) {
+        self.item = item
+        _isFavorite = State(initialValue: item.userData?.isFavorite ?? false)
+        _isPlayed = State(initialValue: item.userData?.isPlayed ?? false)
+    }
 
     private var coordinator: VideoPlayerCoordinator {
         appState.videoPlayerCoordinator
@@ -111,6 +119,37 @@ struct MovieDetailView: View {
                             try await downloadCoordinator.downloadItem(item)
                         }
                     )
+                }
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        let wasFavorite = isFavorite
+                        isFavorite.toggle()
+                        Task {
+                            await appState.toggleFavorite(itemId: item.id, isFavorite: wasFavorite)
+                        }
+                    } label: {
+                        Label(
+                            isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                            systemImage: isFavorite ? "heart.slash" : "heart"
+                        )
+                    }
+
+                    Button {
+                        let wasPlayed = isPlayed
+                        isPlayed.toggle()
+                        Task { await appState.togglePlayed(itemId: item.id, isPlayed: wasPlayed) }
+                    } label: {
+                        Label(
+                            isPlayed ? "Mark as Unwatched" : "Mark as Watched",
+                            systemImage: isPlayed ? "eye.slash" : "eye"
+                        )
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
                 }
             }
         }

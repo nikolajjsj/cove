@@ -6,6 +6,7 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(AppState.self) private var appState
+    @State private var refreshID = UUID()
 
     var body: some View {
         ScrollView {
@@ -25,6 +26,10 @@ struct HomeView: View {
                 }
             }
             .padding()
+            .id(refreshID)
+        }
+        .refreshable {
+            refreshID = UUID()
         }
     }
 }
