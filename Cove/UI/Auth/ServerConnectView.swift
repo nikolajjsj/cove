@@ -8,6 +8,10 @@ struct ServerConnectView: View {
     @State private var password = ""
     @State private var isConnecting = false
     @State private var errorMessage: String?
+    
+    var canConnect: Bool {
+        !self.serverURL.isEmpty && !self.username.isEmpty
+    }
 
     var body: some View {
         NavigationStack {
@@ -74,7 +78,7 @@ struct ServerConnectView: View {
                             Spacer()
                         }
                     }
-                    .disabled(isConnecting || serverURL.isEmpty || username.isEmpty)
+                    .disabled(isConnecting || !canConnect)
                 }
             }
             .navigationTitle("Connect")
