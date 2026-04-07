@@ -120,6 +120,22 @@ struct SearchView: View {
                     query: searchText,
                     maxItems: maxPreviewItems
                 )
+
+                SearchResultsSection(
+                    title: "Episodes",
+                    items: results.items(ofType: .episode),
+                    mediaType: .episode,
+                    query: searchText,
+                    maxItems: maxPreviewItems
+                )
+
+                SearchResultsSection(
+                    title: "Songs",
+                    items: results.items(ofType: .track),
+                    mediaType: .track,
+                    query: searchText,
+                    maxItems: maxPreviewItems
+                )
             }
             .padding(.vertical)
         }
@@ -149,7 +165,7 @@ struct SearchView: View {
         do {
             let searchResults = try await authManager.provider.search(
                 query: query,
-                mediaTypes: [.movie, .series, .artist, .album]
+                mediaTypes: [.movie, .series, .artist, .album, .episode, .track]
             )
             results = searchResults
             hasSearched = true

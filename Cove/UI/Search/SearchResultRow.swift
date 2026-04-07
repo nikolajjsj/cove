@@ -33,7 +33,7 @@ struct SearchResultRow: View {
     @ViewBuilder
     private var thumbnail: some View {
         switch item.mediaType {
-        case .album, .artist:
+        case .album, .artist, .track:
             MediaImage.artwork(url: thumbnailURL, cornerRadius: 6)
                 .frame(width: 50, height: 50)
         default:
@@ -61,8 +61,10 @@ struct SearchResultRow: View {
         switch item.mediaType {
         case .movie: "film"
         case .series: "tv"
+        case .episode: "tv"
         case .album: "music.note"
         case .artist: "person"
+        case .track: "music.note"
         default: "photo"
         }
     }
@@ -81,12 +83,40 @@ struct SearchResultRow: View {
             } else {
                 "TV Show"
             }
+        case .episode:
+            episodeSubtitle
         case .album:
             "Album"
         case .artist:
             "Artist"
+        case .track:
+            trackSubtitle
         default:
             item.mediaType.rawValue.capitalized
         }
+    }
+
+    private var episodeSubtitle: String {
+        var parts: [String] = []
+        if let season = item.parentIndexNumber, let episode = item.indexNumber {
+            parts.append("S\(season):E\(episode)")
+        } else if let episode = item.indexNumber {
+            parts.append("E\(episode)")
+        }
+        if let seriesName = item.seriesName {
+            parts.append(seriesName)
+        }
+        return parts.isEmpty ? "Episode" : parts.joined(separator: " · ")
+    }
+
+    private var trackSubtitle: String {
+        var parts: [String] = []
+        if let artistName = item.artistName {
+            parts.append(artistName)
+        }
+        if let albumName = item.albumName {
+            parts.append(albumName)
+        }
+        return parts.isEmpty ? "Song" : parts.joined(separator: " · ")
     }
 }

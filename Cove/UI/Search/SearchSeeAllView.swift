@@ -132,6 +132,8 @@ struct SearchSeeAllView: View {
         case .series: ["Series"]
         case .album: ["MusicAlbum"]
         case .artist: ["MusicArtist"]
+        case .episode: ["Episode"]
+        case .track: ["Audio"]
         default: nil
         }
     }
