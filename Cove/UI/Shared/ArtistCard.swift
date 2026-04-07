@@ -45,24 +45,6 @@ struct ArtistCard: View {
     }
 }
 
-// MARK: - Placeholder
-
-/// A loading placeholder matching the size of an artist card (circular artwork).
-struct ArtistCardPlaceholder: View {
-    var body: some View {
-        VStack(spacing: 8) {
-            Circle()
-                .fill(.quaternary)
-                .aspectRatio(1, contentMode: .fill)
-
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(width: 80, height: 12)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
 // MARK: - Preview
 
 #Preview {
