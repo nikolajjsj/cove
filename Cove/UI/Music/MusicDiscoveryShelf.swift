@@ -26,7 +26,7 @@ struct MusicDiscoveryShelf: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(0..<5, id: \.self) { _ in
-                                ShelfPlaceholder()
+                                AlbumShelfPlaceholder()
                             }
                         }
                         .padding(.horizontal)
@@ -35,13 +35,8 @@ struct MusicDiscoveryShelf: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(items) { item in
-                                NavigationLink(value: item) {
-                                    ShelfCard(
-                                        title: item.title,
-                                        imageURL: imageURL(for: item)
-                                    )
-                                }
-                                .buttonStyle(.plain)
+                                AlbumCard(item: item, imageURL: imageURL(for: item))
+                                    .frame(width: 140)
                             }
                         }
                         .padding(.horizontal)
@@ -83,44 +78,6 @@ struct MusicDiscoveryShelf: View {
             type: .primary,
             maxSize: CGSize(width: 240, height: 240)
         )
-    }
-}
-
-// MARK: - Shelf Card
-
-private struct ShelfCard: View {
-    let title: String
-    let imageURL: URL?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            MediaImage.artwork(url: imageURL, cornerRadius: 8)
-                .frame(width: 140, height: 140)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-
-            Text(title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(2, reservesSpace: true)
-                .foregroundStyle(.primary)
-                .frame(width: 140, alignment: .leading)
-        }
-    }
-}
-
-// MARK: - Placeholder
-
-private struct ShelfPlaceholder: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.quaternary)
-                .frame(width: 140, height: 140)
-
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(width: 100, height: 12)
-        }
     }
 }
 

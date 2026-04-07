@@ -23,6 +23,11 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
     public let remoteTrailerURLs: [URL]
     public var userData: UserData?
 
+    // Audio-specific fields (populated for tracks/songs, nil for other types)
+    public let artistName: String?
+    public let albumName: String?
+    public let albumId: ItemID?
+
     /// Runtime in seconds, derived from `runTimeTicks`.
     public var runtime: TimeInterval? {
         runTimeTicks.map { TimeInterval($0) / 10_000_000.0 }
@@ -49,7 +54,10 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
         mediaStreams: [MediaStream]? = nil,
         people: [Person] = [],
         remoteTrailerURLs: [URL] = [],
-        userData: UserData? = nil
+        userData: UserData? = nil,
+        artistName: String? = nil,
+        albumName: String? = nil,
+        albumId: ItemID? = nil
     ) {
         self.id = id
         self.title = title
@@ -72,5 +80,8 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
         self.people = people
         self.remoteTrailerURLs = remoteTrailerURLs
         self.userData = userData
+        self.artistName = artistName
+        self.albumName = albumName
+        self.albumId = albumId
     }
 }

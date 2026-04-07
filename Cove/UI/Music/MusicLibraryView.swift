@@ -48,6 +48,38 @@ struct MusicLibraryView: View {
     }
 }
 
+// MARK: - Section Header
+
+/// Reusable section header with a title and an optional "See All" navigation link.
+private struct SectionHeader<Route: Hashable>: View {
+    let title: String
+    let route: Route?
+
+    init(title: String, route: Route? = nil as MusicBrowseRoute?) {
+        self.title = title
+        self.route = route
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Spacer()
+
+            if let route {
+                NavigationLink(value: route) {
+                    Text("See All")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+}
+
 // MARK: - Recently Played Songs Section
 
 /// Loads recently played songs and displays them as horizontally scrolling cards.
@@ -71,7 +103,8 @@ private struct RecentlyPlayedSongsSection: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(0..<5, id: \.self) { _ in
-                                RecentSongPlaceholder()
+                                SongCardPlaceholder()
+                                    .frame(width: 140)
                             }
                         }
                         .padding(.horizontal)
@@ -80,15 +113,14 @@ private struct RecentlyPlayedSongsSection: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                                Button {
+                                SongCard(
+                                    item: song,
+                                    subtitle: song.artistName ?? song.genres?.first,
+                                    imageURL: imageURL(for: song)
+                                ) {
                                     playSong(at: index)
-                                } label: {
-                                    RecentSongCard(
-                                        song: song,
-                                        imageURL: imageURL(for: song)
-                                    )
                                 }
-                                .buttonStyle(.plain)
+                                .frame(width: 140)
                             }
                         }
                         .padding(.horizontal)
@@ -125,6 +157,9 @@ private struct RecentlyPlayedSongsSection: View {
             Track(
                 id: TrackID(item.id.rawValue),
                 title: item.title,
+                albumId: item.albumId.map { AlbumID($0.rawValue) },
+                albumName: item.albumName,
+                artistName: item.artistName,
                 duration: item.runtime,
                 userData: item.userData
             )
@@ -142,58 +177,10 @@ private struct RecentlyPlayedSongsSection: View {
     }
 }
 
-// MARK: - Recent Song Card
-
-private struct RecentSongCard: View {
-    let song: MediaItem
-    let imageURL: URL?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            MediaImage.artwork(url: imageURL, cornerRadius: 8)
-                .frame(width: 140, height: 140)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-
-            Text(song.title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(1)
-                .foregroundStyle(.primary)
-                .frame(width: 140, alignment: .leading)
-
-            if let genres = song.genres, let artist = genres.first {
-                Text(artist)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .frame(width: 140, alignment: .leading)
-            }
-        }
-    }
-}
-
-private struct RecentSongPlaceholder: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.quaternary)
-                .frame(width: 140, height: 140)
-
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(width: 100, height: 12)
-
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(width: 60, height: 10)
-        }
-    }
-}
-
 // MARK: - Artists Shelf Section
 
 /// Loads a limited set of artists and displays them in a horizontal scroll.
-/// A "See All" link navigates to the full paginated `ArtistListView`.
+/// A "See All" link navigates via the centralized MusicBrowseRoute.
 private struct ArtistsShelfSection: View {
     let library: MediaLibrary
     @Environment(AppState.self) private var appState
@@ -205,33 +192,17 @@ private struct ArtistsShelfSection: View {
     var body: some View {
         if isLoading || !artists.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                // Header
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Artists")
-                        .font(.title2)
-                        .fontWeight(.bold)
-
-                    Spacer()
-
-                    NavigationLink {
-                        ArtistListView(library: library)
-                            .navigationTitle("Artists")
-                            #if os(iOS)
-                                .navigationBarTitleDisplayMode(.large)
-                            #endif
-                    } label: {
-                        Text("See All")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                    }
-                }
-                .padding(.horizontal)
+                SectionHeader(
+                    title: "Artists",
+                    route: MusicBrowseRoute.allArtists(libraryId: library.id)
+                )
 
                 if isLoading {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 14) {
                             ForEach(0..<6, id: \.self) { _ in
-                                ArtistShelfPlaceholder()
+                                ArtistCardPlaceholder()
+                                    .frame(width: 120)
                             }
                         }
                         .padding(.horizontal)
@@ -240,14 +211,8 @@ private struct ArtistsShelfSection: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 14) {
                             ForEach(artists) { artist in
-                                NavigationLink(value: artist) {
-                                    ArtistShelfCard(
-                                        name: artist.title,
-                                        imageURL: imageURL(for: artist)
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                .artistContextMenu(artist: artist)
+                                ArtistCard(item: artist, imageURL: imageURL(for: artist))
+                                    .frame(width: 120)
                             }
                         }
                         .padding(.horizontal)
@@ -288,47 +253,10 @@ private struct ArtistsShelfSection: View {
     }
 }
 
-// MARK: - Artist Shelf Card
-
-private struct ArtistShelfCard: View {
-    let name: String
-    let imageURL: URL?
-
-    var body: some View {
-        VStack(spacing: 8) {
-            MediaImage.artwork(url: imageURL, cornerRadius: .infinity)
-                .frame(width: 120, height: 120)
-                .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
-
-            Text(name)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(2, reservesSpace: true)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.primary)
-                .frame(width: 120)
-        }
-    }
-}
-
-private struct ArtistShelfPlaceholder: View {
-    var body: some View {
-        VStack(spacing: 8) {
-            Circle()
-                .fill(.quaternary)
-                .frame(width: 120, height: 120)
-
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(width: 80, height: 12)
-        }
-    }
-}
-
 // MARK: - Albums Grid Section
 
 /// Loads a limited set of albums and displays them in a vertical grid.
-/// A "See All" link navigates to the full paginated `AlbumListView`.
+/// A "See All" link navigates via the centralized MusicBrowseRoute.
 private struct AlbumsGridSection: View {
     let library: MediaLibrary
     @Environment(AppState.self) private var appState
@@ -342,32 +270,15 @@ private struct AlbumsGridSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack(alignment: .firstTextBaseline) {
-                Text("Albums")
-                    .font(.title2)
-                    .fontWeight(.bold)
-
-                Spacer()
-
-                NavigationLink {
-                    AlbumListView(library: library)
-                        .navigationTitle("Albums")
-                        #if os(iOS)
-                            .navigationBarTitleDisplayMode(.large)
-                        #endif
-                } label: {
-                    Text("See All")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                }
-            }
-            .padding(.horizontal)
+            SectionHeader(
+                title: "Albums",
+                route: MusicBrowseRoute.allAlbums(libraryId: library.id)
+            )
 
             if isLoading {
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(0..<6, id: \.self) { _ in
-                        AlbumGridPlaceholder()
+                        AlbumCardPlaceholder()
                     }
                 }
                 .padding(.horizontal)
@@ -380,14 +291,7 @@ private struct AlbumsGridSection: View {
             } else {
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(albums) { album in
-                        NavigationLink(value: album) {
-                            AlbumGridCard(
-                                title: album.title,
-                                imageURL: imageURL(for: album)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .albumContextMenu(album: album)
+                        AlbumCard(item: album, imageURL: imageURL(for: album))
                     }
                 }
                 .padding(.horizontal)
@@ -423,42 +327,6 @@ private struct AlbumsGridSection: View {
             type: .primary,
             maxSize: CGSize(width: 300, height: 300)
         )
-    }
-}
-
-// MARK: - Album Grid Card
-
-private struct AlbumGridCard: View {
-    let title: String
-    let imageURL: URL?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            MediaImage.artwork(url: imageURL, cornerRadius: 8)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-
-            Text(title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(2, reservesSpace: true)
-                .foregroundStyle(.primary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-private struct AlbumGridPlaceholder: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.quaternary)
-                .aspectRatio(1, contentMode: .fill)
-
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.quaternary)
-                .frame(height: 12)
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 

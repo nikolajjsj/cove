@@ -65,6 +65,9 @@ struct SongListView: View {
                     track: Track(
                         id: TrackID(item.id.rawValue),
                         title: item.title,
+                        albumId: item.albumId.map { AlbumID($0.rawValue) },
+                        albumName: item.albumName,
+                        artistName: item.artistName,
                         duration: item.runtime,
                         userData: item.userData
                     ))
@@ -124,7 +127,11 @@ struct SongListView: View {
             Track(
                 id: TrackID(item.id.rawValue),
                 title: item.title,
-                duration: item.runtime
+                albumId: item.albumId.map { AlbumID($0.rawValue) },
+                albumName: item.albumName,
+                artistName: item.artistName,
+                duration: item.runtime,
+                userData: item.userData
             )
         }
         guard !tracks.isEmpty else { return }

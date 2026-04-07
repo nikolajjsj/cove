@@ -68,7 +68,10 @@ enum JellyfinMapper {
             mediaStreams: mediaStreams,
             people: people,
             remoteTrailerURLs: remoteTrailerURLs,
-            userData: userData
+            userData: userData,
+            artistName: dto.albumArtist ?? dto.artistItems?.first?.name,
+            albumName: dto.album,
+            albumId: dto.albumId.map { ItemID($0) }
         )
     }
 

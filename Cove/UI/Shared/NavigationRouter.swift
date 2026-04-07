@@ -2,6 +2,16 @@ import MediaServerKit
 import Models
 import SwiftUI
 
+// MARK: - Music Browse Routes
+
+/// Routes for "See All" navigation from the music library shelves.
+/// Registered in the centralized `NavigationDestinations` modifier so
+/// all navigation goes through `NavigationLink(value:)` — no inline destinations.
+enum MusicBrowseRoute: Hashable {
+    case allArtists(libraryId: ItemID)
+    case allAlbums(libraryId: ItemID)
+}
+
 /// Centralized navigation routing for media items.
 /// Keeps the mapping from `MediaItem.mediaType` → detail view in one place.
 enum NavigationRouter {
@@ -56,11 +66,33 @@ enum NavigationRouter {
     static func destination(for person: Person) -> some View {
         PersonDetailView(person: person)
     }
+
+    /// Returns the browsing view for a music "See All" route.
+    @ViewBuilder
+    static func destination(for route: MusicBrowseRoute, appState: AppState) -> some View {
+        let library = appState.libraries.first { $0.collectionType == .music }
+        switch route {
+        case .allArtists:
+            ArtistListView(library: library)
+                .navigationTitle("Artists")
+                #if os(iOS)
+                    .navigationBarTitleDisplayMode(.large)
+                #endif
+        case .allAlbums:
+            AlbumListView(library: library)
+                .navigationTitle("Albums")
+                #if os(iOS)
+                    .navigationBarTitleDisplayMode(.large)
+                #endif
+        }
+    }
 }
 
 // MARK: - Navigation Destinations Modifier
 
 private struct NavigationDestinations: ViewModifier {
+    @Environment(AppState.self) private var appState
+
     func body(content: Content) -> some View {
         content
             .navigationDestination(for: MediaItem.self) { item in
@@ -77,6 +109,9 @@ private struct NavigationDestinations: ViewModifier {
             }
             .navigationDestination(for: Person.self) { person in
                 NavigationRouter.destination(for: person)
+            }
+            .navigationDestination(for: MusicBrowseRoute.self) { route in
+                NavigationRouter.destination(for: route, appState: appState)
             }
             .navigationDestination(for: SearchSeeAllRoute.self) { route in
                 SearchSeeAllView(

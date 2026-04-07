@@ -117,15 +117,13 @@ struct ArtistDetailView: View {
 
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(loader.items) { album in
-                        NavigationLink(value: album) {
-                            ArtistAlbumCard(
-                                album: album,
-                                imageURL: albumImageURL(for: album.id)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .albumContextMenu(
-                            album: MediaItem(id: album.id, title: album.title, mediaType: .album))
+                        AlbumCard(
+                            album: album,
+                            subtitle: [album.year.map { String($0) }, album.genre]
+                                .compactMap { $0 }
+                                .joined(separator: " · "),
+                            imageURL: albumImageURL(for: album.id)
+                        )
                     }
                 }
                 .padding(.horizontal)
@@ -146,42 +144,6 @@ struct ArtistDetailView: View {
     private func albumImageURL(for itemId: ItemID) -> URL? {
         appState.provider.imageURL(
             for: itemId, type: .primary, maxSize: CGSize(width: 300, height: 300))
-    }
-}
-
-// MARK: - Artist Album Card
-
-private struct ArtistAlbumCard: View {
-    let album: Album
-    let imageURL: URL?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            MediaImage.artwork(url: imageURL, cornerRadius: 8)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-
-            Text(album.title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(2, reservesSpace: true)
-                .foregroundStyle(.primary)
-
-            HStack(spacing: 4) {
-                if let year = album.year {
-                    Text(String(year))
-                }
-                if album.year != nil, album.genre != nil {
-                    Text("·")
-                }
-                if let genre = album.genre {
-                    Text(genre)
-                        .lineLimit(1)
-                }
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

@@ -56,15 +56,8 @@ struct AlbumListView: View {
                 spacing: 20
             ) {
                 ForEach(loader.items) { album in
-                    NavigationLink(value: album) {
-                        AlbumCard(
-                            title: album.title,
-                            imageURL: imageURL(for: album)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .albumContextMenu(album: album)
-                    .onAppear { loader.onItemAppeared(album) }
+                    AlbumCard(item: album, imageURL: imageURL(for: album))
+                        .onAppear { loader.onItemAppeared(album) }
                 }
             }
             .padding()
@@ -120,27 +113,6 @@ struct AlbumListView: View {
             type: .primary,
             maxSize: CGSize(width: 300, height: 300)
         )
-    }
-}
-
-// MARK: - Album Card
-
-private struct AlbumCard: View {
-    let title: String
-    let imageURL: URL?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            MediaImage.artwork(url: imageURL, cornerRadius: 8)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-
-            Text(title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(2, reservesSpace: true)
-                .foregroundStyle(.primary)
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 

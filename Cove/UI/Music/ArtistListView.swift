@@ -51,15 +51,8 @@ struct ArtistListView: View {
                     spacing: 20
                 ) {
                     ForEach(loader.items) { artist in
-                        NavigationLink(value: artist) {
-                            ArtistCard(
-                                name: artist.title,
-                                imageURL: imageURL(for: artist)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .artistContextMenu(artist: artist)
-                        .onAppear { loader.onItemAppeared(artist) }
+                        ArtistCard(item: artist, imageURL: imageURL(for: artist))
+                            .onAppear { loader.onItemAppeared(artist) }
                     }
                 }
                 .padding()
@@ -116,28 +109,6 @@ struct ArtistListView: View {
             type: .primary,
             maxSize: CGSize(width: 300, height: 300)
         )
-    }
-}
-
-// MARK: - Artist Card
-
-private struct ArtistCard: View {
-    let name: String
-    let imageURL: URL?
-
-    var body: some View {
-        VStack(spacing: 8) {
-            MediaImage.artwork(url: imageURL, cornerRadius: 8)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-
-            Text(name)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(2, reservesSpace: true)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.primary)
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 
