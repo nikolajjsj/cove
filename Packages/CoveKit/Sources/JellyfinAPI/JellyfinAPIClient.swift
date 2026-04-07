@@ -112,8 +112,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Library/VirtualFolders")
         logger.debug("Fetching virtual folders")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders,
-            cachePolicy: .cacheFirst(maxAge: 300))
+            url: url, method: .get, headers: authHeaders)
     }
 
     // MARK: - Items
@@ -169,8 +168,7 @@ public final class JellyfinAPIClient: Sendable {
         logger.debug(
             "Fetching \(includeItemTypes?.joined(separator: ", ") ?? "items") for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 120))
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
     }
 
     /// Get a single item's full details.
@@ -185,8 +183,7 @@ public final class JellyfinAPIClient: Sendable {
         let queryItems = [URLQueryItem(name: "Fields", value: fields.joined(separator: ","))]
         logger.debug("Fetching item \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 120))
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
     }
 
     // MARK: - Image URLs
@@ -241,8 +238,7 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching album artists for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 120))
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
     }
 
     /// List all artists.
@@ -273,8 +269,7 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching artists for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 120))
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
     }
 
     // MARK: - Audio Streaming
@@ -515,8 +510,7 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching similar items for \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 300))
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
     }
 
     // MARK: - Special Features
@@ -530,8 +524,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Users/\(userId)/Items/\(itemId)/SpecialFeatures")
         logger.debug("Fetching special features for \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders,
-            cachePolicy: .cacheFirst(maxAge: 300))
+            url: url, method: .get, headers: authHeaders)
     }
 
     // MARK: - Local Trailers
@@ -545,8 +538,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Users/\(userId)/Items/\(itemId)/LocalTrailers")
         logger.debug("Fetching local trailers for \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders,
-            cachePolicy: .cacheFirst(maxAge: 300))
+            url: url, method: .get, headers: authHeaders)
     }
 
     // MARK: - Shows (TV Series)
@@ -561,8 +553,7 @@ public final class JellyfinAPIClient: Sendable {
         ]
         logger.debug("Fetching seasons for series \(seriesId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 120))
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
     }
 
     /// Get episodes for a series, optionally filtered by season.
@@ -580,8 +571,7 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching episodes for series \(seriesId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 120))
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
     }
 
     /// Get "next up" episodes to watch.
@@ -600,8 +590,7 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching next up episodes")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 30))
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
     }
 
     /// Get items to resume (continue watching).
@@ -620,8 +609,7 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching resume items for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 30))
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
     }
 
     // MARK: - Music Features
@@ -632,8 +620,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Audio/\(itemId)/Lyrics")
         logger.debug("Fetching lyrics for item \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders,
-            cachePolicy: .cacheFirst(maxAge: 3600))
+            url: url, method: .get, headers: authHeaders)
     }
 
     /// Mark an item as a favorite.
@@ -733,8 +720,7 @@ public final class JellyfinAPIClient: Sendable {
         ]
         logger.debug("Fetching items for playlist \(playlistId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 60))
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
     }
 
     /// Update an item (e.g., rename a playlist).
