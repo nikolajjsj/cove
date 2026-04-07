@@ -39,14 +39,14 @@ struct AlbumContextMenuModifier: ViewModifier {
                 Button {
                     Task { await queueAlbum(next: true) }
                 } label: {
-                    Label("Play Next", systemImage: "text.line.first.and.arrowforward")
+                    Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
                 }
 
                 // Play Later
                 Button {
                     Task { await queueAlbum(next: false) }
                 } label: {
-                    Label("Play Later", systemImage: "text.line.last.and.arrowforward")
+                    Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward")
                 }
 
                 Divider()
@@ -110,7 +110,7 @@ struct AlbumContextMenuModifier: ViewModifier {
             let message = next ? "Playing Next" : "Added to Up Next"
             let icon =
                 next
-                ? "text.line.first.and.arrowforward" : "text.line.last.and.arrowforward"
+                ? "text.line.first.and.arrowtriangle.forward" : "text.line.last.and.arrowtriangle.forward"
             appState.showToast(message, icon: icon)
         } catch {
             // Silently fail

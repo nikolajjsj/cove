@@ -21,17 +21,17 @@ struct TrackContextMenuModifier: ViewModifier {
                 // Play Next
                 Button {
                     appState.audioPlayer.queue.addNext(track)
-                    appState.showToast("Playing Next", icon: "text.line.first.and.arrowforward")
+                    appState.showToast("Playing Next", icon: "text.line.first.and.arrowtriangle.forward")
                 } label: {
-                    Label("Play Next", systemImage: "text.line.first.and.arrowforward")
+                    Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
                 }
 
                 // Play Later
                 Button {
                     appState.audioPlayer.queue.addToEnd(track)
-                    appState.showToast("Added to Up Next", icon: "text.line.last.and.arrowforward")
+                    appState.showToast("Added to Up Next", icon: "text.line.last.and.arrowtriangle.forward")
                 } label: {
-                    Label("Play Later", systemImage: "text.line.last.and.arrowforward")
+                    Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward")
                 }
 
                 Divider()

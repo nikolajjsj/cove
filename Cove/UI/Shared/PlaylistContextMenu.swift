@@ -37,14 +37,14 @@ struct PlaylistContextMenuModifier: ViewModifier {
                 Button {
                     Task { await queuePlaylist(next: true) }
                 } label: {
-                    Label("Play Next", systemImage: "text.line.first.and.arrowforward")
+                    Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
                 }
 
                 // Play Later
                 Button {
                     Task { await queuePlaylist(next: false) }
                 } label: {
-                    Label("Play Later", systemImage: "text.line.last.and.arrowforward")
+                    Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward")
                 }
 
                 Divider()
@@ -112,7 +112,7 @@ struct PlaylistContextMenuModifier: ViewModifier {
             let message = next ? "Playing Next" : "Added to Up Next"
             let icon =
                 next
-                ? "text.line.first.and.arrowforward" : "text.line.last.and.arrowforward"
+                ? "text.line.first.and.arrowtriangle.forward" : "text.line.last.and.arrowtriangle.forward"
             appState.showToast(message, icon: icon)
         } catch {
             // Silently fail
