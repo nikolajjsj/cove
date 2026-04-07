@@ -29,7 +29,7 @@ struct CollectionDetailView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     // Overview
                     if let overview = item.overview, !overview.isEmpty {
-                        overviewSection(overview)
+                        ExpandableOverview(text: overview, lineLimit: 3)
                     }
 
                     // Metadata pills
@@ -99,29 +99,6 @@ struct CollectionDetailView: View {
         }
 
         return pills
-    }
-
-    // MARK: - Overview
-
-    @State private var isOverviewExpanded = false
-    private let overviewLineLimit = 3
-
-    @ViewBuilder
-    private func overviewSection(_ overview: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(overview)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .lineLimit(isOverviewExpanded ? nil : overviewLineLimit)
-                .animation(.easeInOut(duration: 0.25), value: isOverviewExpanded)
-
-            Button {
-                isOverviewExpanded.toggle()
-            } label: {
-                Text(isOverviewExpanded ? "Show Less" : "Show More")
-                    .font(.subheadline.weight(.medium))
-            }
-        }
     }
 
     // MARK: - Collection Items Grid

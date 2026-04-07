@@ -13,10 +13,7 @@ struct MovieDetailView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
-    @State private var isOverviewExpanded = false
     @State private var detailLoader = DetailItemLoader()
-
-    private let overviewLineLimit = 4
 
     private var coordinator: VideoPlayerCoordinator {
         appState.videoPlayerCoordinator
@@ -39,7 +36,7 @@ struct MovieDetailView: View {
 
                     // Overview
                     if let overview = item.overview, !overview.isEmpty {
-                        overviewSection(overview)
+                        ExpandableOverview(text: overview)
                     }
 
                     // External Links (IMDb, TMDB)
@@ -52,7 +49,7 @@ struct MovieDetailView: View {
 
                     // Genres
                     if let genres = item.genres, !genres.isEmpty {
-                        genresTags(genres)
+                        GenreTagsSection(genres: genres)
                     }
 
                     // Studios
@@ -94,7 +91,7 @@ struct MovieDetailView: View {
         .navigationTitle(item.title)
         .toolbarBackground(.hidden, for: .navigationBar)
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -286,50 +283,6 @@ struct MovieDetailView: View {
             return "Resume at \(TimeFormatting.playbackPosition(position))"
         }
         return "Play"
-    }
-
-    // MARK: - Overview
-
-    @ViewBuilder
-    private func overviewSection(_ overview: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(overview)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .lineLimit(isOverviewExpanded ? nil : overviewLineLimit)
-                .animation(.easeInOut(duration: 0.25), value: isOverviewExpanded)
-
-            Button {
-                isOverviewExpanded.toggle()
-            } label: {
-                Text(isOverviewExpanded ? "Show Less" : "Show More")
-                    .font(.subheadline.weight(.medium))
-            }
-        }
-    }
-
-    // MARK: - Genre Tags
-
-    @ViewBuilder
-    private func genresTags(_ genres: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Genres")
-                .font(.headline)
-
-            FlowLayout(spacing: 8) {
-                ForEach(genres, id: \.self) { genre in
-                    Text(genre)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color(.tertiarySystemFill))
-                        )
-                }
-            }
-        }
     }
 
     // MARK: - Image Helpers

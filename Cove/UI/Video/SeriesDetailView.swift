@@ -36,9 +36,6 @@ struct SeriesDetailView: View {
     @State private var seasonsError: String?
     @State private var episodesError: String?
 
-    // Overview expansion
-    @State private var isOverviewExpanded = false
-
     // Download sheet
     @State private var showDownloadSheet = false
     @State private var downloadingSeasons: Set<SeasonID> = []
@@ -78,7 +75,8 @@ struct SeriesDetailView: View {
 
                     // Overview
                     if let overview = item.overview, !overview.isEmpty {
-                        overviewSection(overview)
+                        ExpandableOverview(
+                            text: overview, lineLimit: 3, font: .subheadline, expandThreshold: 150)
                     }
 
                     // External Links (IMDb, TMDB, TVDB)
@@ -93,7 +91,7 @@ struct SeriesDetailView: View {
 
                     // Genres
                     if let genres = displayItem.genres, !genres.isEmpty {
-                        genresTags(genres)
+                        GenreTagsSection(genres: genres)
                     }
 
                     // Studios
@@ -347,28 +345,6 @@ struct SeriesDetailView: View {
         return pills
     }
 
-    // MARK: - Overview
-
-    @ViewBuilder
-    private func overviewSection(_ overview: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(overview)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(isOverviewExpanded ? nil : 3)
-                .animation(.easeInOut(duration: 0.25), value: isOverviewExpanded)
-
-            if overview.count > 150 {
-                Button {
-                    isOverviewExpanded.toggle()
-                } label: {
-                    Text(isOverviewExpanded ? "Show Less" : "Show More")
-                        .font(.subheadline.weight(.medium))
-                }
-            }
-        }
-    }
-
     // MARK: - Season Picker
 
     @ViewBuilder
@@ -601,30 +577,6 @@ struct SeriesDetailView: View {
     }
 
     // MARK: - Image Helpers
-
-    // MARK: - Genre Tags
-
-    @ViewBuilder
-    private func genresTags(_ genres: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Genres")
-                .font(.headline)
-
-            FlowLayout(spacing: 8) {
-                ForEach(genres, id: \.self) { genre in
-                    Text(genre)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color(.tertiarySystemFill))
-                        )
-                }
-            }
-        }
-    }
 
     func backdropURL(for item: MediaItem) -> URL? {
         if offlineServerId != nil {
