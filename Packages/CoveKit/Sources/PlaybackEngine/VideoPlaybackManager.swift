@@ -19,7 +19,21 @@ public final class VideoPlaybackManager {
     public private(set) var duration: TimeInterval = 0
     public private(set) var isBuffering: Bool = false
     public private(set) var subtitleTracks: [SubtitleTrack] = []
-    public var selectedSubtitleIndex: Int? = nil
+    public var selectedSubtitleIndex: Int? = nil {
+        didSet { applySubtitleSelection() }
+    }
+
+    // Audio tracks
+    public private(set) var audioTracks: [AudioTrack] = []
+    public var selectedAudioTrackIndex: Int? = nil {
+        didSet { applyAudioTrackSelection() }
+    }
+
+    // Playback speed
+    public private(set) var playbackSpeed: Float = 1.0
+
+    // Aspect ratio / video gravity
+    public private(set) var videoGravity: AVLayerVideoGravity = .resizeAspect
 
     // PiP
     public private(set) var isPiPActive: Bool = false
@@ -61,6 +75,13 @@ public final class VideoPlaybackManager {
     @ObservationIgnored private nonisolated(unsafe) var progressReportTask: Task<Void, Never>?
     @ObservationIgnored private nonisolated(unsafe) var countdownTask: Task<Void, Never>?
 
+    /// AVMediaSelectionGroup for subtitle tracks (populated on .readyToPlay).
+    @ObservationIgnored private nonisolated(unsafe) var legibleSelectionGroup:
+        AVMediaSelectionGroup?
+    /// AVMediaSelectionGroup for audio tracks (populated on .readyToPlay).
+    @ObservationIgnored private nonisolated(unsafe) var audibleSelectionGroup:
+        AVMediaSelectionGroup?
+
     #if os(iOS)
         @ObservationIgnored private nonisolated(unsafe) var pipController:
             AVPictureInPictureController?
@@ -68,6 +89,14 @@ public final class VideoPlaybackManager {
     #endif
 
     private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "VideoPlayback")
+
+    /// The available playback speed options.
+    public static let speedOptions: [Float] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+
+    /// The available video gravity options for aspect ratio cycling.
+    private static let gravityOptions: [AVLayerVideoGravity] = [
+        .resizeAspect, .resizeAspectFill,
+    ]
 
     // MARK: - Init / Deinit
 
@@ -98,7 +127,8 @@ public final class VideoPlaybackManager {
 
         currentItem = item
 
-        // Parse subtitle tracks from stream info
+        // Parse subtitle tracks from stream info as initial metadata.
+        // These will be replaced by AVPlayer-discovered tracks when the asset loads.
         subtitleTracks = streamInfo.mediaStreams
             .filter { $0.type == .subtitle }
             .map { stream in
@@ -107,7 +137,7 @@ public final class VideoPlaybackManager {
                     title: stream.title ?? stream.language ?? "Track \(stream.index)",
                     language: stream.language,
                     isExternal: stream.isExternal,
-                    url: nil  // App layer will provide subtitle URLs separately if needed
+                    url: nil
                 )
             }
 
@@ -126,12 +156,19 @@ public final class VideoPlaybackManager {
             let cmTime = CMTime(seconds: startPosition, preferredTimescale: 600)
             player.seek(to: cmTime) { [weak self] _ in
                 Task { @MainActor [weak self] in
-                    self?.player.play()
-                    self?.isPlaying = true
+                    guard let self else { return }
+                    self.player.play()
+                    if self.playbackSpeed != 1.0 {
+                        self.player.rate = self.playbackSpeed
+                    }
+                    self.isPlaying = true
                 }
             }
         } else {
             player.play()
+            if playbackSpeed != 1.0 {
+                player.rate = playbackSpeed
+            }
             isPlaying = true
         }
 
@@ -155,6 +192,9 @@ public final class VideoPlaybackManager {
     /// Resume playback.
     public func play() {
         player.play()
+        if playbackSpeed != 1.0 {
+            player.rate = playbackSpeed
+        }
         isPlaying = true
     }
 
@@ -193,6 +233,62 @@ public final class VideoPlaybackManager {
     public func skipBackward(_ seconds: TimeInterval = 10) {
         seek(to: max(currentTime - seconds, 0))
     }
+
+    // MARK: - Playback Speed
+
+    /// Set the playback speed. Clamped to 0.5–2.0.
+    public func setSpeed(_ speed: Float) {
+        let clamped = max(0.5, min(speed, 2.0))
+        playbackSpeed = clamped
+        if isPlaying {
+            player.rate = clamped
+        }
+        logger.info("Playback speed set to \(clamped)x")
+    }
+
+    /// Cycle to the next speed option.
+    public func cycleSpeed() {
+        let options = Self.speedOptions
+        if let idx = options.firstIndex(of: playbackSpeed) {
+            let nextIdx = (idx + 1) % options.count
+            setSpeed(options[nextIdx])
+        } else {
+            // Find the closest option above current speed
+            if let next = options.first(where: { $0 > playbackSpeed }) {
+                setSpeed(next)
+            } else {
+                setSpeed(options[0])
+            }
+        }
+    }
+
+    // MARK: - Aspect Ratio
+
+    /// Cycle between .resizeAspect (fit) and .resizeAspectFill (fill/zoom).
+    public func cycleAspectRatio() {
+        let options = Self.gravityOptions
+        if let idx = options.firstIndex(of: videoGravity) {
+            let nextIdx = (idx + 1) % options.count
+            videoGravity = options[nextIdx]
+        } else {
+            videoGravity = .resizeAspect
+        }
+        logger.info("Video gravity changed to \(self.videoGravity.rawValue)")
+    }
+
+    // MARK: - Track Selection
+
+    /// Select a subtitle track by index, or nil to disable subtitles.
+    public func selectSubtitle(at index: Int?) {
+        selectedSubtitleIndex = index
+    }
+
+    /// Select an audio track by index, or nil for default.
+    public func selectAudioTrack(at index: Int?) {
+        selectedAudioTrackIndex = index
+    }
+
+    // MARK: - PiP
 
     #if os(iOS)
         /// Toggle Picture-in-Picture mode.
@@ -236,8 +332,13 @@ public final class VideoPlaybackManager {
         currentItem = nil
         subtitleTracks = []
         selectedSubtitleIndex = nil
+        audioTracks = []
+        selectedAudioTrackIndex = nil
         showNextEpisodeCountdown = false
         nextEpisode = nil
+        videoGravity = .resizeAspect
+        legibleSelectionGroup = nil
+        audibleSelectionGroup = nil
 
         progressReportTask?.cancel()
         countdownTask?.cancel()
@@ -250,6 +351,12 @@ public final class VideoPlaybackManager {
         }
 
         logger.info("Stopped video playback")
+    }
+
+    /// Dismiss the next-episode countdown overlay without triggering playback.
+    public func dismissNextEpisodeCountdown() {
+        showNextEpisodeCountdown = false
+        countdownTask?.cancel()
     }
 
     /// Trigger playing the next episode (called by UI countdown or button).
@@ -302,6 +409,8 @@ public final class VideoPlaybackManager {
             guard let rate = change.newValue else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                // When using custom playback speed, the rate might be > 1 while playing.
+                // Treat rate > 0 as playing, rate == 0 as paused.
                 let playing = rate > 0
                 if self.isPlaying != playing {
                     self.isPlaying = playing
@@ -335,6 +444,10 @@ public final class VideoPlaybackManager {
                         self.duration = item.duration.seconds
                     }
                     self.isBuffering = false
+
+                    // Discover selectable audio and subtitle tracks from the loaded asset
+                    self.discoverMediaSelectionTracks(item)
+
                 case .failed:
                     let error =
                         item.error
@@ -374,6 +487,95 @@ public final class VideoPlaybackManager {
             Task { @MainActor [weak self] in
                 self?.isBuffering = isEmpty
             }
+        }
+    }
+
+    // MARK: - Media Selection Track Discovery
+
+    /// Discovers selectable audio and subtitle tracks from the AVPlayerItem's asset.
+    ///
+    /// Called when the player item reaches `.readyToPlay`. This uses AVMediaSelectionGroup
+    /// to enumerate the tracks that AVPlayer can actually switch between, as opposed to
+    /// the metadata from StreamInfo which may not correspond to selectable options.
+    private func discoverMediaSelectionTracks(_ playerItem: AVPlayerItem) {
+        let asset = playerItem.asset
+
+        // Discover subtitle / closed-caption tracks
+        if let legibleGroup = asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
+            self.legibleSelectionGroup = legibleGroup
+
+            let discovered = legibleGroup.options.enumerated().map { index, option in
+                SubtitleTrack(
+                    id: index,
+                    title: option.displayName,
+                    language: option.locale?.languageCode,
+                    isExternal: option.mediaType == .text,
+                    url: nil
+                )
+            }
+
+            if !discovered.isEmpty {
+                subtitleTracks = discovered
+                logger.info("Discovered \(discovered.count) subtitle track(s) from AVAsset")
+            }
+        }
+
+        // Discover audio tracks
+        if let audibleGroup = asset.mediaSelectionGroup(forMediaCharacteristic: .audible) {
+            self.audibleSelectionGroup = audibleGroup
+
+            let discovered = audibleGroup.options.enumerated().map { index, option in
+                AudioTrack(
+                    id: index,
+                    title: option.displayName,
+                    language: option.locale?.languageCode,
+                    codec: nil,
+                    channels: nil,
+                    isDefault: option == audibleGroup.defaultOption
+                )
+            }
+
+            if !discovered.isEmpty {
+                audioTracks = discovered
+
+                // Set the currently selected audio track to the default
+                if let defaultIdx = discovered.firstIndex(where: { $0.isDefault }) {
+                    selectedAudioTrackIndex = defaultIdx
+                }
+
+                logger.info("Discovered \(discovered.count) audio track(s) from AVAsset")
+            }
+        }
+    }
+
+    // MARK: - Track Selection (internal)
+
+    /// Applies the current `selectedSubtitleIndex` to the AVPlayer.
+    private func applySubtitleSelection() {
+        guard let playerItem = player.currentItem, let group = legibleSelectionGroup else { return }
+
+        if let index = selectedSubtitleIndex, index < group.options.count {
+            let option = group.options[index]
+            playerItem.select(option, in: group)
+            logger.info("Selected subtitle track: \(option.displayName)")
+        } else {
+            // Off — deselect all subtitles
+            playerItem.select(nil, in: group)
+            logger.info("Subtitles disabled")
+        }
+    }
+
+    /// Applies the current `selectedAudioTrackIndex` to the AVPlayer.
+    private func applyAudioTrackSelection() {
+        guard let playerItem = player.currentItem, let group = audibleSelectionGroup else { return }
+
+        if let index = selectedAudioTrackIndex, index < group.options.count {
+            let option = group.options[index]
+            playerItem.select(option, in: group)
+            logger.info("Selected audio track: \(option.displayName)")
+        } else if let defaultOption = group.defaultOption {
+            playerItem.select(defaultOption, in: group)
+            logger.info("Reverted to default audio track")
         }
     }
 

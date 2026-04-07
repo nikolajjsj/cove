@@ -37,6 +37,12 @@ final class VideoPlayerCoordinator {
     /// Playback start position in seconds.
     private(set) var startPosition: TimeInterval = 0
 
+    /// Whether the resume prompt is showing.
+    var showResumePrompt: Bool = false
+
+    /// The saved position for the resume prompt.
+    private(set) var savedPosition: TimeInterval = 0
+
     // MARK: - Loading State
 
     /// Whether we're currently resolving a stream URL.
@@ -78,8 +84,17 @@ final class VideoPlayerCoordinator {
                 let info = try await provider.streamURL(for: item, profile: nil)
                 currentItem = item
                 streamInfo = info
-                startPosition = item.userData?.playbackPosition ?? 0
-                isPresented = true
+
+                let position = item.userData?.playbackPosition ?? 0
+                if position > 30 {
+                    // Meaningful progress — ask the user
+                    savedPosition = position
+                    showResumePrompt = true
+                } else {
+                    // No meaningful progress — start from the beginning
+                    startPosition = 0
+                    isPresented = true
+                }
             } catch {
                 self.error = PlaybackError(
                     itemTitle: item.title,
@@ -118,8 +133,15 @@ final class VideoPlayerCoordinator {
                 let info = try await provider.streamURL(for: episodeItem, profile: nil)
                 currentItem = episodeItem
                 streamInfo = info
-                startPosition = episodeItem.userData?.playbackPosition ?? 0
-                isPresented = true
+
+                let position = episodeItem.userData?.playbackPosition ?? 0
+                if position > 30 {
+                    savedPosition = position
+                    showResumePrompt = true
+                } else {
+                    startPosition = 0
+                    isPresented = true
+                }
             } catch {
                 self.error = PlaybackError(
                     itemTitle: episodeTitle,
@@ -144,15 +166,39 @@ final class VideoPlayerCoordinator {
         isPresented = true
     }
 
+    /// User chose "Resume" — start from the saved position.
+    func resumePlayback() {
+        startPosition = savedPosition
+        showResumePrompt = false
+        isPresented = true
+    }
+
+    /// User chose "Play from Beginning" — start from 0.
+    func playFromBeginning() {
+        startPosition = 0
+        showResumePrompt = false
+        isPresented = true
+    }
+
+    /// User dismissed the resume prompt without choosing.
+    func cancelResume() {
+        showResumePrompt = false
+        currentItem = nil
+        streamInfo = nil
+        savedPosition = 0
+    }
+
     /// Dismiss the video player and clear playback state.
     func dismiss() {
         isPresented = false
+        showResumePrompt = false
         // Delay clearing data so the fade-out animation can still reference the current item
         Task {
             try? await Task.sleep(for: .milliseconds(500))
             currentItem = nil
             streamInfo = nil
             startPosition = 0
+            savedPosition = 0
         }
     }
 

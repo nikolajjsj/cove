@@ -6,10 +6,12 @@ import SwiftUI
 
     struct VideoRenderView: UIViewRepresentable {
         let player: AVPlayer
+        var videoGravity: AVLayerVideoGravity = .resizeAspect
 
         func makeUIView(context: Context) -> PlayerUIView {
             let view = PlayerUIView()
             view.player = player
+            view.videoGravity = videoGravity
             view.backgroundColor = .black
             return view
         }
@@ -17,6 +19,9 @@ import SwiftUI
         func updateUIView(_ uiView: PlayerUIView, context: Context) {
             if uiView.player !== player {
                 uiView.player = player
+            }
+            if uiView.videoGravity != videoGravity {
+                uiView.videoGravity = videoGravity
             }
         }
 
@@ -27,10 +32,12 @@ import SwiftUI
 
             var player: AVPlayer? {
                 get { playerLayer.player }
-                set {
-                    playerLayer.player = newValue
-                    playerLayer.videoGravity = .resizeAspect
-                }
+                set { playerLayer.player = newValue }
+            }
+
+            var videoGravity: AVLayerVideoGravity {
+                get { playerLayer.videoGravity }
+                set { playerLayer.videoGravity = newValue }
             }
         }
     }
@@ -40,9 +47,10 @@ import SwiftUI
 
     struct VideoRenderView: NSViewRepresentable {
         let player: AVPlayer
+        var videoGravity: AVLayerVideoGravity = .resizeAspect
 
         func makeNSView(context: Context) -> PlayerNSView {
-            let view = PlayerNSView(player: player)
+            let view = PlayerNSView(player: player, videoGravity: videoGravity)
             return view
         }
 
@@ -50,17 +58,20 @@ import SwiftUI
             if nsView.playerLayer.player !== player {
                 nsView.playerLayer.player = player
             }
+            if nsView.playerLayer.videoGravity != videoGravity {
+                nsView.playerLayer.videoGravity = videoGravity
+            }
         }
 
         final class PlayerNSView: NSView {
             let playerLayer: AVPlayerLayer
 
-            init(player: AVPlayer) {
+            init(player: AVPlayer, videoGravity: AVLayerVideoGravity) {
                 self.playerLayer = AVPlayerLayer(player: player)
                 super.init(frame: .zero)
 
                 wantsLayer = true
-                playerLayer.videoGravity = .resizeAspect
+                playerLayer.videoGravity = videoGravity
                 playerLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
                 layer?.addSublayer(playerLayer)
             }

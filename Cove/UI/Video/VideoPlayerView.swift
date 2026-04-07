@@ -1,4 +1,5 @@
 import AVKit
+import Defaults
 import JellyfinProvider
 import Models
 import PlaybackEngine
@@ -19,57 +20,138 @@ struct VideoPlayerView: View {
     @State private var videoManager = VideoPlaybackManager()
     @State private var showControls = true
     @State private var controlsTimer: Task<Void, Never>?
-    @State private var showSubtitlePicker = false
 
-    // Seeking
+    // Tracks whether the video has actually started rendering frames.
+    // Controls stay visible until this becomes true.
+    @State private var hasStartedPlaying = false
+
+    // Sheets
+    @State private var showSubtitlePicker = false
+    @State private var showAudioTrackPicker = false
+
+    // Seeking (slider-driven)
     @State private var isSeeking = false
     @State private var seekTime: TimeInterval = 0
+
+    // Gesture-driven seeking
+    @State private var isGestureSeeking = false
+    @State private var gestureSeekTime: TimeInterval = 0
+
+    // Center-controls skip animation triggers
+    @State private var forwardSkipTrigger: Int = 0
+    @State private var backwardSkipTrigger: Int = 0
+
+    // Landscape orientation
+    #if os(iOS)
+        @State private var previousOrientationMask: UIInterfaceOrientationMask?
+    #endif
 
     var body: some View {
         ZStack {
             // Video rendering layer
-            VideoRenderView(player: videoManager.player)
+            VideoRenderView(player: videoManager.player, videoGravity: videoManager.videoGravity)
                 .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    toggleControls()
-                }
 
-            // Buffering indicator
-            if videoManager.isBuffering {
+            // Gesture layer — always active underneath controls
+            VideoGestureLayer(
+                currentTime: videoManager.currentTime,
+                duration: videoManager.duration,
+                skipForwardInterval: Defaults[.skipForwardInterval],
+                skipBackwardInterval: Defaults[.skipBackwardInterval],
+                onToggleControls: {
+                    toggleControls()
+                },
+                onSkipForward: {
+                    forwardSkipTrigger += 1
+                    videoManager.skipForward(Defaults[.skipForwardInterval])
+                    resetControlsTimer()
+                },
+                onSkipBackward: {
+                    backwardSkipTrigger += 1
+                    videoManager.skipBackward(Defaults[.skipBackwardInterval])
+                    resetControlsTimer()
+                },
+                onSeekStarted: {
+                    isGestureSeeking = true
+                    gestureSeekTime = videoManager.currentTime
+                    showControls = true
+                    controlsTimer?.cancel()
+                },
+                onSeekChanged: { time in
+                    gestureSeekTime = time
+                },
+                onSeekCommitted: { time in
+                    videoManager.seek(to: time)
+                    isGestureSeeking = false
+                    resetControlsTimer()
+                },
+                onAspectRatioCycle: {
+                    videoManager.cycleAspectRatio()
+                }
+            )
+            .zIndex(1)
+
+            // Buffering indicator (only when controls are hidden)
+            if videoManager.isBuffering && !showControls {
                 ProgressView()
                     .scaleEffect(1.5)
                     .tint(.white)
+                    .zIndex(2)
             }
 
-            // Custom controls overlay
-            if showControls {
-                controlsOverlay
-                    .transition(.opacity)
-            }
+            // Custom controls overlay — always in the tree for snappy toggling.
+            // We animate opacity instead of inserting/removing the view.
+            controlsOverlay
+                .opacity(showControls ? 1 : 0)
+                .allowsHitTesting(showControls)
+                .zIndex(3)
 
             // Next episode countdown
             if videoManager.showNextEpisodeCountdown, let next = videoManager.nextEpisode {
                 nextEpisodeCountdownView(next: next)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .zIndex(4)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: showControls)
+        .animation(.easeOut(duration: 0.15), value: showControls)
         .animation(.easeInOut(duration: 0.3), value: videoManager.showNextEpisodeCountdown)
         .background(Color.black)
         #if os(iOS)
-            .statusBarHidden(!showControls)
-            .persistentSystemOverlays(showControls ? .automatic : .hidden)
+            .statusBarHidden(true)
+            .persistentSystemOverlays(.hidden)
         #endif
         .onAppear {
+            applyLandscapeOrientation()
             setupAndPlay()
         }
         .onDisappear {
             controlsTimer?.cancel()
             videoManager.stop()
+            // Belt-and-suspenders: also restore here in case the view is
+            // removed without going through the dismiss button (e.g. PiP,
+            // error dismissal, next-episode coordinator dismiss).
+            restoreOrientation()
+        }
+        // Detect when media has actually started playing so we can auto-hide controls.
+        .onChange(of: videoManager.isBuffering) { oldValue, newValue in
+            if oldValue && !newValue && videoManager.isPlaying && !hasStartedPlaying {
+                hasStartedPlaying = true
+                scheduleControlsHide()
+            }
+        }
+        .onChange(of: videoManager.isPlaying) { _, isPlaying in
+            if isPlaying && !videoManager.isBuffering && !hasStartedPlaying {
+                hasStartedPlaying = true
+                scheduleControlsHide()
+            }
         }
         .sheet(isPresented: $showSubtitlePicker) {
             subtitlePickerSheet
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showAudioTrackPicker) {
+            audioTrackPickerSheet
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
@@ -80,16 +162,6 @@ struct VideoPlayerView: View {
     @ViewBuilder
     private var controlsOverlay: some View {
         ZStack {
-            // Tap-to-dismiss layer — sits behind all interactive controls.
-            // Using Color.clear + contentShape so it fills the screen but
-            // doesn't block buttons/sliders that are placed on top of it.
-            Color.black.opacity(0.001)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    toggleControls()
-                }
-
             // Gradient backgrounds (top and bottom) — purely decorative
             VStack(spacing: 0) {
                 LinearGradient(
@@ -124,10 +196,18 @@ struct VideoPlayerView: View {
 
                 Spacer()
 
-                // Bottom: seek bar, time, subtitle/pip buttons
+                // Bottom: seek bar, time, subtitle/audio/speed/pip buttons
                 bottomBar
                     .padding(.horizontal)
                     .padding(.bottom, 8)
+            }
+
+            // Buffering spinner shown over center controls
+            if videoManager.isBuffering {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .tint(.white)
+                    .allowsHitTesting(false)
             }
         }
     }
@@ -137,6 +217,9 @@ struct VideoPlayerView: View {
     private var topBar: some View {
         HStack(alignment: .center, spacing: 12) {
             Button {
+                // Restore orientation eagerly — before the view starts its
+                // removal transition — so the device rotates back immediately.
+                restoreOrientation()
                 coordinator.dismiss()
             } label: {
                 Image(systemName: "xmark")
@@ -153,7 +236,7 @@ struct VideoPlayerView: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
 
-                if let subtitle = videoManager.currentItem?.overview {
+                if let subtitle = topBarSubtitle {
                     Text(subtitle)
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.7))
@@ -162,6 +245,22 @@ struct VideoPlayerView: View {
             }
 
             Spacer()
+
+            // Aspect ratio toggle
+            Button {
+                videoManager.cycleAspectRatio()
+            } label: {
+                Image(
+                    systemName: videoManager.videoGravity == .resizeAspectFill
+                        ? "arrow.down.right.and.arrow.up.left"
+                        : "arrow.up.left.and.arrow.down.right"
+                )
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             #if os(iOS)
                 if videoManager.isPiPPossible {
@@ -180,17 +279,34 @@ struct VideoPlayerView: View {
         }
     }
 
+    /// Subtitle text for the top bar — shows series info for episodes.
+    private var topBarSubtitle: String? {
+        if item.mediaType == .episode {
+            var parts: [String] = []
+            if let s = item.parentIndexNumber, let e = item.indexNumber {
+                parts.append("S\(s) E\(e)")
+            }
+            if let series = item.seriesName {
+                parts.append(series)
+            }
+            return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        }
+        return item.productionYear.map { String($0) }
+    }
+
     // MARK: - Center Controls
 
     private var centerControls: some View {
         HStack(spacing: 48) {
             Button {
-                videoManager.skipBackward()
+                backwardSkipTrigger += 1
+                videoManager.skipBackward(Defaults[.skipBackwardInterval])
                 resetControlsTimer()
             } label: {
-                Image(systemName: "gobackward.10")
+                Image(systemName: skipBackwardIcon)
                     .font(.title)
                     .foregroundStyle(.white)
+                    .symbolEffect(.bounce, value: backwardSkipTrigger)
                     .frame(width: 56, height: 56)
                     .contentShape(Rectangle())
             }
@@ -203,23 +319,36 @@ struct VideoPlayerView: View {
                 Image(systemName: videoManager.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 44))
                     .foregroundStyle(.white)
+                    .contentTransition(.symbolEffect(.replace))
                     .frame(width: 64, height: 64)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             Button {
-                videoManager.skipForward()
+                forwardSkipTrigger += 1
+                videoManager.skipForward(Defaults[.skipForwardInterval])
                 resetControlsTimer()
             } label: {
-                Image(systemName: "goforward.10")
+                Image(systemName: skipForwardIcon)
                     .font(.title)
                     .foregroundStyle(.white)
+                    .symbolEffect(.bounce, value: forwardSkipTrigger)
                     .frame(width: 56, height: 56)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private var skipBackwardIcon: String {
+        let interval = Int(Defaults[.skipBackwardInterval])
+        return "gobackward.\(interval)"
+    }
+
+    private var skipForwardIcon: String {
+        let interval = Int(Defaults[.skipForwardInterval])
+        return "goforward.\(interval)"
     }
 
     // MARK: - Bottom Bar
@@ -228,7 +357,7 @@ struct VideoPlayerView: View {
         VStack(spacing: 8) {
             seekSlider
 
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 // Time labels
                 Text(TimeFormatting.playbackPosition(displayTime))
                     .font(.caption.monospacedDigit())
@@ -243,6 +372,23 @@ struct VideoPlayerView: View {
                     .foregroundStyle(.white.opacity(0.8))
 
                 Spacer()
+
+                // Speed picker — inline Menu instead of a full sheet
+                speedMenu
+
+                // Audio track button (only shown when multiple tracks available)
+                if videoManager.audioTracks.count > 1 {
+                    Button {
+                        showAudioTrackPicker = true
+                    } label: {
+                        Image(systemName: "waveform.circle")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
 
                 // Subtitle button
                 if !videoManager.subtitleTracks.isEmpty {
@@ -261,7 +407,7 @@ struct VideoPlayerView: View {
                     .buttonStyle(.plain)
                 }
 
-                // Airplay
+                // AirPlay
                 #if os(iOS)
                     AirPlayButton()
                         .frame(width: 44, height: 44)
@@ -271,10 +417,61 @@ struct VideoPlayerView: View {
         }
     }
 
+    // MARK: - Speed Menu
+
+    /// Inline speed picker presented as a compact Menu (context-menu style).
+    private var speedMenu: some View {
+        Menu {
+            Picker(
+                "Playback Speed",
+                selection: Binding(
+                    get: { videoManager.playbackSpeed },
+                    set: { newSpeed in
+                        videoManager.setSpeed(newSpeed)
+                        Defaults[.videoPlaybackSpeed] = newSpeed
+                        resetControlsTimer()
+                    }
+                )
+            ) {
+                ForEach(VideoPlaybackManager.speedOptions, id: \.self) { speed in
+                    Text(speedDisplayText(speed) + (speed == 1.0 ? " (Normal)" : ""))
+                        .tag(speed)
+                }
+            }
+        } label: {
+            Text(speedLabel)
+                .font(.caption.weight(.bold).monospacedDigit())
+                .foregroundStyle(
+                    videoManager.playbackSpeed != 1.0 ? Color.accentColor : .white
+                )
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+    }
+
+    /// Speed label: "1×" for normal, "1.5×" etc for other speeds.
+    private var speedLabel: String {
+        let speed = videoManager.playbackSpeed
+        if speed == Float(Int(speed)) {
+            return "\(Int(speed))×"
+        }
+        return String(format: "%.1f×", speed)
+    }
+
+    private func speedDisplayText(_ speed: Float) -> String {
+        if speed == Float(Int(speed)) {
+            return "\(Int(speed))×"
+        }
+        return String(format: "%.2g×", speed)
+    }
+
     // MARK: - Seek Slider
 
+    /// The time to display — prioritizes gesture seeking, then slider seeking, then actual time.
     private var displayTime: TimeInterval {
-        isSeeking ? seekTime : videoManager.currentTime
+        if isGestureSeeking { return gestureSeekTime }
+        if isSeeking { return seekTime }
+        return videoManager.currentTime
     }
 
     private var seekSlider: some View {
@@ -306,8 +503,9 @@ struct VideoPlayerView: View {
     private var subtitlePickerSheet: some View {
         NavigationStack {
             List {
+                // "Off" option
                 Button {
-                    videoManager.selectedSubtitleIndex = nil
+                    videoManager.selectSubtitle(at: nil)
                     showSubtitlePicker = false
                 } label: {
                     HStack {
@@ -321,6 +519,35 @@ struct VideoPlayerView: View {
                         }
                     }
                 }
+
+                // Subtitle tracks
+                ForEach(videoManager.subtitleTracks) { track in
+                    Button {
+                        videoManager.selectSubtitle(at: track.id)
+                        showSubtitlePicker = false
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(track.title)
+                                    .foregroundStyle(.primary)
+                                if let language = track.language {
+                                    Text(
+                                        Locale.current.localizedString(
+                                            forLanguageCode: language) ?? language
+                                    )
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                            if videoManager.selectedSubtitleIndex == track.id {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(Color.accentColor)
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                    }
+                }
             }
             .navigationTitle("Subtitles")
             #if os(iOS)
@@ -330,6 +557,66 @@ struct VideoPlayerView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         showSubtitlePicker = false
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Audio Track Picker Sheet
+
+    @ViewBuilder
+    private var audioTrackPickerSheet: some View {
+        NavigationStack {
+            List {
+                ForEach(videoManager.audioTracks) { track in
+                    Button {
+                        videoManager.selectAudioTrack(at: track.id)
+                        showAudioTrackPicker = false
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    Text(track.title)
+                                        .foregroundStyle(.primary)
+                                    if track.isDefault {
+                                        Text("Default")
+                                            .font(.caption2.weight(.medium))
+                                            .foregroundStyle(.secondary)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(
+                                                Capsule().fill(.quaternary)
+                                            )
+                                    }
+                                }
+                                if let language = track.language {
+                                    Text(
+                                        Locale.current.localizedString(
+                                            forLanguageCode: language) ?? language
+                                    )
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                            if videoManager.selectedAudioTrackIndex == track.id {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(Color.accentColor)
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Audio")
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        showAudioTrackPicker = false
                     }
                 }
             }
@@ -354,7 +641,7 @@ struct VideoPlayerView: View {
                         Spacer()
 
                         Button {
-                            //                            videoManager.showNextEpisodeCountdown = false
+                            videoManager.dismissNextEpisodeCountdown()
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.caption.bold())
@@ -397,7 +684,9 @@ struct VideoPlayerView: View {
                 }
                 .padding(16)
                 .frame(width: 280)
-                .background(.ultraThinMaterial.opacity(0.8), in: RoundedRectangle(cornerRadius: 14))
+                .background(
+                    .ultraThinMaterial.opacity(0.8), in: RoundedRectangle(cornerRadius: 14)
+                )
                 .environment(\.colorScheme, .dark)
             }
             .padding(24)
@@ -407,6 +696,12 @@ struct VideoPlayerView: View {
     // MARK: - Setup
 
     private func setupAndPlay() {
+        // Restore persisted playback speed
+        let savedSpeed = Defaults[.videoPlaybackSpeed]
+        if savedSpeed != 1.0 {
+            videoManager.setSpeed(savedSpeed)
+        }
+
         // Wire playback reporting callbacks
         let provider = authManager.provider
         let coordinator = self.coordinator
@@ -421,7 +716,6 @@ struct VideoPlayerView: View {
             try? await provider.reportPlaybackStopped(item: item, position: position)
         }
         videoManager.onPlayNextEpisode = { _ in
-            // Dismiss and let the parent handle navigation to the next episode
             coordinator.dismiss()
         }
         videoManager.onPlaybackError = { item, error in
@@ -437,7 +731,11 @@ struct VideoPlayerView: View {
             streamInfo: streamInfo,
             startPosition: startPosition
         )
-        scheduleControlsHide()
+
+        // Don't schedule auto-hide yet — controls stay visible until
+        // playback has actually started (detected via onChange handlers).
+        // For instant-start local files where isBuffering is never true,
+        // the isPlaying onChange will catch it immediately.
     }
 
     // MARK: - Controls Visibility
@@ -452,6 +750,7 @@ struct VideoPlayerView: View {
     }
 
     private func resetControlsTimer() {
+        showControls = true
         scheduleControlsHide()
     }
 
@@ -463,6 +762,65 @@ struct VideoPlayerView: View {
                 showControls = false
             }
         }
+    }
+
+    // MARK: - Orientation Management
+
+    private func applyLandscapeOrientation() {
+        #if os(iOS)
+            guard Defaults[.forceLandscapeVideo] else { return }
+
+            // Store current orientation mask and force landscape
+            if let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene }).first
+            {
+                previousOrientationMask =
+                    windowScene.windows.first?.windowScene?.effectiveGeometry
+                        .interfaceOrientation == .portrait ? .portrait : nil
+            }
+
+            // Request landscape orientation
+            if let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene }).first
+            {
+                let preferences = UIWindowScene.GeometryPreferences.iOS(
+                    interfaceOrientations: .landscape)
+                windowScene.requestGeometryUpdate(preferences) { error in
+                    // Best effort — some devices or multitasking modes may not support this
+                }
+            }
+
+            // Also set the supported orientations via the app delegate approach
+            UIViewController.attemptRotationToDeviceOrientation()
+        #endif
+    }
+
+    private func restoreOrientation() {
+        #if os(iOS)
+            guard Defaults[.forceLandscapeVideo] else { return }
+
+            if let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene }).first
+            {
+                // Actively request portrait so the device rotates back
+                // immediately instead of just "allowing" all orientations
+                // (which leaves the device stuck in landscape).
+                let portraitPreferences = UIWindowScene.GeometryPreferences.iOS(
+                    interfaceOrientations: .portrait)
+                windowScene.requestGeometryUpdate(portraitPreferences) { _ in }
+
+                // After a short delay, re-allow all orientations so the user
+                // can freely rotate again (e.g. landscape for another video).
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(400))
+                    let allPreferences = UIWindowScene.GeometryPreferences.iOS(
+                        interfaceOrientations: .all)
+                    windowScene.requestGeometryUpdate(allPreferences) { _ in }
+                }
+            }
+
+            UIViewController.attemptRotationToDeviceOrientation()
+        #endif
     }
 
     // MARK: - Helpers

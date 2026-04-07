@@ -1,3 +1,4 @@
+import Models
 import SwiftUI
 
 struct RootView: View {
@@ -45,6 +46,30 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.35), value: coordinator.isPresented)
         .animation(.easeInOut(duration: 0.4), value: authManager.isRestoringSession)
         .animation(.easeInOut(duration: 0.4), value: authManager.isAuthenticated)
+        // Resume prompt — "Resume" vs "Play from Beginning"
+        .alert(
+            "Resume Playback",
+            isPresented: Binding(
+                get: { coordinator.showResumePrompt },
+                set: { coordinator.showResumePrompt = $0 }
+            )
+        ) {
+            Button("Resume") {
+                coordinator.resumePlayback()
+            }
+            Button("Play from Beginning") {
+                coordinator.playFromBeginning()
+            }
+            Button("Cancel", role: .cancel) {
+                coordinator.cancelResume()
+            }
+        } message: {
+            if let item = coordinator.currentItem {
+                Text(
+                    "You were \(TimeFormatting.playbackPosition(coordinator.savedPosition)) into \"\(item.title)\". Would you like to resume?"
+                )
+            }
+        }
         // Playback error alert — shown at the root so it's always reachable
         .alert(
             "Playback Error",
