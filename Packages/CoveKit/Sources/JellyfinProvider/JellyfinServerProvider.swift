@@ -112,9 +112,14 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - Library Browsing
 
     public func libraries() async throws -> [MediaLibrary] {
-        let client = try client()
-        let folders = try await client.getVirtualFolders()
-        return folders.compactMap { JellyfinMapper.mapLibrary($0) }
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getUserViews(userId: userId)
+        let items = result.items ?? []
+        return items.compactMap { dto -> MediaLibrary? in
+            guard let id = dto.id, let name = dto.name else { return nil }
+            let collectionType = dto.collectionType.flatMap { CollectionType(rawValue: $0) }
+            return MediaLibrary(id: ItemID(id), name: name, collectionType: collectionType)
+        }
     }
 
     public func items(in library: MediaLibrary, sort: SortOptions, filter: FilterOptions)

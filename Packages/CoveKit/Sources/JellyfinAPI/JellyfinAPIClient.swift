@@ -115,6 +115,16 @@ public final class JellyfinAPIClient: Sendable {
             url: url, method: .get, headers: authHeaders)
     }
 
+    /// Fetch the media views (libraries) accessible to the given user.
+    /// Unlike `getVirtualFolders`, this endpoint works for non-admin users too.
+    /// `GET /Users/{userId}/Views`
+    public func getUserViews(userId: String) async throws -> ItemsResult {
+        let url = baseURL.appendingPathComponent("Users/\(userId)/Views")
+        logger.debug("Fetching user views for user \(userId)")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders)
+    }
+
     // MARK: - Items
 
     /// Browse items with filtering and sorting.
