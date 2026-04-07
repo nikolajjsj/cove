@@ -236,8 +236,10 @@ private struct LibrarySection: View {
     }
 
     private func loadItems() async {
-        isLoading = true
-        defer { isLoading = false }
+        let firstVisit = items.isEmpty
+        
+        if firstVisit { isLoading = true }
+        defer { if firstVisit { isLoading = false } }
         do {
             let sort = SortOptions(field: .dateAdded, order: .descending)
             let filter = FilterOptions(
