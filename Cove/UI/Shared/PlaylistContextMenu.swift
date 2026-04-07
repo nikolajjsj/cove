@@ -10,6 +10,7 @@ struct PlaylistContextMenuModifier: ViewModifier {
     var onRenamed: (() -> Void)?
     var onDeleted: (() -> Void)?
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var showRenameAlert = false
     @State private var renameText = ""
     @State private var showDeleteConfirmation = false
@@ -83,7 +84,7 @@ struct PlaylistContextMenuModifier: ViewModifier {
 
     private func playPlaylist(shuffle: Bool) async {
         do {
-            var tracks = try await appState.provider.playlistTracks(playlist: playlist.id)
+            var tracks = try await authManager.provider.playlistTracks(playlist: playlist.id)
             guard !tracks.isEmpty else { return }
             if shuffle { tracks.shuffle() }
             appState.audioPlayer.play(tracks: tracks, startingAt: 0)
@@ -94,7 +95,7 @@ struct PlaylistContextMenuModifier: ViewModifier {
 
     private func queuePlaylist(next: Bool) async {
         do {
-            let tracks = try await appState.provider.playlistTracks(playlist: playlist.id)
+            let tracks = try await authManager.provider.playlistTracks(playlist: playlist.id)
             appState.queueTracks(tracks, next: next)
         } catch {
             // Silently fail
@@ -105,7 +106,7 @@ struct PlaylistContextMenuModifier: ViewModifier {
         let name = renameText.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
         do {
-            try await appState.provider.renamePlaylist(playlist: playlist.id, name: name)
+            try await authManager.provider.renamePlaylist(playlist: playlist.id, name: name)
             appState.showToast("Playlist renamed", icon: "checkmark.circle.fill")
             onRenamed?()
         } catch {
@@ -115,7 +116,7 @@ struct PlaylistContextMenuModifier: ViewModifier {
 
     private func deletePlaylist() async {
         do {
-            try await appState.provider.deletePlaylist(playlist: playlist.id)
+            try await authManager.provider.deletePlaylist(playlist: playlist.id)
             appState.showToast("Playlist deleted", icon: "checkmark.circle.fill")
             onDeleted?()
         } catch {

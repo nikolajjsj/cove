@@ -7,6 +7,7 @@ import SwiftUI
 struct LyricsView: View {
     let track: Track
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var lyrics: Lyrics?
     @State private var isLoading = true
     @State private var isUserScrolling = false
@@ -157,7 +158,7 @@ struct LyricsView: View {
     private func loadLyrics() async {
         isLoading = true
         do {
-            lyrics = try await appState.provider.lyrics(track: track.id)
+            lyrics = try await authManager.provider.lyrics(track: track.id)
         } catch {
             lyrics = nil
         }
@@ -166,8 +167,10 @@ struct LyricsView: View {
 }
 
 #Preview {
+    let state = AppState.preview
     LyricsView(
         track: Track(id: TrackID("preview"), title: "Test Track")
     )
-    .environment(AppState())
+    .environment(state)
+    .environment(state.authManager)
 }

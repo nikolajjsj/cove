@@ -8,6 +8,8 @@ import SwiftUI
 struct PlaylistDetailView: View {
     let playlist: Playlist
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
+    @Environment(DownloadCoordinator.self) private var downloadCoordinator
     @State private var tracks: [Track] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -56,11 +58,12 @@ struct PlaylistDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                if appState.downloadManager != nil && !tracks.isEmpty {
+                if downloadCoordinator.downloadManager != nil && !tracks.isEmpty {
                     Button {
                         Task {
                             isDownloading = true
-                            try? await appState.downloadPlaylist(playlist: playlist, tracks: tracks)
+                            try? await downloadCoordinator.downloadPlaylist(
+                                playlist: playlist, tracks: tracks)
                             isDownloading = false
                             appState.showToast("Downloading playlist", icon: "arrow.down.circle")
                         }
@@ -216,7 +219,7 @@ struct PlaylistDetailView: View {
         let newName = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !newName.isEmpty else { return }
         do {
-            try await appState.provider.renamePlaylist(playlist: playlist.id, name: newName)
+            try await authManager.provider.renamePlaylist(playlist: playlist.id, name: newName)
             appState.showToast("Playlist renamed", icon: "pencil")
         } catch {
             appState.showToast("Failed to rename playlist", icon: "exclamationmark.triangle")
@@ -225,7 +228,7 @@ struct PlaylistDetailView: View {
 
     private func deletePlaylist() async {
         do {
-            try await appState.provider.deletePlaylist(playlist: playlist.id)
+            try await authManager.provider.deletePlaylist(playlist: playlist.id)
             appState.showToast("Playlist deleted", icon: "trash")
             dismiss()
         } catch {
@@ -237,7 +240,7 @@ struct PlaylistDetailView: View {
         guard tracks.indices.contains(index) else { return }
         let track = tracks[index]
         do {
-            try await appState.provider.removeFromPlaylist(
+            try await authManager.provider.removeFromPlaylist(
                 playlist: playlist.id, entryIds: ["\(track.id)"]
             )
             tracks.remove(at: index)
@@ -253,7 +256,7 @@ struct PlaylistDetailView: View {
         isLoading = true
         errorMessage = nil
         do {
-            tracks = try await appState.provider.playlistTracks(playlist: playlist.id)
+            tracks = try await authManager.provider.playlistTracks(playlist: playlist.id)
         } catch {
             errorMessage = error.localizedDescription
             tracks = []
@@ -264,18 +267,18 @@ struct PlaylistDetailView: View {
     // MARK: - Image Helpers
 
     private var playlistImageURL: URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: playlist.id, type: .primary, maxSize: CGSize(width: 440, height: 440)
         )
     }
 
     private func trackImageURL(for track: Track) -> URL? {
         if let albumId = track.albumId {
-            return appState.provider.imageURL(
+            return authManager.provider.imageURL(
                 for: albumId, type: .primary, maxSize: CGSize(width: 80, height: 80)
             )
         }
-        return appState.provider.imageURL(
+        return authManager.provider.imageURL(
             for: track.id, type: .primary, maxSize: CGSize(width: 80, height: 80)
         )
     }
@@ -335,6 +338,7 @@ private struct PlaylistTrackRow: View {
 }
 
 #Preview {
+    let state = AppState.preview
     NavigationStack {
         PlaylistDetailView(
             playlist: Playlist(
@@ -344,6 +348,8 @@ private struct PlaylistTrackRow: View {
                 duration: 3600
             )
         )
-        .environment(AppState())
+        .environment(state)
+        .environment(state.authManager)
+        .environment(state.downloadCoordinator)
     }
 }

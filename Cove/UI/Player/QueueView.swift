@@ -11,6 +11,7 @@ import SwiftUI
 /// blends seamlessly with the player's dominant-color gradient.
 struct QueueView: View {
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var showClearConfirmation = false
 
     var body: some View {
@@ -266,12 +267,14 @@ struct QueueView: View {
 
     private func artworkURL(for track: Track) -> URL? {
         let itemId = track.albumId ?? track.id
-        return appState.provider.imageURL(
+        return authManager.provider.imageURL(
             for: itemId, type: .primary, maxSize: CGSize(width: 96, height: 96))
     }
 }
 
 #Preview {
+    let state = AppState.preview
     QueueView()
-        .environment(AppState())
+        .environment(state)
+        .environment(state.authManager)
 }

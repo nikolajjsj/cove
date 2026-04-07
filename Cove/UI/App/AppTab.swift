@@ -38,7 +38,7 @@ enum AppTab: Hashable {
     }
 
     @ViewBuilder
-    func destination(appState: AppState) -> some View {
+    func destination(appState: AppState, downloadCoordinator: DownloadCoordinator) -> some View {
         switch self {
         case .home:
             HomeView()
@@ -51,7 +51,7 @@ enum AppTab: Hashable {
         case .tvShows:
             LibraryGridView(library: appState.libraries.first { $0.collectionType == .tvshows })
         case .downloads:
-            if let downloadManager = appState.downloadManager {
+            if let downloadManager = downloadCoordinator.downloadManager {
                 DownloadsView(downloadManager: downloadManager)
             } else {
                 ContentUnavailableView(

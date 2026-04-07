@@ -27,6 +27,6 @@ struct AlbumListView: View {
 #Preview {
     NavigationStack {
         AlbumListView(library: nil)
-            .environment(AppState())
+            .environment(AppState.preview)
     }
 }

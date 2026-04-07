@@ -11,6 +11,7 @@ struct SongListView: View {
     var sortOrder: Models.SortOrder = .ascending
     var isFavoriteFilter: Bool = false
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var loader = PagedCollectionLoader<MediaItem>()
 
     private let pageSize = 40
@@ -103,7 +104,7 @@ struct SongListView: View {
             return
         }
 
-        let provider = appState.provider
+        let provider = authManager.provider
 
         await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
             let sort = SortOptions(field: sortField, order: sortOrder)
@@ -145,7 +146,7 @@ struct SongListView: View {
     // MARK: - Helpers
 
     private func imageURL(for item: MediaItem) -> URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .primary,
             maxSize: CGSize(width: 80, height: 80)
@@ -204,8 +205,10 @@ private struct SongRow: View {
 }
 
 #Preview {
+    let state = AppState.preview
     NavigationStack {
         SongListView(library: nil)
-            .environment(AppState())
+            .environment(state)
+            .environment(state.authManager)
     }
 }

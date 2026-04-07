@@ -1,19 +1,88 @@
+import Defaults
+import DownloadManager
 import ImageService
+import Persistence
 import SwiftUI
 import UserNotifications
 
 @main
 struct CoveApp: App {
-    @State private var appState = AppState()
+    @State private var authManager: AuthManager
+    @State private var downloadCoordinator: DownloadCoordinator
+    @State private var appState: AppState
 
     init() {
         ImageService.configure()
+
+        // 1. Set up persistence layer
+        let databaseManager = try? DatabaseManager(path: DatabaseManager.defaultPath)
+
+        let serverRepository: ServerRepository? = databaseManager.map {
+            ServerRepository(database: $0)
+        }
+
+        var downloadManagerService: DownloadManagerService?
+        var offlineSyncManager: OfflineSyncManager?
+        var downloadRepository: DownloadRepository?
+        var downloadGroupRepository: DownloadGroupRepository?
+        var offlineMetadataRepository: OfflineMetadataRepository?
+
+        if let dbManager = databaseManager {
+            let downloadRepo = DownloadRepository(database: dbManager)
+            let reportRepo = OfflinePlaybackReportRepository(database: dbManager)
+            let groupRepo = DownloadGroupRepository(database: dbManager)
+            let metadataRepo = OfflineMetadataRepository(database: dbManager)
+
+            downloadRepository = downloadRepo
+            downloadGroupRepository = groupRepo
+            offlineMetadataRepository = metadataRepo
+
+            let manager = DownloadManagerService(
+                downloadRepository: downloadRepo,
+                reportRepository: reportRepo,
+                groupRepository: groupRepo,
+                metadataRepository: metadataRepo
+            )
+
+            // Wire up WiFi-only gate from user preference
+            manager.isWifiOnlyEnabled = {
+                Defaults[.downloadOverCellular] == false
+            }
+
+            downloadManagerService = manager
+            offlineSyncManager = OfflineSyncManager(reportRepository: reportRepo)
+        }
+
+        // 2. Create managers
+        let authManager = AuthManager(serverRepository: serverRepository)
+        let downloadCoordinator = DownloadCoordinator(
+            downloadManager: downloadManagerService,
+            offlineSyncManager: offlineSyncManager,
+            downloadRepository: downloadRepository,
+            downloadGroupRepository: downloadGroupRepository,
+            offlineMetadataRepository: offlineMetadataRepository
+        )
+
+        // Wire cross-references
+        downloadCoordinator.authManager = authManager
+
+        // 3. Create slim AppState with injected managers
+        let appState = AppState(
+            authManager: authManager,
+            downloadCoordinator: downloadCoordinator
+        )
+
+        _authManager = State(initialValue: authManager)
+        _downloadCoordinator = State(initialValue: downloadCoordinator)
+        _appState = State(initialValue: appState)
     }
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(appState)
+                .environment(authManager)
+                .environment(downloadCoordinator)
                 .task {
                     await requestNotificationPermissions()
                 }

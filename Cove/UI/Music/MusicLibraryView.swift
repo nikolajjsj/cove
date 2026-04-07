@@ -7,7 +7,6 @@ import SwiftUI
 
 struct MusicLibraryView: View {
     let library: MediaLibrary?
-    @Environment(AppState.self) private var appState
 
     var body: some View {
         ScrollView {
@@ -86,6 +85,7 @@ private struct SectionHeader<Route: Hashable>: View {
 private struct RecentlyPlayedSongsSection: View {
     let library: MediaLibrary
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var songs: [MediaItem] = []
     @State private var isLoading = true
 
@@ -134,7 +134,7 @@ private struct RecentlyPlayedSongsSection: View {
     }
 
     private func loadSongs() async {
-        let provider = appState.provider
+        let provider = authManager.provider
 
         do {
             let sort = SortOptions(field: .datePlayed, order: .descending)
@@ -169,7 +169,7 @@ private struct RecentlyPlayedSongsSection: View {
     }
 
     private func imageURL(for item: MediaItem) -> URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .primary,
             maxSize: CGSize(width: 240, height: 240)
@@ -183,7 +183,7 @@ private struct RecentlyPlayedSongsSection: View {
 /// A "See All" link navigates via the centralized MusicBrowseRoute.
 private struct ArtistsShelfSection: View {
     let library: MediaLibrary
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var artists: [MediaItem] = []
     @State private var isLoading = true
 
@@ -226,7 +226,7 @@ private struct ArtistsShelfSection: View {
     }
 
     private func loadArtists() async {
-        let provider = appState.provider
+        let provider = authManager.provider
 
         do {
             let sort = SortOptions(field: .name, order: .ascending)
@@ -245,7 +245,7 @@ private struct ArtistsShelfSection: View {
     }
 
     private func imageURL(for item: MediaItem) -> URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .primary,
             maxSize: CGSize(width: 240, height: 240)
@@ -259,7 +259,7 @@ private struct ArtistsShelfSection: View {
 /// A "See All" link navigates via the centralized MusicBrowseRoute.
 private struct AlbumsGridSection: View {
     let library: MediaLibrary
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var albums: [MediaItem] = []
     @State private var isLoading = true
 
@@ -303,7 +303,7 @@ private struct AlbumsGridSection: View {
     }
 
     private func loadAlbums() async {
-        let provider = appState.provider
+        let provider = authManager.provider
 
         do {
             let sort = SortOptions(field: .dateCreated, order: .descending)
@@ -322,7 +322,7 @@ private struct AlbumsGridSection: View {
     }
 
     private func imageURL(for item: MediaItem) -> URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .primary,
             maxSize: CGSize(width: 300, height: 300)
@@ -333,8 +333,10 @@ private struct AlbumsGridSection: View {
 // MARK: - Preview
 
 #Preview {
+    let state = AppState.preview
     NavigationStack {
         MusicLibraryView(library: nil)
-            .environment(AppState())
+            .environment(state)
+            .environment(state.authManager)
     }
 }

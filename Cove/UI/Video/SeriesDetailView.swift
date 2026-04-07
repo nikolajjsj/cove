@@ -26,6 +26,8 @@ struct SeriesDetailView: View {
     private var isOffline: Bool { offlineServerId != nil }
 
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
+    @Environment(DownloadCoordinator.self) private var downloadCoordinator
     @Environment(\.dismiss) private var dismiss
 
     @State private var seasons: [Season] = []
@@ -147,12 +149,12 @@ struct SeriesDetailView: View {
 
                         // Special Features
                         MediaItemRail(title: "Special Features") { [item] in
-                            try await appState.provider.specialFeatures(for: item)
+                            try await authManager.provider.specialFeatures(for: item)
                         }
 
                         // More Like This
                         MediaItemRail(title: "More Like This") { [item] in
-                            try await appState.provider.similarItems(for: item, limit: 12)
+                            try await authManager.provider.similarItems(for: item, limit: 12)
                         }
                     }
                     .padding(.horizontal)
@@ -179,7 +181,7 @@ struct SeriesDetailView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
-                } else if appState.downloadManager != nil && !seasons.isEmpty {
+                } else if downloadCoordinator.downloadManager != nil && !seasons.isEmpty {
                     Button {
                         showDownloadSheet = true
                     } label: {
@@ -228,7 +230,7 @@ struct SeriesDetailView: View {
             await loadSeasons()
             if !isOffline {
                 await detailLoader.load {
-                    try await appState.provider.item(id: item.id)
+                    try await authManager.provider.item(id: item.id)
                 }
             }
         }
@@ -371,7 +373,7 @@ struct SeriesDetailView: View {
                                 coordinator.playEpisode(
                                     id: episode.id,
                                     title: episode.title,
-                                    using: appState.provider
+                                    using: authManager.provider
                                 )
                             }
                         }
@@ -418,7 +420,7 @@ struct SeriesDetailView: View {
             await loadOfflineSeasons(serverId: serverId)
         } else {
             do {
-                let loadedSeasons = try await appState.provider.seasons(series: item.id)
+                let loadedSeasons = try await authManager.provider.seasons(series: item.id)
                 seasons = loadedSeasons.sorted { $0.seasonNumber < $1.seasonNumber }
                 if let first = seasons.first {
                     selectedSeason = first
@@ -432,8 +434,8 @@ struct SeriesDetailView: View {
     }
 
     private func loadOfflineSeasons(serverId: String) async {
-        guard let metadataRepo = appState.offlineMetadataRepository,
-            let dm = appState.downloadManager
+        guard let metadataRepo = downloadCoordinator.offlineMetadataRepository,
+            let dm = downloadCoordinator.downloadManager
         else { return }
 
         // Load series metadata
@@ -489,7 +491,7 @@ struct SeriesDetailView: View {
             loadOfflineEpisodes(for: season)
         } else {
             do {
-                let loaded = try await appState.provider.episodes(season: season.id)
+                let loaded = try await authManager.provider.episodes(season: season.id)
                 episodes = loaded.sorted { ($0.episodeNumber ?? 0) < ($1.episodeNumber ?? 0) }
             } catch {
                 episodesError = error.localizedDescription
@@ -539,7 +541,7 @@ struct SeriesDetailView: View {
             }
             return nil
         }
-        return appState.provider.imageURL(
+        return authManager.provider.imageURL(
             for: item,
             type: .backdrop,
             maxSize: CGSize(width: 1280, height: 720)
@@ -555,7 +557,7 @@ struct SeriesDetailView: View {
             }
             return nil
         }
-        return appState.provider.imageURL(
+        return authManager.provider.imageURL(
             for: episode.id,
             type: .primary,
             maxSize: CGSize(width: 320, height: 180)
@@ -565,12 +567,13 @@ struct SeriesDetailView: View {
     // MARK: - Offline Playback
 
     private func playOfflineEpisode(_ episode: Episode, serverId: String) {
-        guard let dm = appState.downloadManager,
+        guard let dm = downloadCoordinator.downloadManager,
             let dl = offlineEpisodeDownloads.first(where: { $0.itemId == episode.id }),
             let localURL = dm.localFileURL(for: dl)
         else {
             // Fallback to network
-            coordinator.playEpisode(id: episode.id, title: episode.title, using: appState.provider)
+            coordinator.playEpisode(
+                id: episode.id, title: episode.title, using: authManager.provider)
             return
         }
         let mediaItem = MediaItem(id: episode.id, title: episode.title, mediaType: .episode)
@@ -580,25 +583,29 @@ struct SeriesDetailView: View {
     // MARK: - Offline Deletion
 
     private func deleteAllOfflineEpisodes() async {
-        guard let dm = appState.downloadManager, let serverId = offlineServerId else { return }
+        guard let dm = downloadCoordinator.downloadManager, let serverId = offlineServerId else {
+            return
+        }
         for ep in offlineEpisodeDownloads {
             try? await dm.deleteDownload(id: ep.id)
         }
         for ep in offlineEpisodeDownloads {
-            try? await appState.offlineMetadataRepository?.delete(
+            try? await downloadCoordinator.offlineMetadataRepository?.delete(
                 itemId: ep.itemId.rawValue, serverId: serverId
             )
         }
-        try? await appState.offlineMetadataRepository?.delete(
+        try? await downloadCoordinator.offlineMetadataRepository?.delete(
             itemId: item.id.rawValue, serverId: serverId
         )
         await loadSeasons()
     }
 
     private func deleteOfflineEpisode(_ dl: DownloadItem) async {
-        guard let dm = appState.downloadManager, let serverId = offlineServerId else { return }
+        guard let dm = downloadCoordinator.downloadManager, let serverId = offlineServerId else {
+            return
+        }
         try? await dm.deleteDownload(id: dl.id)
-        try? await appState.offlineMetadataRepository?.delete(
+        try? await downloadCoordinator.offlineMetadataRepository?.delete(
             itemId: dl.itemId.rawValue, serverId: serverId
         )
         await loadSeasons()
@@ -681,8 +688,8 @@ struct SeriesDetailView: View {
         defer { downloadingSeasons.remove(season.id) }
 
         do {
-            let eps = try await appState.provider.episodes(season: season.id)
-            try await appState.downloadSeason(
+            let eps = try await authManager.provider.episodes(season: season.id)
+            try await downloadCoordinator.downloadSeason(
                 series: item,
                 season: season,
                 episodes: eps
@@ -715,6 +722,7 @@ struct SeriesDetailView: View {
 // MARK: - Preview
 
 #Preview {
+    let state = AppState.preview
     NavigationStack {
         SeriesDetailView(
             item: MediaItem(
@@ -725,6 +733,8 @@ struct SeriesDetailView: View {
                 mediaType: .series
             )
         )
-        .environment(AppState())
+        .environment(state)
+        .environment(state.authManager)
+        .environment(state.downloadCoordinator)
     }
 }

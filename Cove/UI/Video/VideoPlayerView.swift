@@ -10,6 +10,7 @@ struct VideoPlayerView: View {
     let startPosition: TimeInterval
 
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
 
     private var coordinator: VideoPlayerCoordinator {
         appState.videoPlayerCoordinator
@@ -407,7 +408,7 @@ struct VideoPlayerView: View {
 
     private func setupAndPlay() {
         // Wire playback reporting callbacks
-        let provider = appState.provider
+        let provider = authManager.provider
         let coordinator = self.coordinator
 
         videoManager.onPlaybackStart = { item, position in
@@ -467,7 +468,7 @@ struct VideoPlayerView: View {
     // MARK: - Helpers
 
     private func thumbnailURL(for item: MediaItem) -> URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .primary,
             maxSize: CGSize(width: 320, height: 180)

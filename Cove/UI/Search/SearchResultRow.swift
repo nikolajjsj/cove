@@ -5,7 +5,7 @@ import SwiftUI
 
 struct SearchResultRow: View {
     let item: MediaItem
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
 
     var body: some View {
         HStack(spacing: 12) {
@@ -25,11 +25,6 @@ struct SearchResultRow: View {
             }
 
             Spacer()
-
-            // Disclosure indicator
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
         }
     }
 
@@ -55,7 +50,7 @@ struct SearchResultRow: View {
     // MARK: - Helpers
 
     private var thumbnailURL: URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .primary,
             maxSize: CGSize(width: 150, height: 225)

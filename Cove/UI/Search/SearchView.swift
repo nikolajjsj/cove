@@ -4,7 +4,7 @@ import Models
 import SwiftUI
 
 struct SearchView: View {
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var searchText = ""
     @State private var results: SearchResults?
@@ -147,7 +147,7 @@ struct SearchView: View {
         }
 
         do {
-            let searchResults = try await appState.provider.search(
+            let searchResults = try await authManager.provider.search(
                 query: query,
                 mediaTypes: [.movie, .series, .artist, .album]
             )

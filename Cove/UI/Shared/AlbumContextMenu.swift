@@ -7,6 +7,7 @@ import SwiftUI
 struct AlbumContextMenuModifier: ViewModifier {
     let album: MediaItem
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var showPlaylistPicker = false
     @State private var fetchedTrackIds: [ItemID] = []
 
@@ -79,7 +80,7 @@ struct AlbumContextMenuModifier: ViewModifier {
 
     private func playAlbum(shuffle: Bool) async {
         do {
-            var tracks = try await appState.provider.tracks(album: album.id)
+            var tracks = try await authManager.provider.tracks(album: album.id)
             guard !tracks.isEmpty else { return }
             if shuffle { tracks.shuffle() }
             appState.audioPlayer.play(tracks: tracks, startingAt: 0)
@@ -90,7 +91,7 @@ struct AlbumContextMenuModifier: ViewModifier {
 
     private func queueAlbum(next: Bool) async {
         do {
-            let tracks = try await appState.provider.tracks(album: album.id)
+            let tracks = try await authManager.provider.tracks(album: album.id)
             appState.queueTracks(tracks, next: next)
         } catch {
             // Silently fail
@@ -99,7 +100,7 @@ struct AlbumContextMenuModifier: ViewModifier {
 
     private func prepareAndShowPlaylistPicker() async {
         do {
-            let tracks = try await appState.provider.tracks(album: album.id)
+            let tracks = try await authManager.provider.tracks(album: album.id)
             fetchedTrackIds = tracks.map(\.id)
             showPlaylistPicker = true
         } catch {

@@ -63,6 +63,6 @@ struct ArtistCard: View {
             .frame(width: 120)
         }
         .padding()
-        .environment(AppState())
+        .environment(AppState.preview)
     }
 }

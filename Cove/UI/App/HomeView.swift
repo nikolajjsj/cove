@@ -35,7 +35,7 @@ struct HomeView: View {
 // MARK: - Continue Watching Section
 
 private struct ContinueWatchingSection: View {
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var resumeItems: [MediaItem] = []
     @State private var isLoading = true
 
@@ -69,7 +69,7 @@ private struct ContinueWatchingSection: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            resumeItems = try await appState.provider.resumeItems()
+            resumeItems = try await authManager.provider.resumeItems()
         } catch {
             resumeItems = []
         }
@@ -80,7 +80,7 @@ private struct ContinueWatchingSection: View {
 
 private struct ContinueWatchingCard: View {
     let item: MediaItem
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -138,12 +138,12 @@ private struct ContinueWatchingCard: View {
 
     private var thumbnailURL: URL? {
         // Try backdrop first for landscape, fall back to primary
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .backdrop,
             maxSize: CGSize(width: 480, height: 270)
         )
-            ?? appState.provider.imageURL(
+            ?? authManager.provider.imageURL(
                 for: item,
                 type: .primary,
                 maxSize: CGSize(width: 480, height: 270)
@@ -182,7 +182,7 @@ private struct ContinueWatchingCard: View {
 
 private struct LibrarySection: View {
     let library: MediaLibrary
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var items: [MediaItem] = []
     @State private var isLoading = true
 
@@ -237,7 +237,7 @@ private struct LibrarySection: View {
 
     private func loadItems() async {
         let firstVisit = items.isEmpty
-        
+
         if firstVisit { isLoading = true }
         defer { if firstVisit { isLoading = false } }
         do {
@@ -246,7 +246,7 @@ private struct LibrarySection: View {
                 limit: 20,
                 includeItemTypes: library.includeItemTypes,
             )
-            items = try await appState.provider.items(in: library, sort: sort, filter: filter)
+            items = try await authManager.provider.items(in: library, sort: sort, filter: filter)
         } catch {
             items = []
         }

@@ -37,7 +37,7 @@ struct PagedMediaGridView<Card: View>: View {
     let imageSize: CGSize
     @ViewBuilder let card: (MediaItem, URL?) -> Card
 
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var loader = PagedCollectionLoader<MediaItem>()
 
     private let pageSize = 40
@@ -143,7 +143,7 @@ struct PagedMediaGridView<Card: View>: View {
             return
         }
 
-        let provider = appState.provider
+        let provider = authManager.provider
 
         await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
             let sort = SortOptions(field: sortField, order: sortOrder)
@@ -163,7 +163,7 @@ struct PagedMediaGridView<Card: View>: View {
     // MARK: - Helpers
 
     private func imageURL(for item: MediaItem) -> URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .primary,
             maxSize: imageSize

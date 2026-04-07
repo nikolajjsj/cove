@@ -81,6 +81,6 @@ struct AlbumCard: View {
             )
         }
         .padding()
-        .environment(AppState())
+        .environment(AppState.preview)
     }
 }

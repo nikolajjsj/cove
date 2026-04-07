@@ -8,7 +8,7 @@ import SwiftUI
 struct CollectionDetailView: View {
     let item: MediaItem
 
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
 
     @State private var loader = CollectionLoader<MediaItem>()
@@ -51,7 +51,7 @@ struct CollectionDetailView: View {
         #endif
         .task {
             await loader.load {
-                try await appState.provider.collectionItems(collectionId: item.id)
+                try await authManager.provider.collectionItems(collectionId: item.id)
             }
         }
     }
@@ -147,7 +147,7 @@ struct CollectionDetailView: View {
     // MARK: - Image Helpers
 
     private var backdropURL: URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .backdrop,
             maxSize: CGSize(width: 1280, height: 720)
@@ -155,7 +155,7 @@ struct CollectionDetailView: View {
     }
 
     private var primaryURL: URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .primary,
             maxSize: CGSize(width: 600, height: 900)

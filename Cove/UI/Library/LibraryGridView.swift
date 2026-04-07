@@ -6,7 +6,7 @@ import SwiftUI
 
 struct LibraryGridView: View {
     let library: MediaLibrary?
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var loader = PagedCollectionLoader<MediaItem>()
     @State private var searchText = ""
     @State private var searchResults: [MediaItem] = []
@@ -163,7 +163,7 @@ struct LibraryGridView: View {
             return
         }
 
-        let provider = appState.provider
+        let provider = authManager.provider
 
         await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
             let sort = SortOptions(field: .name, order: .ascending)
@@ -205,7 +205,7 @@ struct LibraryGridView: View {
         )
 
         do {
-            let result = try await appState.provider.pagedItems(
+            let result = try await authManager.provider.pagedItems(
                 in: library, sort: sort, filter: filter
             )
             searchResults = result.items
@@ -233,7 +233,7 @@ struct LibraryGridView: View {
         )
 
         do {
-            let result = try await appState.provider.pagedItems(
+            let result = try await authManager.provider.pagedItems(
                 in: library, sort: sort, filter: filter
             )
             let existingIDs = Set(searchResults.map(\.id))

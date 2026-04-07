@@ -6,7 +6,7 @@ import SwiftUI
 
 struct GenreListView: View {
     let library: MediaLibrary?
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var loader = CollectionLoader<MediaItem>()
 
     var body: some View {
@@ -54,7 +54,7 @@ struct GenreListView: View {
             return
         }
 
-        let provider = appState.provider
+        let provider = authManager.provider
 
         await loader.load {
             let sort = SortOptions(field: .name, order: .ascending)
@@ -90,6 +90,6 @@ private struct GenreRow: View {
 #Preview {
     NavigationStack {
         GenreListView(library: nil)
-            .environment(AppState())
+            .environment(AuthManager(serverRepository: nil))
     }
 }

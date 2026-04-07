@@ -61,7 +61,7 @@ struct PlayerControlsView: View {
 
             // Favorite button
             FavoriteButton(track: track)
-            
+
             // Sleep Timer – isolated so remaining-seconds ticks stay local
             SleepTimerButton()
 
@@ -69,14 +69,16 @@ struct PlayerControlsView: View {
             Menu {
                 Button {
                     appState.audioPlayer.queue.addNext(track)
-                    appState.showToast("Playing Next", icon: "text.line.first.and.arrowtriangle.forward")
+                    appState.showToast(
+                        "Playing Next", icon: "text.line.first.and.arrowtriangle.forward")
                 } label: {
                     Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
                 }
 
                 Button {
                     appState.audioPlayer.queue.addToEnd(track)
-                    appState.showToast("Added to Up Next", icon: "text.line.last.and.arrowtriangle.forward")
+                    appState.showToast(
+                        "Added to Up Next", icon: "text.line.last.and.arrowtriangle.forward")
                 } label: {
                     Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward")
                 }
@@ -201,7 +203,7 @@ private struct PlaybackControlsRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            
+
             Spacer()
 
             // Previous
@@ -243,7 +245,7 @@ private struct PlaybackControlsRow: View {
             }
             .buttonStyle(.plain)
             .disabled(!queue.hasNext)
-            
+
             Spacer()
 
             // Repeat
@@ -271,6 +273,7 @@ private struct PlaybackControlsRow: View {
 private struct FavoriteButton: View {
     let track: Track
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
 
     var body: some View {
         let isFav = track.userData?.isFavorite == true
@@ -278,7 +281,7 @@ private struct FavoriteButton: View {
         Button {
             Task {
                 do {
-                    try await appState.provider.setFavorite(itemId: track.id, isFavorite: !isFav)
+                    try await authManager.provider.setFavorite(itemId: track.id, isFavorite: !isFav)
                     appState.showToast(
                         isFav ? "Removed from Favorites" : "Added to Favorites",
                         icon: isFav ? "heart" : "heart.fill"

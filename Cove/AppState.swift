@@ -10,14 +10,16 @@ import PlaybackEngine
 import SwiftUI
 
 @Observable
+@MainActor
 final class AppState {
-    var isAuthenticated = false
-    var isRestoringSession = true
-    var activeConnection: ServerConnection?
+    // MARK: - Library Data
+
     var libraries: [MediaLibrary] = []
-    var isLoading = false
-    var error: AppError?
+
+    // MARK: - UI State
+
     var isOffline = false
+    var error: AppError?
 
     // MARK: - Navigation
 
@@ -41,469 +43,74 @@ final class AppState {
     /// The currently displayed toast message, if any.
     var currentToast: ToastMessage?
 
-    let provider = JellyfinServerProvider()
+    // MARK: - Services
+
+    let authManager: AuthManager
+    let downloadCoordinator: DownloadCoordinator
     let audioPlayer = AudioPlaybackManager()
     let videoPlayerCoordinator = VideoPlayerCoordinator()
-    let serverRepository: ServerRepository?
-    let downloadManager: DownloadManagerService?
-    let offlineSyncManager: OfflineSyncManager?
-    let downloadRepository: DownloadRepository?
-    let downloadGroupRepository: DownloadGroupRepository?
-    let offlineMetadataRepository: OfflineMetadataRepository?
     let networkMonitor = NetworkMonitor.shared
 
-    private let databaseManager: DatabaseManager?
+    // MARK: - Init
 
-    init() {
-        // Try to set up persistence; if it fails, run without it
-        if let dbManager = try? DatabaseManager(path: DatabaseManager.defaultPath) {
-            self.databaseManager = dbManager
-            self.serverRepository = ServerRepository(database: dbManager)
-
-            let downloadRepo = DownloadRepository(database: dbManager)
-            let reportRepo = OfflinePlaybackReportRepository(database: dbManager)
-            let groupRepo = DownloadGroupRepository(database: dbManager)
-            let metadataRepo = OfflineMetadataRepository(database: dbManager)
-
-            self.downloadRepository = downloadRepo
-            self.downloadGroupRepository = groupRepo
-            self.offlineMetadataRepository = metadataRepo
-
-            let manager = DownloadManagerService(
-                downloadRepository: downloadRepo,
-                reportRepository: reportRepo,
-                groupRepository: groupRepo,
-                metadataRepository: metadataRepo
-            )
-
-            // Wire up WiFi-only gate from user preference
-            manager.isWifiOnlyEnabled = {
-                Defaults[.downloadOverCellular] == false
-            }
-
-            self.downloadManager = manager
-            self.offlineSyncManager = OfflineSyncManager(reportRepository: reportRepo)
-        } else {
-            self.databaseManager = nil
-            self.serverRepository = nil
-            self.downloadManager = nil
-            self.offlineSyncManager = nil
-            self.downloadRepository = nil
-            self.downloadGroupRepository = nil
-            self.offlineMetadataRepository = nil
-        }
+    init(authManager: AuthManager, downloadCoordinator: DownloadCoordinator) {
+        self.authManager = authManager
+        self.downloadCoordinator = downloadCoordinator
 
         // Start network monitoring
         networkMonitor.start()
         startNetworkObservation()
     }
 
+    // MARK: - Session Lifecycle
+
+    /// Restore a previous session and set up dependent services.
     func restoreSession() async {
-        defer { isRestoringSession = false }
-
-        guard let repo = serverRepository else { return }
-
         // Restore incomplete downloads
-        await downloadManager?.restoreDownloadsOnLaunch()
+        await downloadCoordinator.restoreDownloadsOnLaunch()
 
-        do {
-            let servers = try await repo.fetchAll()
-            if let last = servers.last {
-                if provider.restore(connection: last) {
-                    activeConnection = last
-                    isAuthenticated = true
-                    wireUpPlayer()
-                    await loadLibraries()
-
-                    // Sync any pending offline playback reports
-                    await syncOfflineReports()
-                }
-            }
-        } catch {
-            // Silently fail — user will see login screen
+        let success = await authManager.restoreSession()
+        if success {
+            wireUpPlayer()
+            await loadLibraries()
+            await downloadCoordinator.syncOfflineReports()
         }
     }
 
-    func connect(url: URL, username: String, password: String) async throws {
-        isLoading = true
-        defer { isLoading = false }
-
-        let credentials = Credentials(username: username, password: password)
-        let connection = try await provider.connect(url: url, credentials: credentials)
-
-        // Persist the connection
-        try? await serverRepository?.save(connection)
-
-        activeConnection = connection
-        isAuthenticated = true
+    /// Called after a successful connection to set up dependent services.
+    func onConnected() async {
         wireUpPlayer()
         await loadLibraries()
     }
 
+    /// Disconnect and tear down all state.
+    func onDisconnect() async {
+        audioPlayer.stop()
+        libraries = []
+        await authManager.disconnect()
+    }
+
+    // MARK: - Library Loading
+
     func loadLibraries() async {
         do {
-            libraries = try await provider.libraries()
+            libraries = try await authManager.provider.libraries()
         } catch {
             libraries = []
         }
-    }
-
-    func disconnect() async {
-        audioPlayer.stop()
-
-        if let connection = activeConnection {
-            try? await serverRepository?.delete(id: connection.id)
-        }
-        await provider.disconnect()
-        activeConnection = nil
-        libraries = []
-        isAuthenticated = false
-    }
-
-    // MARK: - Download Helpers
-
-    /// Resolve a download URL for a media item, save offline metadata & artwork, and enqueue it for download.
-    func downloadItem(_ item: MediaItem, parentId: ItemID? = nil) async throws {
-        guard let downloadManager, let connection = activeConnection,
-            let metadataRepo = offlineMetadataRepository
-        else { return }
-
-        let serverId = connection.id.uuidString
-        let downloadInfo = try await provider.downloadInfo(
-            for: item, profile: provider.deviceProfile())
-        let remoteURL = downloadInfo.url
-
-        let artworkURL = provider.imageURL(
-            for: item,
-            type: .primary,
-            maxSize: CGSize(width: 600, height: 600)
-        )
-
-        // Save offline metadata
-        var metadata = OfflineMediaMetadata.from(item: item, serverId: serverId)
-
-        // Download primary artwork
-        let storage = DownloadStorage.shared
-        if let artworkURL {
-            let _ = try? storage.prepareParentDirectory(
-                serverId: serverId, mediaType: item.mediaType, itemId: item.id
-            )
-            let destURL = storage.primaryImageURL(
-                serverId: serverId, mediaType: item.mediaType, itemId: item.id
-            )
-            if await storage.downloadImage(from: artworkURL, to: destURL) {
-                metadata.primaryImagePath = storage.relativePrimaryImagePath(
-                    serverId: serverId, mediaType: item.mediaType, itemId: item.id
-                )
-            }
-        }
-
-        // Download backdrop for movies/series
-        if item.mediaType == .movie || item.mediaType == .series {
-            if let backdropURL = provider.imageURL(
-                for: item, type: .backdrop, maxSize: CGSize(width: 1280, height: 720)
-            ) {
-                let destURL = storage.backdropImageURL(
-                    serverId: serverId, mediaType: item.mediaType, itemId: item.id
-                )
-                if await storage.downloadImage(from: backdropURL, to: destURL) {
-                    metadata.backdropImagePath = storage.relativeBackdropImagePath(
-                        serverId: serverId, mediaType: item.mediaType, itemId: item.id
-                    )
-                }
-            }
-        }
-
-        try await metadataRepo.save(metadata)
-
-        _ = try await downloadManager.enqueueDownload(
-            itemId: item.id,
-            serverId: serverId,
-            title: item.title,
-            mediaType: item.mediaType,
-            remoteURL: remoteURL,
-            parentId: parentId,
-            artworkURL: artworkURL,
-            expectedBytes: downloadInfo.expectedBytes ?? 0
-        )
-    }
-
-    /// Download all episodes in a season. Saves metadata, artwork, and enqueues all episodes.
-    func downloadSeason(
-        series: MediaItem,
-        season: Season,
-        episodes: [Episode]
-    ) async throws {
-        guard let downloadManager, let connection = activeConnection,
-            let metadataRepo = offlineMetadataRepository
-        else { return }
-
-        let serverId = connection.id.uuidString
-        let storage = DownloadStorage.shared
-
-        // 1. Save and download artwork for the series (parent)
-        var seriesMeta = OfflineMediaMetadata.from(item: series, serverId: serverId)
-        let _ = try? storage.prepareParentDirectory(
-            serverId: serverId, mediaType: .series, itemId: series.id
-        )
-
-        if let primaryURL = provider.imageURL(
-            for: series, type: .primary, maxSize: CGSize(width: 600, height: 600)
-        ) {
-            let dest = storage.primaryImageURL(
-                serverId: serverId, mediaType: .series, itemId: series.id)
-            if await storage.downloadImage(from: primaryURL, to: dest) {
-                seriesMeta.primaryImagePath = storage.relativePrimaryImagePath(
-                    serverId: serverId, mediaType: .series, itemId: series.id
-                )
-            }
-        }
-
-        if let backdropURL = provider.imageURL(
-            for: series, type: .backdrop, maxSize: CGSize(width: 1280, height: 720)
-        ) {
-            let dest = storage.backdropImageURL(
-                serverId: serverId, mediaType: .series, itemId: series.id)
-            if await storage.downloadImage(from: backdropURL, to: dest) {
-                seriesMeta.backdropImagePath = storage.relativeBackdropImagePath(
-                    serverId: serverId, mediaType: .series, itemId: series.id
-                )
-            }
-        }
-
-        try await metadataRepo.save(seriesMeta)
-
-        // 2. Save season metadata
-        let seasonMeta = OfflineMediaMetadata.from(season: season, serverId: serverId)
-        try await metadataRepo.save(seasonMeta)
-
-        // 3. Save episode metadata and resolve download URLs
-        var episodeTuples: [(itemId: ItemID, title: String, remoteURL: URL, expectedBytes: Int64)] =
-            []
-
-        for episode in episodes.sorted(by: { ($0.episodeNumber ?? 0) < ($1.episodeNumber ?? 0) }) {
-            // Save episode metadata
-            var epMeta = OfflineMediaMetadata.from(
-                episode: episode, seriesName: series.title, serverId: serverId
-            )
-
-            // Download episode thumbnail
-            if let thumbURL = provider.imageURL(
-                for: episode.id, type: .primary, maxSize: CGSize(width: 320, height: 180)
-            ) {
-                let _ = try? storage.prepareParentDirectory(
-                    serverId: serverId, mediaType: .episode, itemId: episode.id
-                )
-                let dest = storage.primaryImageURL(
-                    serverId: serverId, mediaType: .episode, itemId: episode.id
-                )
-                if await storage.downloadImage(from: thumbURL, to: dest) {
-                    epMeta.primaryImagePath = storage.relativePrimaryImagePath(
-                        serverId: serverId, mediaType: .episode, itemId: episode.id
-                    )
-                }
-            }
-
-            try await metadataRepo.save(epMeta)
-
-            // Resolve download URL for the episode
-            let epItem = MediaItem(
-                id: episode.id, title: episode.title, mediaType: .episode
-            )
-            let downloadInfo = try await provider.downloadInfo(
-                for: epItem, profile: provider.deviceProfile())
-            episodeTuples.append(
-                (
-                    itemId: episode.id, title: episode.title, remoteURL: downloadInfo.url,
-                    expectedBytes: downloadInfo.expectedBytes ?? 0
-                ))
-        }
-
-        // 4. Batch enqueue via download manager
-        let groupTitle = "\(series.title) – \(season.title)"
-        _ = try await downloadManager.enqueueSeason(
-            seasonItemId: season.id,
-            seriesItemId: series.id,
-            episodes: episodeTuples,
-            serverId: serverId,
-            groupTitle: groupTitle
-        )
-    }
-
-    /// Download all tracks in an album. Saves metadata, artwork, and enqueues all tracks.
-    func downloadAlbum(
-        album: Album,
-        tracks: [Track]
-    ) async throws {
-        guard let downloadManager, let connection = activeConnection,
-            let metadataRepo = offlineMetadataRepository
-        else { return }
-
-        let serverId = connection.id.uuidString
-        let storage = DownloadStorage.shared
-
-        // 1. Save and download artwork for the album
-        var albumMeta = OfflineMediaMetadata.from(album: album, serverId: serverId)
-        let _ = try? storage.prepareParentDirectory(
-            serverId: serverId, mediaType: .album, itemId: album.id
-        )
-
-        if let primaryURL = provider.imageURL(
-            for: album.id, type: .primary, maxSize: CGSize(width: 600, height: 600)
-        ) {
-            let dest = storage.primaryImageURL(
-                serverId: serverId, mediaType: .album, itemId: album.id)
-            if await storage.downloadImage(from: primaryURL, to: dest) {
-                albumMeta.primaryImagePath = storage.relativePrimaryImagePath(
-                    serverId: serverId, mediaType: .album, itemId: album.id
-                )
-            }
-        }
-
-        try await metadataRepo.save(albumMeta)
-
-        // 2. Save track metadata and resolve download URLs
-        var trackTuples: [(itemId: ItemID, title: String, remoteURL: URL, expectedBytes: Int64)] =
-            []
-
-        for track in tracks.sorted(by: {
-            ($0.discNumber ?? 1, $0.trackNumber ?? 0) < ($1.discNumber ?? 1, $1.trackNumber ?? 0)
-        }) {
-            let trackMeta = OfflineMediaMetadata.from(track: track, serverId: serverId)
-            try await metadataRepo.save(trackMeta)
-
-            // Resolve download URL
-            let trackItem = MediaItem(id: track.id, title: track.title, mediaType: .track)
-            let downloadInfo = try await provider.downloadInfo(
-                for: trackItem, profile: provider.deviceProfile())
-            trackTuples.append(
-                (
-                    itemId: track.id, title: track.title, remoteURL: downloadInfo.url,
-                    expectedBytes: downloadInfo.expectedBytes ?? 0
-                ))
-        }
-
-        // 3. Batch enqueue via download manager
-        _ = try await downloadManager.enqueueAlbum(
-            albumItemId: album.id,
-            tracks: trackTuples,
-            serverId: serverId,
-            groupTitle: album.title
-        )
-    }
-
-    /// Download all tracks in a playlist for offline playback.
-    func downloadPlaylist(
-        playlist: Playlist,
-        tracks: [Track]
-    ) async throws {
-        guard let downloadManager, let connection = activeConnection,
-            let metadataRepo = offlineMetadataRepository
-        else { return }
-
-        let serverId = connection.id.uuidString
-        let storage = DownloadStorage.shared
-
-        // 1. Save and download artwork for the playlist
-        var playlistMeta = OfflineMediaMetadata.from(playlist: playlist, serverId: serverId)
-        let _ = try? storage.prepareParentDirectory(
-            serverId: serverId, mediaType: .playlist, itemId: playlist.id
-        )
-
-        if let primaryURL = provider.imageURL(
-            for: playlist.id, type: .primary, maxSize: CGSize(width: 600, height: 600)
-        ) {
-            let dest = storage.primaryImageURL(
-                serverId: serverId, mediaType: .playlist, itemId: playlist.id)
-            if await storage.downloadImage(from: primaryURL, to: dest) {
-                playlistMeta.primaryImagePath = storage.relativePrimaryImagePath(
-                    serverId: serverId, mediaType: .playlist, itemId: playlist.id
-                )
-            }
-        }
-
-        try await metadataRepo.save(playlistMeta)
-
-        // 2. Save track metadata and resolve download URLs (preserve playlist order)
-        var trackTuples: [(itemId: ItemID, title: String, remoteURL: URL, expectedBytes: Int64)] =
-            []
-
-        for track in tracks {
-            let trackMeta = OfflineMediaMetadata.from(track: track, serverId: serverId)
-            try await metadataRepo.save(trackMeta)
-
-            // Resolve download URL
-            let trackItem = MediaItem(id: track.id, title: track.title, mediaType: .track)
-            let downloadInfo = try await provider.downloadInfo(
-                for: trackItem, profile: provider.deviceProfile())
-            trackTuples.append(
-                (
-                    itemId: track.id, title: track.title, remoteURL: downloadInfo.url,
-                    expectedBytes: downloadInfo.expectedBytes ?? 0
-                ))
-        }
-
-        // 3. Batch enqueue via download manager
-        _ = try await downloadManager.enqueuePlaylist(
-            playlistItemId: playlist.id,
-            tracks: trackTuples,
-            serverId: serverId,
-            groupTitle: playlist.name
-        )
-    }
-
-    func downloadState(for itemId: ItemID) async -> DownloadState? {
-        guard let downloadManager, let connection = activeConnection else { return nil }
-        let item = try? await downloadManager.download(
-            for: itemId, serverId: connection.id.uuidString)
-        return item?.state
-    }
-
-    /// Get the local file URL for an offline item, if available.
-    func localFileURL(for itemId: ItemID) async -> URL? {
-        guard let downloadManager, let connection = activeConnection else { return nil }
-        guard
-            let item = try? await downloadManager.download(
-                for: itemId, serverId: connection.id.uuidString),
-            item.state == .completed
-        else {
-            return nil
-        }
-        return downloadManager.localFileURL(for: item)
-    }
-
-    // MARK: - Offline Playback Report Queuing
-
-    /// Queue a playback report for later sync when offline.
-    func queueOfflinePlaybackReport(
-        itemId: ItemID,
-        positionTicks: Int64,
-        eventType: PlaybackEventType
-    ) async {
-        guard let offlineSyncManager, let connection = activeConnection else { return }
-        try? await offlineSyncManager.queuePlaybackEvent(
-            itemId: itemId,
-            serverId: connection.id.uuidString,
-            positionTicks: positionTicks,
-            eventType: eventType
-        )
     }
 
     // MARK: - Player Wiring
 
     /// Configure the audio player's URL resolvers to use the current server provider.
     /// Called after a successful connection or session restore.
-    private func wireUpPlayer() {
-        // Use nonisolated(unsafe) because JellyfinServerProvider is thread-safe internally
-        // (uses NSLock-protected state) but doesn't formally declare Sendable conformance.
-        // These closures are only ever called from @MainActor context within AudioPlaybackManager.
-        let provider = self.provider
+    func wireUpPlayer() {
+        let provider = authManager.provider
+        let connection = authManager.activeConnection
 
-        audioPlayer.streamURLResolver = { [weak self] track in
+        audioPlayer.streamURLResolver = { track in
             // Try local file first (sync check via DownloadStorage)
-            if let self,
-                let connection = self.activeConnection
-            {
+            if let connection {
                 let storage = DownloadStorage.shared
                 let dir = storage.itemDirectory(
                     serverId: connection.id.uuidString,
@@ -524,10 +131,9 @@ final class AppState {
             return provider.audioStreamURL(for: track)
         }
 
-        audioPlayer.artworkURLResolver = { [weak self] track in
+        audioPlayer.artworkURLResolver = { track in
             // Try local artwork first
-            if let self,
-                let connection = self.activeConnection,
+            if let connection,
                 let albumId = track.albumId
             {
                 let storage = DownloadStorage.shared
@@ -562,7 +168,7 @@ final class AppState {
 
                 // When coming back online, sync pending reports
                 if connected {
-                    await self.syncOfflineReports()
+                    await self.downloadCoordinator.syncOfflineReports()
                 }
             }
         }
@@ -571,9 +177,6 @@ final class AppState {
     // MARK: - Toast
 
     /// Show a brief toast/snackbar message.
-    /// - Parameters:
-    ///   - message: The text to display.
-    ///   - icon: An SF Symbol name for the leading icon.
     func showToast(_ message: String, icon: String = "checkmark.circle.fill") {
         currentToast = ToastMessage(message: message, icon: icon)
     }
@@ -586,7 +189,6 @@ final class AppState {
     // MARK: - Navigation Helpers
 
     /// Navigate to a specific destination by switching tabs and appending to the navigation path.
-    /// Intended to be called from the player or other modal contexts before dismissing.
     func navigate(to tab: AppTab, destination: any Hashable) {
         selectedTab = tab
         navigationPaths[tab, default: NavigationPath()].append(destination)
@@ -597,25 +199,25 @@ final class AppState {
     /// Toggle the favorite state for any media item.
     func toggleFavorite(itemId: ItemID, isFavorite: Bool) async {
         do {
-            try await provider.setFavorite(itemId: itemId, isFavorite: !isFavorite)
+            try await authManager.provider.setFavorite(itemId: itemId, isFavorite: !isFavorite)
             showToast(
                 isFavorite ? "Removed from Favorites" : "Added to Favorites",
                 icon: isFavorite ? "heart" : "heart.fill"
             )
         } catch {
-            // Silently fail — UI will be stale but recoverable on next load
+            showToast("Couldn't update favorite", icon: "exclamationmark.triangle")
         }
     }
 
     /// Start an instant-mix radio station seeded from any item.
     func startRadio(for itemId: ItemID) async {
         do {
-            let tracks = try await provider.instantMix(for: itemId, limit: 50)
+            let tracks = try await authManager.provider.instantMix(for: itemId, limit: 50)
             guard !tracks.isEmpty else { return }
             audioPlayer.play(tracks: tracks, startingAt: 0)
             showToast("Radio started", icon: "dot.radiowaves.left.and.right")
         } catch {
-            // Silently fail
+            showToast("Couldn't start radio", icon: "exclamationmark.triangle")
         }
     }
 
@@ -636,43 +238,31 @@ final class AppState {
             : "text.line.last.and.arrowtriangle.forward"
         showToast(message, icon: icon)
     }
+}
 
-    // MARK: - Offline Sync
+// MARK: - Preview Helpers
 
-    private func syncOfflineReports() async {
-        guard let offlineSyncManager, let connection = activeConnection else { return }
-        guard networkMonitor.isConnected else { return }
-
-        let provider = self.provider
-
-        await offlineSyncManager.syncPendingReports(
-            serverId: connection.id.uuidString
-        ) { report in
-            let item = MediaItem(
-                id: report.itemId,
-                title: "",
-                mediaType: .movie  // Type doesn't matter for reporting
-            )
-            let position = TimeInterval(report.positionTicks) / 10_000_000.0
-
-            switch report.eventType {
-            case .start:
-                try await provider.reportPlaybackStart(item: item, position: position)
-            case .progress:
-                try await provider.reportPlaybackProgress(item: item, position: position)
-            case .stopped:
-                try await provider.reportPlaybackStopped(item: item, position: position)
-            }
-        }
-
-        // Clean up old synced reports
-        await offlineSyncManager.cleanup()
+extension AppState {
+    /// Creates an `AppState` with lightweight stub managers for SwiftUI previews.
+    static var preview: AppState {
+        let auth = AuthManager(serverRepository: nil)
+        let downloads = DownloadCoordinator(
+            downloadManager: nil,
+            offlineSyncManager: nil,
+            downloadRepository: nil,
+            downloadGroupRepository: nil,
+            offlineMetadataRepository: nil
+        )
+        downloads.authManager = auth
+        return AppState(authManager: auth, downloadCoordinator: downloads)
     }
+
+    /// The `AuthManager` used by this state — exposed for preview environment injection.
+    static var previewAuthManager: AuthManager { preview.authManager }
 }
 
 // MARK: - Toast Message
 
-/// A brief confirmation message shown as a toast/snackbar overlay.
 struct ToastMessage: Equatable, Identifiable {
     let id = UUID()
     let message: String

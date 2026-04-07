@@ -12,7 +12,7 @@ import SwiftUI
 struct PersonDetailView: View {
     let person: Person
 
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var loader = CollectionLoader<MediaItem>()
 
     private let columns = [
@@ -47,7 +47,7 @@ struct PersonDetailView: View {
         #endif
         .task {
             await loader.load {
-                try await appState.provider.personItems(personId: person.id)
+                try await authManager.provider.personItems(personId: person.id)
             }
         }
     }

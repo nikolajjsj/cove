@@ -7,7 +7,7 @@ import SwiftUI
 
 struct ArtistDetailView: View {
     let artistItem: MediaItem
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var loader = CollectionLoader<Album>()
 
     private let columns = [
@@ -42,7 +42,7 @@ struct ArtistDetailView: View {
         #endif
         .task {
             await loader.load {
-                try await appState.provider.albums(artist: artistItem.id)
+                try await authManager.provider.albums(artist: artistItem.id)
             }
         }
     }
@@ -134,7 +134,7 @@ struct ArtistDetailView: View {
     // MARK: - Image Helpers
 
     private var artistImageURL: URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: artistItem,
             type: .primary,
             maxSize: CGSize(width: 400, height: 400)
@@ -142,12 +142,13 @@ struct ArtistDetailView: View {
     }
 
     private func albumImageURL(for itemId: ItemID) -> URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: itemId, type: .primary, maxSize: CGSize(width: 300, height: 300))
     }
 }
 
 #Preview {
+    let state = AppState.preview
     NavigationStack {
         ArtistDetailView(
             artistItem: MediaItem(
@@ -157,6 +158,7 @@ struct ArtistDetailView: View {
                 mediaType: .artist
             )
         )
-        .environment(AppState())
+        .environment(state)
+        .environment(state.authManager)
     }
 }

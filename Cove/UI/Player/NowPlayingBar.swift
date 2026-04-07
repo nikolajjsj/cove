@@ -6,6 +6,7 @@ import SwiftUI
 
 struct NowPlayingBar: View {
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @Binding var showFullPlayer: Bool
 
     let track: Track
@@ -100,7 +101,7 @@ struct NowPlayingBar: View {
 
     private func artworkURL(for track: Track) -> URL? {
         let itemId = track.albumId ?? track.id
-        return appState.provider.imageURL(
+        return authManager.provider.imageURL(
             for: itemId, type: .primary, maxSize: CGSize(width: 96, height: 96))
     }
 }

@@ -12,6 +12,8 @@ struct AlbumDetailView: View {
     private let offlineServerId: String?
 
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
+    @Environment(DownloadCoordinator.self) private var downloadCoordinator
     @State private var tracks: [Track] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -91,7 +93,7 @@ struct AlbumDetailView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
-                } else if appState.downloadManager != nil {
+                } else if downloadCoordinator.downloadManager != nil {
                     albumDownloadButton
                 }
             }
@@ -303,7 +305,7 @@ struct AlbumDetailView: View {
             await loadOfflineTracks(serverId: serverId)
         } else {
             do {
-                tracks = try await appState.provider.tracks(album: albumItem.id)
+                tracks = try await authManager.provider.tracks(album: albumItem.id)
             } catch {
                 errorMessage = error.localizedDescription
                 tracks = []
@@ -313,8 +315,8 @@ struct AlbumDetailView: View {
     }
 
     private func loadOfflineTracks(serverId: String) async {
-        guard let metadataRepo = appState.offlineMetadataRepository,
-            let dm = appState.downloadManager
+        guard let metadataRepo = downloadCoordinator.offlineMetadataRepository,
+            let dm = downloadCoordinator.downloadManager
         else { return }
 
         // Load album metadata for artist name, year, etc.
@@ -373,7 +375,7 @@ struct AlbumDetailView: View {
             }
             return nil
         }
-        return appState.provider.imageURL(
+        return authManager.provider.imageURL(
             for: albumItem,
             type: .primary,
             maxSize: CGSize(width: 600, height: 600)
@@ -429,7 +431,7 @@ struct AlbumDetailView: View {
         )
 
         do {
-            try await appState.downloadAlbum(album: album, tracks: tracks)
+            try await downloadCoordinator.downloadAlbum(album: album, tracks: tracks)
             isAlbumDownloaded = true
         } catch {
             downloadError = "Failed to download album: \(error.localizedDescription)"
@@ -438,8 +440,8 @@ struct AlbumDetailView: View {
     }
 
     private func removeAlbumDownload() async {
-        guard let dm = appState.downloadManager,
-            let connection = appState.activeConnection
+        guard let dm = downloadCoordinator.downloadManager,
+            let connection = authManager.activeConnection
         else { return }
         let serverId = connection.id.uuidString
         let allDownloads = (try? await dm.downloads(for: serverId)) ?? []
@@ -448,19 +450,19 @@ struct AlbumDetailView: View {
         }
         // Clean up metadata
         for track in tracks {
-            try? await appState.offlineMetadataRepository?.delete(
+            try? await downloadCoordinator.offlineMetadataRepository?.delete(
                 itemId: track.id.rawValue, serverId: serverId
             )
         }
-        try? await appState.offlineMetadataRepository?.delete(
+        try? await downloadCoordinator.offlineMetadataRepository?.delete(
             itemId: albumItem.id.rawValue, serverId: serverId
         )
         isAlbumDownloaded = false
     }
 
     private func checkAlbumDownloadState() async {
-        guard let dm = appState.downloadManager,
-            let connection = appState.activeConnection
+        guard let dm = downloadCoordinator.downloadManager,
+            let connection = authManager.activeConnection
         else { return }
         let serverId = connection.id.uuidString
         let allDownloads = (try? await dm.downloads(for: serverId)) ?? []
@@ -475,27 +477,31 @@ struct AlbumDetailView: View {
     // MARK: - Offline Deletion
 
     private func deleteOfflineAlbum() async {
-        guard let dm = appState.downloadManager, let serverId = offlineServerId else { return }
+        guard let dm = downloadCoordinator.downloadManager, let serverId = offlineServerId else {
+            return
+        }
         for dl in offlineDownloads {
             try? await dm.deleteDownload(id: dl.id)
         }
         for dl in offlineDownloads {
-            try? await appState.offlineMetadataRepository?.delete(
+            try? await downloadCoordinator.offlineMetadataRepository?.delete(
                 itemId: dl.itemId.rawValue, serverId: serverId
             )
         }
-        try? await appState.offlineMetadataRepository?.delete(
+        try? await downloadCoordinator.offlineMetadataRepository?.delete(
             itemId: albumItem.id.rawValue, serverId: serverId
         )
         await loadTracks()
     }
 
     private func deleteOfflineTrack(_ track: Track) async {
-        guard let dm = appState.downloadManager, let serverId = offlineServerId else { return }
+        guard let dm = downloadCoordinator.downloadManager, let serverId = offlineServerId else {
+            return
+        }
         if let dl = offlineDownloads.first(where: { $0.itemId == track.id }) {
             try? await dm.deleteDownload(id: dl.id)
         }
-        try? await appState.offlineMetadataRepository?.delete(
+        try? await downloadCoordinator.offlineMetadataRepository?.delete(
             itemId: track.id.rawValue, serverId: serverId
         )
         await loadTracks()
@@ -573,6 +579,7 @@ private struct TrackRow: View {
 // MARK: - Preview
 
 #Preview {
+    let state = AppState.preview
     NavigationStack {
         AlbumDetailView(
             albumItem: MediaItem(
@@ -582,6 +589,8 @@ private struct TrackRow: View {
                 mediaType: .album
             )
         )
-        .environment(AppState())
+        .environment(state)
+        .environment(state.authManager)
+        .environment(state.downloadCoordinator)
     }
 }

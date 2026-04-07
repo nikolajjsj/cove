@@ -5,7 +5,7 @@ import SwiftUI
 
 struct LibraryItemCard: View {
     let item: MediaItem
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -30,7 +30,7 @@ struct LibraryItemCard: View {
     // MARK: - Helpers
 
     private var posterURL: URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .primary,
             maxSize: CGSize(width: 300, height: 450)

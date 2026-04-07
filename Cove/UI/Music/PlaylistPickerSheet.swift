@@ -16,6 +16,7 @@ import SwiftUI
 struct PlaylistPickerSheet: View {
     let trackIds: [ItemID]
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
     @State private var playlists: [Playlist] = []
     @State private var isLoading = true
@@ -121,7 +122,7 @@ struct PlaylistPickerSheet: View {
     private func loadPlaylists() async {
         isLoading = true
         do {
-            playlists = try await appState.provider.playlists()
+            playlists = try await authManager.provider.playlists()
         } catch {
             playlists = []
         }
@@ -131,7 +132,7 @@ struct PlaylistPickerSheet: View {
     private func addToPlaylist(_ playlist: Playlist) async {
         isAdding = true
         do {
-            try await appState.provider.addToPlaylist(
+            try await authManager.provider.addToPlaylist(
                 playlist: playlist.id, trackIds: trackIds
             )
             dismiss()
@@ -151,7 +152,7 @@ struct PlaylistPickerSheet: View {
         guard !name.isEmpty else { return }
         isAdding = true
         do {
-            _ = try await appState.provider.createPlaylist(
+            _ = try await authManager.provider.createPlaylist(
                 name: name, trackIds: trackIds
             )
             dismiss()
@@ -164,12 +165,14 @@ struct PlaylistPickerSheet: View {
     // MARK: - Helpers
 
     private func imageURL(for itemId: ItemID) -> URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: itemId, type: .primary, maxSize: CGSize(width: 88, height: 88))
     }
 }
 
 #Preview {
+    let state = AppState.preview
     PlaylistPickerSheet(trackIds: [])
-        .environment(AppState())
+        .environment(state)
+        .environment(state.authManager)
 }

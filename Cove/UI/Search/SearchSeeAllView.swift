@@ -8,7 +8,7 @@ struct SearchSeeAllView: View {
     let mediaType: MediaType
     let title: String
 
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var items: [MediaItem] = []
     @State private var isLoading = true
     @State private var isLoadingMore = false
@@ -84,7 +84,7 @@ struct SearchSeeAllView: View {
         items = []
 
         do {
-            let result = try await appState.provider.searchPaged(
+            let result = try await authManager.provider.searchPaged(
                 query: query,
                 includeItemTypes: includeItemTypes,
                 limit: pageSize,
@@ -105,7 +105,7 @@ struct SearchSeeAllView: View {
         isLoadingMore = true
 
         do {
-            let result = try await appState.provider.searchPaged(
+            let result = try await authManager.provider.searchPaged(
                 query: query,
                 includeItemTypes: includeItemTypes,
                 limit: pageSize,

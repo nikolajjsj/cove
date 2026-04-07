@@ -5,6 +5,8 @@ import SwiftUI
 
 struct AppShellView: View {
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
+    @Environment(DownloadCoordinator.self) private var downloadCoordinator
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showFullPlayer = false
 
@@ -41,9 +43,11 @@ struct AppShellView: View {
             ForEach(availableTabs, id: \.self) { tab in
                 Tab(tab.title, systemImage: tab.icon, value: tab) {
                     NavigationStack(path: navigationPathBinding(for: tab)) {
-                        tab.destination(appState: appState)
-                            .navigationTitle(tab.title)
-                            .withNavigationDestinations()
+                        tab.destination(
+                            appState: appState, downloadCoordinator: downloadCoordinator
+                        )
+                        .navigationTitle(tab.title)
+                        .withNavigationDestinations()
                     }
                 }
             }
@@ -69,9 +73,11 @@ struct AppShellView: View {
             #endif
         } detail: {
             NavigationStack(path: navigationPathBinding(for: appState.selectedTab)) {
-                appState.selectedTab.destination(appState: appState)
-                    .navigationTitle(appState.selectedTab.title)
-                    .withNavigationDestinations()
+                appState.selectedTab.destination(
+                    appState: appState, downloadCoordinator: downloadCoordinator
+                )
+                .navigationTitle(appState.selectedTab.title)
+                .withNavigationDestinations()
             }
         }
         .safeAreaInset(edge: .bottom) {

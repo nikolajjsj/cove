@@ -11,6 +11,8 @@ struct MovieDetailView: View {
     let item: MediaItem
 
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
+    @Environment(DownloadCoordinator.self) private var downloadCoordinator
     @Environment(\.dismiss) private var dismiss
 
     @State private var detailLoader = DetailItemLoader()
@@ -64,17 +66,17 @@ struct MovieDetailView: View {
 
                     // Trailers
                     MediaItemRail(title: "Trailers") { [item] in
-                        try await appState.provider.localTrailers(for: item)
+                        try await authManager.provider.localTrailers(for: item)
                     }
 
                     // Special Features
                     MediaItemRail(title: "Special Features") { [item] in
-                        try await appState.provider.specialFeatures(for: item)
+                        try await authManager.provider.specialFeatures(for: item)
                     }
 
                     // More Like This
                     MediaItemRail(title: "More Like This") { [item] in
-                        try await appState.provider.similarItems(for: item, limit: 12)
+                        try await authManager.provider.similarItems(for: item, limit: 12)
                     }
                 }
                 .padding(.horizontal)
@@ -84,7 +86,7 @@ struct MovieDetailView: View {
         }
         .task {
             await detailLoader.load {
-                try await appState.provider.item(id: item.id)
+                try await authManager.provider.item(id: item.id)
             }
         }
         .ignoresSafeArea(edges: .top)
@@ -95,19 +97,18 @@ struct MovieDetailView: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                if let downloadManager = appState.downloadManager {
-                    let appState = appState
+                if let downloadManager = downloadCoordinator.downloadManager {
                     DownloadButton(
                         item: item,
-                        serverId: appState.activeConnection?.id.uuidString ?? "",
+                        serverId: authManager.activeConnection?.id.uuidString ?? "",
                         downloadManager: downloadManager,
                         downloadURLResolver: {
-                            let info = try await appState.provider.downloadInfo(
-                                for: item, profile: appState.provider.deviceProfile())
+                            let info = try await authManager.provider.downloadInfo(
+                                for: item, profile: authManager.provider.deviceProfile())
                             return info.url
                         },
                         onDownload: {
-                            try await appState.downloadItem(item)
+                            try await downloadCoordinator.downloadItem(item)
                         }
                     )
                 }
@@ -210,7 +211,7 @@ struct MovieDetailView: View {
 
     private var playButton: some View {
         Button {
-            coordinator.play(item: item, using: appState.provider)
+            coordinator.play(item: item, using: authManager.provider)
         } label: {
             HStack(spacing: 8) {
                 if coordinator.isLoadingItem(item.id) {
@@ -242,7 +243,7 @@ struct MovieDetailView: View {
     // MARK: - Image Helpers
 
     private var backdropURL: URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .backdrop,
             maxSize: CGSize(width: 1280, height: 720)

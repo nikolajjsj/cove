@@ -106,5 +106,5 @@ struct SongCard: View {
         .frame(width: 140)
     }
     .padding()
-    .environment(AppState())
+    .environment(AppState.preview)
 }

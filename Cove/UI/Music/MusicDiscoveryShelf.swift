@@ -8,7 +8,7 @@ struct MusicDiscoveryShelf: View {
     let title: String
     let sortField: SortField
     let library: MediaLibrary
-    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var items: [MediaItem] = []
     @State private var isLoading = true
 
@@ -52,7 +52,7 @@ struct MusicDiscoveryShelf: View {
     // MARK: - Loading
 
     private func loadItems() async {
-        let provider = appState.provider
+        let provider = authManager.provider
 
         do {
             let sort = SortOptions(field: sortField, order: .descending)
@@ -73,7 +73,7 @@ struct MusicDiscoveryShelf: View {
     // MARK: - Helpers
 
     private func imageURL(for item: MediaItem) -> URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .primary,
             maxSize: CGSize(width: 240, height: 240)
@@ -93,6 +93,6 @@ struct MusicDiscoveryShelf: View {
                 )
             }
         }
-        .environment(AppState())
+        .environment(AuthManager(serverRepository: nil))
     }
 }

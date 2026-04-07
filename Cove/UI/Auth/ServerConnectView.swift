@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ServerConnectView: View {
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var serverURL = ""
     @State private var username = ""
     @State private var password = ""
@@ -102,7 +103,8 @@ struct ServerConnectView: View {
         }
 
         do {
-            try await appState.connect(url: url, username: username, password: password)
+            try await authManager.connect(url: url, username: username, password: password)
+            await appState.onConnected()
         } catch {
             errorMessage = error.localizedDescription
         }

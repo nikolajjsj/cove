@@ -9,6 +9,7 @@ struct PlaylistListView: View {
     var isFavoriteFilter: Bool = false
 
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var playlists: [Playlist] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -110,7 +111,7 @@ struct PlaylistListView: View {
         isLoading = true
         errorMessage = nil
         do {
-            playlists = try await appState.provider.playlists()
+            playlists = try await authManager.provider.playlists()
         } catch {
             errorMessage = error.localizedDescription
             playlists = []
@@ -122,7 +123,7 @@ struct PlaylistListView: View {
         let name = newPlaylistName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
         do {
-            let _ = try await appState.provider.createPlaylist(name: name, trackIds: [])
+            let _ = try await authManager.provider.createPlaylist(name: name, trackIds: [])
             appState.showToast("Playlist created", icon: "checkmark.circle")
             await loadPlaylists()
         } catch {
@@ -135,7 +136,7 @@ struct PlaylistListView: View {
     private func imageURL(for itemId: ItemID, maxSize: CGSize? = CGSize(width: 120, height: 120))
         -> URL?
     {
-        appState.provider.imageURL(for: itemId, type: .primary, maxSize: maxSize)
+        authManager.provider.imageURL(for: itemId, type: .primary, maxSize: maxSize)
     }
 }
 
@@ -187,8 +188,10 @@ private struct PlaylistRow: View {
 }
 
 #Preview {
+    let state = AppState.preview
     NavigationStack {
         PlaylistListView()
-            .environment(AppState())
+            .environment(state)
+            .environment(state.authManager)
     }
 }

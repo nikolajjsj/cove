@@ -8,6 +8,7 @@ struct GenreDetailView: View {
     let genreItem: MediaItem
     let library: MediaLibrary?
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var loader = PagedCollectionLoader<MediaItem>()
 
     private let pageSize = 40
@@ -96,7 +97,7 @@ struct GenreDetailView: View {
             return
         }
 
-        let provider = appState.provider
+        let provider = authManager.provider
 
         await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
             let sort = SortOptions(field: .name, order: .ascending)
@@ -116,7 +117,7 @@ struct GenreDetailView: View {
     // MARK: - Helpers
 
     private func imageURL(for item: MediaItem) -> URL? {
-        appState.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .primary,
             maxSize: CGSize(width: 300, height: 300)
@@ -125,11 +126,13 @@ struct GenreDetailView: View {
 }
 
 #Preview {
+    let state = AppState.preview
     NavigationStack {
         GenreDetailView(
             genreItem: MediaItem(id: ItemID("preview"), title: "Rock", mediaType: .genre),
             library: nil
         )
-        .environment(AppState())
+        .environment(state)
+        .environment(state.authManager)
     }
 }

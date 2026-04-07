@@ -6,13 +6,15 @@ import SwiftUI
 struct SettingsView: View {
     @Default(.downloadOverCellular) var downloadOverCellular
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
+    @Environment(DownloadCoordinator.self) private var downloadCoordinator
     @State private var showStorageManagement = false
     @State private var totalDownloadSize: Int64 = 0
     @State private var downloadCount: Int = 0
 
     var body: some View {
         Form {
-            if let connection = appState.activeConnection {
+            if let connection = authManager.activeConnection {
                 Section("Connected Server") {
                     LabeledContent("Name", value: connection.name)
                     LabeledContent("URL", value: connection.url.absoluteString)
@@ -31,7 +33,7 @@ struct SettingsView: View {
                 }
             }
 
-            if appState.downloadManager != nil {
+            if downloadCoordinator.downloadManager != nil {
                 Section("Downloads & Storage") {
                     Toggle("Download over Cellular", isOn: $downloadOverCellular)
 
@@ -70,13 +72,13 @@ struct SettingsView: View {
 
             Section {
                 Button("Disconnect", role: .destructive) {
-                    Task { await appState.disconnect() }
+                    Task { await appState.onDisconnect() }
                 }
             }
         }
         .formStyle(.grouped)
         .sheet(isPresented: $showStorageManagement) {
-            if let downloadManager = appState.downloadManager {
+            if let downloadManager = downloadCoordinator.downloadManager {
                 NavigationStack {
                     StorageManagementView(downloadManager: downloadManager)
                 }
@@ -121,8 +123,8 @@ struct SettingsView: View {
     // MARK: - Helpers
 
     private func loadStorageInfo() async {
-        guard let downloadManager = appState.downloadManager,
-            let connection = appState.activeConnection
+        guard let downloadManager = downloadCoordinator.downloadManager,
+            let connection = authManager.activeConnection
         else { return }
 
         do {

@@ -9,6 +9,8 @@ struct DownloadsView: View {
     let downloadManager: DownloadManagerService
 
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
+    @Environment(DownloadCoordinator.self) private var downloadCoordinator
     @State private var viewModel: DownloadsViewModel?
     @State private var showStorageManagement = false
     @State private var showDeleteAllConfirmation = false
@@ -149,12 +151,12 @@ struct DownloadsView: View {
             }
         }
         .task {
-            guard let connection = appState.activeConnection else { return }
+            guard let connection = authManager.activeConnection else { return }
             let vm = DownloadsViewModel(
                 downloadManager: downloadManager,
-                metadataRepository: appState.offlineMetadataRepository,
-                groupRepository: appState.downloadGroupRepository,
-                downloadRepository: appState.downloadRepository
+                metadataRepository: downloadCoordinator.offlineMetadataRepository,
+                groupRepository: downloadCoordinator.downloadGroupRepository,
+                downloadRepository: downloadCoordinator.downloadRepository
             )
             viewModel = vm
             vm.startObserving(serverId: connection.id.uuidString)
@@ -540,7 +542,7 @@ struct DownloadsView: View {
             appState.videoPlayerCoordinator.playLocal(item: mediaItem, localFileURL: localURL)
         } else {
             // Fallback: try to play via network
-            appState.videoPlayerCoordinator.play(item: mediaItem, using: appState.provider)
+            appState.videoPlayerCoordinator.play(item: mediaItem, using: authManager.provider)
         }
     }
 

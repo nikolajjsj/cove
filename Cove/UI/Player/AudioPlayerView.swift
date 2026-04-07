@@ -13,6 +13,7 @@ import SwiftUI
 /// gradient extracted from the current track's album artwork.
 struct AudioPlayerView: View {
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
 
     @State private var currentPage: PlayerPage = .artwork
@@ -194,12 +195,14 @@ struct AudioPlayerView: View {
 
     private func artworkURL(for track: Track) -> URL? {
         let itemId = track.albumId ?? track.id
-        return appState.provider.imageURL(
+        return authManager.provider.imageURL(
             for: itemId, type: .primary, maxSize: CGSize(width: 600, height: 600))
     }
 }
 
 #Preview {
+    let state = AppState.preview
     AudioPlayerView()
-        .environment(AppState())
+        .environment(state)
+        .environment(state.authManager)
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
 
     private var coordinator: VideoPlayerCoordinator {
         appState.videoPlayerCoordinator
@@ -28,6 +29,7 @@ struct RootView: View {
                     startPosition: coordinator.startPosition
                 )
                 .environment(appState)
+                .environment(authManager)
                 .transition(
                     .asymmetric(
                         insertion: .opacity
@@ -41,8 +43,8 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.35), value: coordinator.isPresented)
-        .animation(.easeInOut(duration: 0.4), value: appState.isRestoringSession)
-        .animation(.easeInOut(duration: 0.4), value: appState.isAuthenticated)
+        .animation(.easeInOut(duration: 0.4), value: authManager.isRestoringSession)
+        .animation(.easeInOut(duration: 0.4), value: authManager.isAuthenticated)
         // Playback error alert — shown at the root so it's always reachable
         .alert(
             "Playback Error",
@@ -70,10 +72,10 @@ struct RootView: View {
 
     @ViewBuilder
     private var mainContent: some View {
-        if appState.isRestoringSession {
+        if authManager.isRestoringSession {
             LaunchView()
                 .transition(.opacity.animation(.easeOut(duration: 0.3)))
-        } else if appState.isAuthenticated {
+        } else if authManager.isAuthenticated {
             AppShellView()
                 .transition(.opacity.animation(.easeIn(duration: 0.35)))
         } else {
