@@ -122,7 +122,7 @@ struct PlaylistListView: View {
         let name = newPlaylistName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
         do {
-            try await appState.provider.createPlaylist(name: name, trackIds: [])
+            let _ = try await appState.provider.createPlaylist(name: name, trackIds: [])
             appState.showToast("Playlist created", icon: "checkmark.circle")
             await loadPlaylists()
         } catch {
