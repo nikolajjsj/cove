@@ -59,7 +59,6 @@ struct ArtistDetailView: View {
                 cornerRadius: .infinity
             )
             .frame(width: 200, height: 200)
-            .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
 
             // Artist name
             Text(artistItem.title)
