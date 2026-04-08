@@ -17,8 +17,8 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
     let overviewLineLimit: Int
     let overviewFont: Font
     let overviewExpandThreshold: Int?
-    @ViewBuilder let header: () -> Header
-    @ViewBuilder let footer: () -> Footer
+    @ViewBuilder let header: Header
+    @ViewBuilder let footer: Footer
 
     init(
         item: MediaItem,
@@ -30,8 +30,8 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
         overviewLineLimit: Int = 4,
         overviewFont: Font = .body,
         overviewExpandThreshold: Int? = nil,
-        @ViewBuilder header: @escaping () -> Header,
-        @ViewBuilder footer: @escaping () -> Footer
+        @ViewBuilder header: () -> Header,
+        @ViewBuilder footer: () -> Footer
     ) {
         self.item = item
         self.displayItem = displayItem
@@ -42,8 +42,8 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
         self.overviewLineLimit = overviewLineLimit
         self.overviewFont = overviewFont
         self.overviewExpandThreshold = overviewExpandThreshold
-        self.header = header
-        self.footer = footer
+        self.header = header()
+        self.footer = footer()
     }
 
     var body: some View {
@@ -60,7 +60,7 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
 
             // MARK: - Header slot (e.g. play button)
             VStack(alignment: .leading, spacing: 16) {
-                header()
+                header
 
                 // Metadata pills
                 MetadataPillsView(metadataPills)
@@ -101,7 +101,7 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
             .padding(.bottom, 8)
 
             // MARK: - Footer slot (e.g. cast/crew, similar items, season picker)
-            footer()
+            footer
         }
     }
 }

@@ -32,8 +32,8 @@ struct ContentRail<Card: View, Skeleton: View, Header: View>: View {
     // MARK: - Configuration
 
     let fetch: @Sendable () async throws -> [MediaItem]
-    @ViewBuilder let header: () -> Header
-    @ViewBuilder let skeleton: () -> Skeleton
+    @ViewBuilder let header: Header
+    @ViewBuilder let skeleton: Skeleton
     @ViewBuilder let card: (MediaItem) -> Card
 
     let skeletonCount: Int
@@ -81,12 +81,12 @@ struct ContentRail<Card: View, Skeleton: View, Header: View>: View {
 
     private var loadingContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            header()
+            header
 
             ScrollView(.horizontal) {
                 LazyHStack(spacing: spacing) {
                     ForEach(0..<skeletonCount, id: \.self) { _ in
-                        skeleton()
+                        skeleton
                     }
                 }
             }
@@ -98,7 +98,7 @@ struct ContentRail<Card: View, Skeleton: View, Header: View>: View {
 
     private func loadedContent(_ items: [MediaItem]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            header()
+            header
 
             ScrollView(.horizontal) {
                 LazyHStack(spacing: spacing) {
@@ -164,8 +164,8 @@ extension ContentRail where Header == SectionHeader {
         fetch: @escaping @Sendable () async throws -> [MediaItem],
         @ViewBuilder card: @escaping (MediaItem) -> Card
     ) {
-        self.header = { SectionHeader(title: title) }
-        self.skeleton = skeleton
+        self.header = SectionHeader(title: title)
+        self.skeleton = skeleton()
         self.skeletonCount = skeletonCount
         self.spacing = spacing
         self.cardWidth = cardWidth
@@ -203,10 +203,10 @@ extension ContentRail {
         @ViewBuilder skeleton: @escaping () -> Skeleton,
         fetch: @escaping @Sendable () async throws -> [MediaItem],
         @ViewBuilder card: @escaping (MediaItem) -> Card,
-        @ViewBuilder header: @escaping () -> Header
+        @ViewBuilder header: () -> Header
     ) {
-        self.header = header
-        self.skeleton = skeleton
+        self.header = header()
+        self.skeleton = skeleton()
         self.skeletonCount = skeletonCount
         self.spacing = spacing
         self.cardWidth = cardWidth
