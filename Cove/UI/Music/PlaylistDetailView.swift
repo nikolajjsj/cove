@@ -71,7 +71,7 @@ struct PlaylistDetailView: View {
                         if isDownloading {
                             ProgressView()
                         } else {
-                            Image(systemName: "arrow.down.circle")
+                            Label("Download", systemImage: "arrow.down.circle")
                         }
                     }
                 }
@@ -91,7 +91,7 @@ struct PlaylistDetailView: View {
                         Label("Delete Playlist", systemImage: "trash")
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Label("Options", systemImage: "ellipsis.circle")
                 }
             }
         }

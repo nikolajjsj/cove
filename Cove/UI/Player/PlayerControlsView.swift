@@ -117,7 +117,7 @@ struct PlayerControlsView: View {
                     }
                 }
             } label: {
-                Image(systemName: "ellipsis.circle.fill")
+                Label("More", systemImage: "ellipsis.circle.fill")
                     .font(.title3)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())

@@ -147,7 +147,7 @@ struct SeriesDetailView: View {
                         Button {
                             showDownloadSheet = true
                         } label: {
-                            Image(systemName: "arrow.down.circle")
+                            Label("Download Season", systemImage: "arrow.down.circle")
                                 .font(.title3)
                         }
                     }

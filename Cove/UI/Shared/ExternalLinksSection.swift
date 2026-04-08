@@ -20,19 +20,15 @@ struct ExternalLinksSection: View {
                         Button {
                             openURL(link.url)
                         } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: link.icon)
-                                    .font(.caption2.weight(.semibold))
-                                Text(link.label)
-                                    .font(.caption.weight(.medium))
-                            }
-                            .foregroundStyle(link.tint)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color(.tertiarySystemFill))
-                            )
+                            Label(link.label, systemImage: link.icon)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(link.tint)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color(.tertiarySystemFill))
+                                )
                         }
                         .buttonStyle(.plain)
                     }

@@ -91,7 +91,7 @@ struct AlbumDetailView: View {
                             Label("Remove Album", systemImage: "trash")
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        Label("Options", systemImage: "ellipsis.circle")
                     }
                 } else if downloadCoordinator.downloadManager != nil {
                     albumDownloadButton

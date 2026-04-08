@@ -73,17 +73,9 @@ private struct GenreRow: View {
     let name: String
 
     var body: some View {
-        HStack {
-            Image(systemName: "guitars")
-                .foregroundStyle(.secondary)
-                .frame(width: 28)
-
-            Text(name)
-                .font(.body)
-
-            Spacer()
-        }
-        .padding(.vertical, 4)
+        Label(name, systemImage: "guitars")
+            .font(.body)
+            .padding(.vertical, 4)
     }
 }
 

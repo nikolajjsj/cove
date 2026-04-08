@@ -97,7 +97,7 @@ struct PlaylistListView: View {
                     newPlaylistName = ""
                     showNewPlaylistAlert = true
                 } label: {
-                    Image(systemName: "plus")
+                    Label("New Playlist", systemImage: "plus")
                 }
             }
         }
