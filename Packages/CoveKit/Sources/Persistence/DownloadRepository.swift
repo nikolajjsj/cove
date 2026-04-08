@@ -64,6 +64,18 @@ public final class DownloadRepository: Sendable {
         }
     }
 
+    /// Fetch all downloads belonging to a specific group, ordered by creation date (oldest first).
+    public func fetchAll(groupId: String) async throws -> [DownloadItem] {
+        try await dbWriter.read { db in
+            let records =
+                try DownloadRecord
+                .filter(Column("groupId") == groupId)
+                .order(Column("createdAt").asc)
+                .fetchAll(db)
+            return records.compactMap { $0.toDownloadItem() }
+        }
+    }
+
     /// Fetch a single download by its unique ID.
     public func fetch(id: String) async throws -> DownloadItem? {
         try await dbWriter.read { db in

@@ -1,5 +1,6 @@
 import DownloadManager
 import Foundation
+import JellyfinAPI
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -36,6 +37,51 @@ final class DownloadCoordinator {
         self.offlineMetadataRepository = offlineMetadataRepository
     }
 
+    // MARK: - Artwork Helper
+
+    /// Downloads primary artwork (and optionally a backdrop) for an item, saving paths into the metadata.
+    private func downloadArtwork(
+        for itemId: ItemID,
+        mediaType: MediaType,
+        serverId: String,
+        provider: JellyfinServerProvider,
+        storage: DownloadStorage,
+        metadata: inout OfflineMediaMetadata,
+        includeBackdrop: Bool = false
+    ) async {
+        let _ = try? storage.prepareParentDirectory(
+            serverId: serverId, mediaType: mediaType, itemId: itemId
+        )
+
+        // Primary artwork
+        if let primaryURL = provider.imageURL(
+            for: itemId, type: .primary, maxSize: CGSize(width: 600, height: 600)
+        ) {
+            let dest = storage.primaryImageURL(
+                serverId: serverId, mediaType: mediaType, itemId: itemId)
+            if await storage.downloadImage(from: primaryURL, to: dest) {
+                metadata.primaryImagePath = storage.relativePrimaryImagePath(
+                    serverId: serverId, mediaType: mediaType, itemId: itemId
+                )
+            }
+        }
+
+        // Backdrop (for movies/series)
+        if includeBackdrop {
+            if let backdropURL = provider.imageURL(
+                for: itemId, type: .backdrop, maxSize: CGSize(width: 1280, height: 720)
+            ) {
+                let dest = storage.backdropImageURL(
+                    serverId: serverId, mediaType: mediaType, itemId: itemId)
+                if await storage.downloadImage(from: backdropURL, to: dest) {
+                    metadata.backdropImagePath = storage.relativeBackdropImagePath(
+                        serverId: serverId, mediaType: mediaType, itemId: itemId
+                    )
+                }
+            }
+        }
+    }
+
     // MARK: - Single Item Download
 
     func downloadItem(_ item: MediaItem, parentId: ItemID? = nil) async throws {
@@ -46,52 +92,30 @@ final class DownloadCoordinator {
 
         let provider = authManager.provider
         let serverId = connection.id.uuidString
+        let storage = DownloadStorage.shared
         let downloadInfo = try await provider.downloadInfo(
             for: item, profile: provider.deviceProfile())
         let remoteURL = downloadInfo.url
+
+        // Save offline metadata with artwork
+        var metadata = OfflineMediaMetadata.from(item: item, serverId: serverId)
+        let includeBackdrop = item.mediaType == .movie || item.mediaType == .series
+        await downloadArtwork(
+            for: item.id,
+            mediaType: item.mediaType,
+            serverId: serverId,
+            provider: provider,
+            storage: storage,
+            metadata: &metadata,
+            includeBackdrop: includeBackdrop
+        )
+        try await metadataRepo.save(metadata)
 
         let artworkURL = provider.imageURL(
             for: item,
             type: .primary,
             maxSize: CGSize(width: 600, height: 600)
         )
-
-        // Save offline metadata
-        var metadata = OfflineMediaMetadata.from(item: item, serverId: serverId)
-
-        // Download primary artwork
-        let storage = DownloadStorage.shared
-        if let artworkURL {
-            let _ = try? storage.prepareParentDirectory(
-                serverId: serverId, mediaType: item.mediaType, itemId: item.id
-            )
-            let destURL = storage.primaryImageURL(
-                serverId: serverId, mediaType: item.mediaType, itemId: item.id
-            )
-            if await storage.downloadImage(from: artworkURL, to: destURL) {
-                metadata.primaryImagePath = storage.relativePrimaryImagePath(
-                    serverId: serverId, mediaType: item.mediaType, itemId: item.id
-                )
-            }
-        }
-
-        // Download backdrop for movies/series
-        if item.mediaType == .movie || item.mediaType == .series {
-            if let backdropURL = provider.imageURL(
-                for: item, type: .backdrop, maxSize: CGSize(width: 1280, height: 720)
-            ) {
-                let destURL = storage.backdropImageURL(
-                    serverId: serverId, mediaType: item.mediaType, itemId: item.id
-                )
-                if await storage.downloadImage(from: backdropURL, to: destURL) {
-                    metadata.backdropImagePath = storage.relativeBackdropImagePath(
-                        serverId: serverId, mediaType: item.mediaType, itemId: item.id
-                    )
-                }
-            }
-        }
-
-        try await metadataRepo.save(metadata)
 
         _ = try await downloadManager.enqueueDownload(
             itemId: item.id,
@@ -123,34 +147,15 @@ final class DownloadCoordinator {
 
         // 1. Save and download artwork for the series (parent)
         var seriesMeta = OfflineMediaMetadata.from(item: series, serverId: serverId)
-        let _ = try? storage.prepareParentDirectory(
-            serverId: serverId, mediaType: .series, itemId: series.id
+        await downloadArtwork(
+            for: series.id,
+            mediaType: .series,
+            serverId: serverId,
+            provider: provider,
+            storage: storage,
+            metadata: &seriesMeta,
+            includeBackdrop: true
         )
-
-        if let primaryURL = provider.imageURL(
-            for: series, type: .primary, maxSize: CGSize(width: 600, height: 600)
-        ) {
-            let dest = storage.primaryImageURL(
-                serverId: serverId, mediaType: .series, itemId: series.id)
-            if await storage.downloadImage(from: primaryURL, to: dest) {
-                seriesMeta.primaryImagePath = storage.relativePrimaryImagePath(
-                    serverId: serverId, mediaType: .series, itemId: series.id
-                )
-            }
-        }
-
-        if let backdropURL = provider.imageURL(
-            for: series, type: .backdrop, maxSize: CGSize(width: 1280, height: 720)
-        ) {
-            let dest = storage.backdropImageURL(
-                serverId: serverId, mediaType: .series, itemId: series.id)
-            if await storage.downloadImage(from: backdropURL, to: dest) {
-                seriesMeta.backdropImagePath = storage.relativeBackdropImagePath(
-                    serverId: serverId, mediaType: .series, itemId: series.id
-                )
-            }
-        }
-
         try await metadataRepo.save(seriesMeta)
 
         // 2. Save season metadata
@@ -165,23 +170,14 @@ final class DownloadCoordinator {
             var epMeta = OfflineMediaMetadata.from(
                 episode: episode, seriesName: series.title, serverId: serverId
             )
-
-            if let thumbURL = provider.imageURL(
-                for: episode.id, type: .primary, maxSize: CGSize(width: 320, height: 180)
-            ) {
-                let _ = try? storage.prepareParentDirectory(
-                    serverId: serverId, mediaType: .episode, itemId: episode.id
-                )
-                let dest = storage.primaryImageURL(
-                    serverId: serverId, mediaType: .episode, itemId: episode.id
-                )
-                if await storage.downloadImage(from: thumbURL, to: dest) {
-                    epMeta.primaryImagePath = storage.relativePrimaryImagePath(
-                        serverId: serverId, mediaType: .episode, itemId: episode.id
-                    )
-                }
-            }
-
+            await downloadArtwork(
+                for: episode.id,
+                mediaType: .episode,
+                serverId: serverId,
+                provider: provider,
+                storage: storage,
+                metadata: &epMeta
+            )
             try await metadataRepo.save(epMeta)
 
             let epItem = MediaItem(
@@ -224,22 +220,14 @@ final class DownloadCoordinator {
 
         // 1. Save and download artwork for the album
         var albumMeta = OfflineMediaMetadata.from(album: album, serverId: serverId)
-        let _ = try? storage.prepareParentDirectory(
-            serverId: serverId, mediaType: .album, itemId: album.id
+        await downloadArtwork(
+            for: album.id,
+            mediaType: .album,
+            serverId: serverId,
+            provider: provider,
+            storage: storage,
+            metadata: &albumMeta
         )
-
-        if let primaryURL = provider.imageURL(
-            for: album.id, type: .primary, maxSize: CGSize(width: 600, height: 600)
-        ) {
-            let dest = storage.primaryImageURL(
-                serverId: serverId, mediaType: .album, itemId: album.id)
-            if await storage.downloadImage(from: primaryURL, to: dest) {
-                albumMeta.primaryImagePath = storage.relativePrimaryImagePath(
-                    serverId: serverId, mediaType: .album, itemId: album.id
-                )
-            }
-        }
-
         try await metadataRepo.save(albumMeta)
 
         // 2. Save track metadata and resolve download URLs
@@ -288,22 +276,14 @@ final class DownloadCoordinator {
 
         // 1. Save and download artwork for the playlist
         var playlistMeta = OfflineMediaMetadata.from(playlist: playlist, serverId: serverId)
-        let _ = try? storage.prepareParentDirectory(
-            serverId: serverId, mediaType: .playlist, itemId: playlist.id
+        await downloadArtwork(
+            for: playlist.id,
+            mediaType: .playlist,
+            serverId: serverId,
+            provider: provider,
+            storage: storage,
+            metadata: &playlistMeta
         )
-
-        if let primaryURL = provider.imageURL(
-            for: playlist.id, type: .primary, maxSize: CGSize(width: 600, height: 600)
-        ) {
-            let dest = storage.primaryImageURL(
-                serverId: serverId, mediaType: .playlist, itemId: playlist.id)
-            if await storage.downloadImage(from: primaryURL, to: dest) {
-                playlistMeta.primaryImagePath = storage.relativePrimaryImagePath(
-                    serverId: serverId, mediaType: .playlist, itemId: playlist.id
-                )
-            }
-        }
-
         try await metadataRepo.save(playlistMeta)
 
         // 2. Save track metadata and resolve download URLs (preserve playlist order)
@@ -393,7 +373,7 @@ final class DownloadCoordinator {
                 title: "",
                 mediaType: .movie  // Type doesn't matter for reporting
             )
-            let position = TimeInterval(report.positionTicks) / 10_000_000.0
+            let position = JellyfinTicks.toSeconds(report.positionTicks)
 
             switch report.eventType {
             case .start:

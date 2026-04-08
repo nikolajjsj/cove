@@ -197,6 +197,71 @@ public final class DownloadManagerService: @unchecked Sendable {
 
     // MARK: - Public API — Batch Enqueue
 
+    /// Shared implementation for batch-enqueueing items into a download group.
+    private func enqueueGroup(
+        groupItemId: ItemID,
+        mediaType: MediaType,
+        children: [(itemId: ItemID, title: String, remoteURL: URL, expectedBytes: Int64)],
+        childMediaType: MediaType,
+        serverId: String,
+        groupTitle: String,
+        parentIdOverride: ItemID? = nil
+    ) async throws -> DownloadGroup {
+        // Create or fetch existing group
+        let group: DownloadGroup
+        if let existing = try await groupRepository?.fetch(itemId: groupItemId, serverId: serverId)
+        {
+            group = existing
+        } else {
+            group = DownloadGroup(
+                itemId: groupItemId,
+                serverId: serverId,
+                mediaType: mediaType,
+                title: groupTitle
+            )
+            try await groupRepository?.save(group)
+        }
+
+        // Enqueue each child with the group ID
+        for child in children {
+            // Skip if already enqueued
+            if let existing = try await downloadRepository.fetch(
+                itemId: child.itemId, serverId: serverId)
+            {
+                logger.info(
+                    "Item \(child.itemId.rawValue) already exists: state=\(existing.state.rawValue)"
+                )
+                continue
+            }
+
+            let item = DownloadItem(
+                id: UUID().uuidString,
+                itemId: child.itemId,
+                serverId: serverId,
+                title: child.title,
+                mediaType: childMediaType,
+                state: .queued,
+                progress: 0,
+                totalBytes: child.expectedBytes,
+                downloadedBytes: 0,
+                localFilePath: nil,
+                remoteURL: child.remoteURL.absoluteString,
+                parentId: parentIdOverride ?? groupItemId,
+                groupId: group.id,
+                artworkURL: nil,
+                errorMessage: nil,
+                createdAt: Date(),
+                completedAt: nil
+            )
+            try await downloadRepository.save(item)
+        }
+
+        logger.info(
+            "Enqueued \(children.count) items for '\(groupTitle)' [group: \(group.id)]")
+        await startNextDownloadsIfNeeded()
+        return group
+    }
+
     /// Enqueue all tracks in an album as a download group.
     ///
     /// Creates a `DownloadGroup` for the album, saves metadata for the album and all tracks,
@@ -215,59 +280,14 @@ public final class DownloadManagerService: @unchecked Sendable {
         serverId: String,
         groupTitle: String
     ) async throws -> DownloadGroup {
-        // Create or fetch existing group
-        let group: DownloadGroup
-        if let existing = try await groupRepository?.fetch(itemId: albumItemId, serverId: serverId)
-        {
-            group = existing
-        } else {
-            group = DownloadGroup(
-                itemId: albumItemId,
-                serverId: serverId,
-                mediaType: .album,
-                title: groupTitle
-            )
-            try await groupRepository?.save(group)
-        }
-
-        // Enqueue each track with the group ID
-        for track in tracks {
-            // Skip if already enqueued
-            if let existing = try await downloadRepository.fetch(
-                itemId: track.itemId, serverId: serverId)
-            {
-                logger.info(
-                    "Track \(track.itemId.rawValue) already exists: state=\(existing.state.rawValue)"
-                )
-                continue
-            }
-
-            let item = DownloadItem(
-                id: UUID().uuidString,
-                itemId: track.itemId,
-                serverId: serverId,
-                title: track.title,
-                mediaType: .track,
-                state: .queued,
-                progress: 0,
-                totalBytes: track.expectedBytes,
-                downloadedBytes: 0,
-                localFilePath: nil,
-                remoteURL: track.remoteURL.absoluteString,
-                parentId: albumItemId,
-                groupId: group.id,
-                artworkURL: nil,
-                errorMessage: nil,
-                createdAt: Date(),
-                completedAt: nil
-            )
-            try await downloadRepository.save(item)
-        }
-
-        logger.info(
-            "Enqueued \(tracks.count) tracks for album '\(groupTitle)' [group: \(group.id)]")
-        await startNextDownloadsIfNeeded()
-        return group
+        try await enqueueGroup(
+            groupItemId: albumItemId,
+            mediaType: .album,
+            children: tracks,
+            childMediaType: .track,
+            serverId: serverId,
+            groupTitle: groupTitle
+        )
     }
 
     /// Batch-enqueue all tracks in a playlist as a single download group.
@@ -278,60 +298,14 @@ public final class DownloadManagerService: @unchecked Sendable {
         serverId: String,
         groupTitle: String
     ) async throws -> DownloadGroup {
-        // Create or fetch existing group
-        let group: DownloadGroup
-        if let existing = try await groupRepository?.fetch(
-            itemId: playlistItemId, serverId: serverId)
-        {
-            group = existing
-        } else {
-            group = DownloadGroup(
-                itemId: playlistItemId,
-                serverId: serverId,
-                mediaType: .playlist,
-                title: groupTitle
-            )
-            try await groupRepository?.save(group)
-        }
-
-        // Enqueue each track with the group ID
-        for track in tracks {
-            // Skip if already enqueued
-            if let existing = try await downloadRepository.fetch(
-                itemId: track.itemId, serverId: serverId)
-            {
-                logger.info(
-                    "Track \(track.itemId.rawValue) already exists: state=\(existing.state.rawValue)"
-                )
-                continue
-            }
-
-            let item = DownloadItem(
-                id: UUID().uuidString,
-                itemId: track.itemId,
-                serverId: serverId,
-                title: track.title,
-                mediaType: .track,
-                state: .queued,
-                progress: 0,
-                totalBytes: track.expectedBytes,
-                downloadedBytes: 0,
-                localFilePath: nil,
-                remoteURL: track.remoteURL.absoluteString,
-                parentId: playlistItemId,
-                groupId: group.id,
-                artworkURL: nil,
-                errorMessage: nil,
-                createdAt: Date(),
-                completedAt: nil
-            )
-            try await downloadRepository.save(item)
-        }
-
-        logger.info(
-            "Enqueued \(tracks.count) tracks for playlist '\(groupTitle)' [group: \(group.id)]")
-        await startNextDownloadsIfNeeded()
-        return group
+        try await enqueueGroup(
+            groupItemId: playlistItemId,
+            mediaType: .playlist,
+            children: tracks,
+            childMediaType: .track,
+            serverId: serverId,
+            groupTitle: groupTitle
+        )
     }
 
     /// Enqueue all episodes in a season as a download group.
@@ -351,81 +325,34 @@ public final class DownloadManagerService: @unchecked Sendable {
         serverId: String,
         groupTitle: String
     ) async throws -> DownloadGroup {
-        // Create or fetch existing group
-        let group: DownloadGroup
-        if let existing = try await groupRepository?.fetch(itemId: seasonItemId, serverId: serverId)
-        {
-            group = existing
-        } else {
-            group = DownloadGroup(
-                itemId: seasonItemId,
-                serverId: serverId,
-                mediaType: .season,
-                title: groupTitle
-            )
-            try await groupRepository?.save(group)
-        }
-
-        // Enqueue each episode with the group ID
-        for episode in episodes {
-            if let existing = try await downloadRepository.fetch(
-                itemId: episode.itemId, serverId: serverId)
-            {
-                logger.info(
-                    "Episode \(episode.itemId.rawValue) already exists: state=\(existing.state.rawValue)"
-                )
-                continue
-            }
-
-            let item = DownloadItem(
-                id: UUID().uuidString,
-                itemId: episode.itemId,
-                serverId: serverId,
-                title: episode.title,
-                mediaType: .episode,
-                state: .queued,
-                progress: 0,
-                totalBytes: episode.expectedBytes,
-                downloadedBytes: 0,
-                localFilePath: nil,
-                remoteURL: episode.remoteURL.absoluteString,
-                parentId: seriesItemId,
-                groupId: group.id,
-                artworkURL: nil,
-                errorMessage: nil,
-                createdAt: Date(),
-                completedAt: nil
-            )
-            try await downloadRepository.save(item)
-        }
-
-        logger.info("Enqueued \(episodes.count) episodes for '\(groupTitle)' [group: \(group.id)]")
-        await startNextDownloadsIfNeeded()
-        return group
+        try await enqueueGroup(
+            groupItemId: seasonItemId,
+            mediaType: .season,
+            children: episodes,
+            childMediaType: .episode,
+            serverId: serverId,
+            groupTitle: groupTitle,
+            parentIdOverride: seriesItemId
+        )
     }
 
     // MARK: - Public API — Group Queries
 
     /// Check if all downloads in a group are completed.
     public func isGroupComplete(groupId: String) async -> Bool {
-        guard let items = try? await downloadRepository.fetchAll() else { return false }
-        let groupItems = items.filter { $0.groupId == groupId }
-        guard !groupItems.isEmpty else { return false }
-        return groupItems.allSatisfy { $0.state == .completed }
+        guard let items = try? await downloadRepository.fetchAll(groupId: groupId) else {
+            return false
+        }
+        guard !items.isEmpty else { return false }
+        return items.allSatisfy { $0.state == .completed }
     }
 
     /// Delete all downloads in a group, plus the group record itself.
     public func deleteGroup(id: String) async throws {
-        // Get all items in the group
-        let allItems = try await downloadRepository.fetchAll()
-        let groupItems = allItems.filter { $0.groupId == id }
-
-        // Delete each item (cancels tasks, removes files)
+        let groupItems = try await downloadRepository.fetchAll(groupId: id)
         for item in groupItems {
             try await deleteDownload(id: item.id)
         }
-
-        // Delete the group record
         try await groupRepository?.delete(id: id)
         logger.info("Deleted download group \(id) with \(groupItems.count) items")
     }
