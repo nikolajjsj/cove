@@ -322,7 +322,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
         let lines = lyricDtos.compactMap { dto -> LyricLine? in
             guard let text = dto.text else { return nil }
             // Start time from Jellyfin is in ticks (10,000,000 ticks per second)
-            let startTime: TimeInterval? = dto.start.map { TimeInterval($0) / 10_000_000.0 }
+            let startTime: TimeInterval? = dto.start.map { JellyfinTicks.toSeconds($0) }
             return LyricLine(startTime: startTime, text: text)
         }
         guard !lines.isEmpty else { return nil }
@@ -710,7 +710,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
     public func reportPlaybackStart(item: MediaItem, position: TimeInterval) async throws {
         let client = try client()
-        let positionTicks = Int64(position * 10_000_000)
+        let positionTicks = JellyfinTicks.fromSeconds(position)
         try await client.reportPlaybackStart(
             itemId: item.id.rawValue,
             positionTicks: positionTicks
@@ -719,7 +719,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
     public func reportPlaybackProgress(item: MediaItem, position: TimeInterval) async throws {
         let client = try client()
-        let positionTicks = Int64(position * 10_000_000)
+        let positionTicks = JellyfinTicks.fromSeconds(position)
         try await client.reportPlaybackProgress(
             itemId: item.id.rawValue,
             positionTicks: positionTicks,
@@ -729,7 +729,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
     public func reportPlaybackStopped(item: MediaItem, position: TimeInterval) async throws {
         let client = try client()
-        let positionTicks = Int64(position * 10_000_000)
+        let positionTicks = JellyfinTicks.fromSeconds(position)
         try await client.reportPlaybackStopped(
             itemId: item.id.rawValue,
             positionTicks: positionTicks
