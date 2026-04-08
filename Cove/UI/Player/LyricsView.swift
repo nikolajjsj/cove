@@ -129,16 +129,7 @@ struct LyricsView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "music.note")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary.opacity(0.5))
-
-            Text("Lyrics not available")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ContentUnavailableView("Lyrics Not Available", systemImage: "music.note")
     }
 
     // MARK: - Auto-Scroll Pause
