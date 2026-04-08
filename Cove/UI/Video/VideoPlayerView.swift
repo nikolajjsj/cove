@@ -250,7 +250,8 @@ struct VideoPlayerView: View {
                 restoreOrientation()
                 coordinator.dismiss()
             } label: {
-                Image(systemName: "xmark")
+                Label("Close", systemImage: "xmark")
+                    .labelStyle(.iconOnly)
                     .font(.title3.bold())
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
@@ -279,7 +280,8 @@ struct VideoPlayerView: View {
                     showChapterList = true
                     controlsTimer?.cancel()
                 } label: {
-                    Image(systemName: "list.bullet.rectangle")
+                    Label("Chapters", systemImage: "list.bullet.rectangle")
+                        .labelStyle(.iconOnly)
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 44, height: 44)
@@ -292,11 +294,13 @@ struct VideoPlayerView: View {
             Button {
                 videoManager.cycleAspectRatio()
             } label: {
-                Image(
-                    systemName: videoManager.videoGravity == .resizeAspectFill
+                Label(
+                    "Aspect Ratio",
+                    systemImage: videoManager.videoGravity == .resizeAspectFill
                         ? "arrow.down.right.and.arrow.up.left"
                         : "arrow.up.left.and.arrow.down.right"
                 )
+                .labelStyle(.iconOnly)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 44, height: 44)
@@ -309,11 +313,15 @@ struct VideoPlayerView: View {
                     Button {
                         videoManager.togglePiP()
                     } label: {
-                        Image(systemName: videoManager.isPiPActive ? "pip.exit" : "pip.enter")
-                            .font(.title3)
-                            .foregroundStyle(.white)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
+                        Label(
+                            "Picture in Picture",
+                            systemImage: videoManager.isPiPActive ? "pip.exit" : "pip.enter"
+                        )
+                        .labelStyle(.iconOnly)
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -345,7 +353,8 @@ struct VideoPlayerView: View {
                 videoManager.skipBackward(Defaults[.skipBackwardInterval])
                 resetControlsTimer()
             } label: {
-                Image(systemName: skipBackwardIcon)
+                Label("Skip Back", systemImage: skipBackwardIcon)
+                    .labelStyle(.iconOnly)
                     .font(.title)
                     .foregroundStyle(.white)
                     .symbolEffect(.bounce, value: backwardSkipTrigger)
@@ -358,12 +367,16 @@ struct VideoPlayerView: View {
                 videoManager.togglePlayPause()
                 resetControlsTimer()
             } label: {
-                Image(systemName: videoManager.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 44))
-                    .foregroundStyle(.white)
-                    .contentTransition(.symbolEffect(.replace))
-                    .frame(width: 64, height: 64)
-                    .contentShape(Rectangle())
+                Label(
+                    videoManager.isPlaying ? "Pause" : "Play",
+                    systemImage: videoManager.isPlaying ? "pause.fill" : "play.fill"
+                )
+                .labelStyle(.iconOnly)
+                .font(.system(size: 44))
+                .foregroundStyle(.white)
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 64, height: 64)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -372,7 +385,8 @@ struct VideoPlayerView: View {
                 videoManager.skipForward(Defaults[.skipForwardInterval])
                 resetControlsTimer()
             } label: {
-                Image(systemName: skipForwardIcon)
+                Label("Skip Forward", systemImage: skipForwardIcon)
+                    .labelStyle(.iconOnly)
                     .font(.title)
                     .foregroundStyle(.white)
                     .symbolEffect(.bounce, value: forwardSkipTrigger)
@@ -765,7 +779,8 @@ struct VideoPlayerView: View {
                         Button {
                             videoManager.dismissNextEpisodeCountdown()
                         } label: {
-                            Image(systemName: "xmark")
+                            Label("Dismiss", systemImage: "xmark")
+                                .labelStyle(.iconOnly)
                                 .font(.caption.bold())
                                 .foregroundStyle(.white.opacity(0.7))
                                 .frame(width: 28, height: 28)
