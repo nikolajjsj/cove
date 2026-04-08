@@ -270,21 +270,25 @@ private struct PlaybackControlsRow: View {
 
 /// Small isolated view so the favorite API call / optimistic toggle
 /// doesn't cause the parent to re-render.
+///
+/// Uses ``UserDataStore`` for optimistic updates and cross-view sync.
 private struct FavoriteButton: View {
     let track: Track
     @Environment(AppState.self) private var appState
-    @Environment(AuthManager.self) private var authManager
+    @Environment(UserDataStore.self) private var store
 
     var body: some View {
-        let isFav = track.userData?.isFavorite == true
+        let isFav = store.isFavorite(track.id, fallback: track.userData)
 
         Button {
             Task {
                 do {
-                    try await authManager.provider.setFavorite(itemId: track.id, isFavorite: !isFav)
+                    let newValue = try await store.toggleFavorite(
+                        itemId: track.id, current: track.userData
+                    )
                     appState.showToast(
-                        isFav ? "Removed from Favorites" : "Added to Favorites",
-                        icon: isFav ? "heart" : "heart.fill"
+                        newValue ? "Added to Favorites" : "Removed from Favorites",
+                        icon: newValue ? "heart.fill" : "heart"
                     )
                 } catch {
                     // Silently fail

@@ -13,21 +13,14 @@ struct SeriesDetailView: View {
     /// When non-nil, the view operates in offline mode using local storage.
     private let offlineServerId: String?
 
-    @State private var isFavorite: Bool
-    @State private var isPlayed: Bool
-
     init(item: MediaItem) {
         self.item = item
         self.offlineServerId = nil
-        _isFavorite = State(initialValue: item.userData?.isFavorite ?? false)
-        _isPlayed = State(initialValue: item.userData?.isPlayed ?? false)
     }
 
     init(offlineSeriesId: String, serverId: String, title: String) {
         self.item = MediaItem(id: ItemID(offlineSeriesId), title: title, mediaType: .series)
         self.offlineServerId = serverId
-        _isFavorite = State(initialValue: false)
-        _isPlayed = State(initialValue: false)
     }
 
     private var isOffline: Bool { offlineServerId != nil }
@@ -189,33 +182,8 @@ struct SeriesDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     if !isOffline {
-                        Button {
-                            let wasFavorite = isFavorite
-                            isFavorite.toggle()
-                            Task {
-                                await appState.toggleFavorite(
-                                    itemId: item.id, isFavorite: wasFavorite)
-                            }
-                        } label: {
-                            Label(
-                                isFavorite ? "Remove from Favorites" : "Add to Favorites",
-                                systemImage: isFavorite ? "heart.slash" : "heart"
-                            )
-                        }
-
-                        Button {
-                            let wasPlayed = isPlayed
-                            isPlayed.toggle()
-                            Task {
-                                await appState.togglePlayed(
-                                    itemId: item.id, isPlayed: wasPlayed)
-                            }
-                        } label: {
-                            Label(
-                                isPlayed ? "Mark as Unwatched" : "Mark as Watched",
-                                systemImage: isPlayed ? "eye.slash" : "eye"
-                            )
-                        }
+                        FavoriteToggle(itemId: item.id, userData: item.userData)
+                        PlayedToggle(itemId: item.id, userData: item.userData)
                     }
 
                     if isOffline {

@@ -10,6 +10,7 @@ struct CoveApp: App {
     @State private var authManager: AuthManager
     @State private var downloadCoordinator: DownloadCoordinator
     @State private var appState: AppState
+    @State private var userDataStore: UserDataStore
 
     init() {
         ImageService.configure()
@@ -72,9 +73,14 @@ struct CoveApp: App {
             downloadCoordinator: downloadCoordinator
         )
 
+        // 4. Create the centralized user data mutation store
+        let userDataStore = UserDataStore(provider: authManager.provider)
+        appState.userDataStore = userDataStore
+
         _authManager = State(initialValue: authManager)
         _downloadCoordinator = State(initialValue: downloadCoordinator)
         _appState = State(initialValue: appState)
+        _userDataStore = State(initialValue: userDataStore)
     }
 
     var body: some Scene {
@@ -83,6 +89,7 @@ struct CoveApp: App {
                 .environment(appState)
                 .environment(authManager)
                 .environment(downloadCoordinator)
+                .environment(userDataStore)
                 .task {
                     await requestNotificationPermissions()
                 }

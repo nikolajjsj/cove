@@ -74,8 +74,8 @@ struct MediaContextMenuModifier: ViewModifier {
     private var movieMenu: some View {
         playVideoButton
         Divider()
-        watchedToggle
-        favoriteToggle
+        PlayedToggle(itemId: item.id, userData: item.userData)
+        FavoriteToggle(itemId: item.id, userData: item.userData)
     }
 
     // MARK: - Episode Menu
@@ -86,7 +86,7 @@ struct MediaContextMenuModifier: ViewModifier {
 
         Divider()
 
-        watchedToggle
+        PlayedToggle(itemId: item.id, userData: item.userData)
 
         if let seriesId = item.seriesId {
             Button {
@@ -103,16 +103,16 @@ struct MediaContextMenuModifier: ViewModifier {
 
         Divider()
 
-        favoriteToggle
+        FavoriteToggle(itemId: item.id, userData: item.userData)
     }
 
     // MARK: - Series Menu
 
     @ViewBuilder
     private var seriesMenu: some View {
-        watchedToggle
+        PlayedToggle(itemId: item.id, userData: item.userData)
         Divider()
-        favoriteToggle
+        FavoriteToggle(itemId: item.id, userData: item.userData)
     }
 
     // MARK: - Album Menu
@@ -157,7 +157,7 @@ struct MediaContextMenuModifier: ViewModifier {
 
         Divider()
 
-        favoriteToggle
+        FavoriteToggle(itemId: item.id, userData: item.userData)
     }
 
     // MARK: - Artist Menu
@@ -166,7 +166,7 @@ struct MediaContextMenuModifier: ViewModifier {
     private var artistMenu: some View {
         radioButton
         Divider()
-        favoriteToggle
+        FavoriteToggle(itemId: item.id, userData: item.userData)
     }
 
     // MARK: - Track Menu
@@ -230,14 +230,14 @@ struct MediaContextMenuModifier: ViewModifier {
 
         Divider()
 
-        favoriteToggle
+        FavoriteToggle(itemId: item.id, userData: item.userData)
     }
 
     // MARK: - Default Menu
 
     @ViewBuilder
     private var defaultMenu: some View {
-        favoriteToggle
+        FavoriteToggle(itemId: item.id, userData: item.userData)
     }
 
     // MARK: - Shared Action Buttons
@@ -251,42 +251,6 @@ struct MediaContextMenuModifier: ViewModifier {
             Label(
                 hasProgress ? "Resume" : "Play",
                 systemImage: "play.fill"
-            )
-        }
-    }
-
-    /// Toggle the watched / unwatched state.
-    private var watchedToggle: some View {
-        Button {
-            Task {
-                await appState.togglePlayed(
-                    itemId: item.id,
-                    isPlayed: item.userData?.isPlayed == true
-                )
-            }
-        } label: {
-            let isPlayed = item.userData?.isPlayed == true
-            Label(
-                isPlayed ? "Mark as Unwatched" : "Mark as Watched",
-                systemImage: isPlayed ? "eye.slash" : "eye"
-            )
-        }
-    }
-
-    /// Toggle the favorite state.
-    private var favoriteToggle: some View {
-        Button {
-            Task {
-                await appState.toggleFavorite(
-                    itemId: item.id,
-                    isFavorite: item.userData?.isFavorite == true
-                )
-            }
-        } label: {
-            let isFav = item.userData?.isFavorite == true
-            Label(
-                isFav ? "Unfavorite" : "Favorite",
-                systemImage: isFav ? "heart.fill" : "heart"
             )
         }
     }

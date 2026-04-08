@@ -16,6 +16,12 @@ final class AppState {
 
     var libraries: [MediaLibrary] = []
 
+    // MARK: - User Data
+
+    /// Centralized store for optimistic user data mutations (favorite, played, etc.).
+    /// Set during app initialization in `CoveApp`.
+    var userDataStore: UserDataStore!
+
     // MARK: - UI State
 
     var isOffline = false
@@ -87,6 +93,7 @@ final class AppState {
     func onDisconnect() async {
         audioPlayer.stop()
         libraries = []
+        userDataStore?.invalidateAll()
         await authManager.disconnect()
     }
 
@@ -197,12 +204,19 @@ final class AppState {
     // MARK: - Common Media Actions
 
     /// Toggle the favorite state for any media item.
+    ///
+    /// Delegates to ``UserDataStore`` for optimistic updates and cross-view sync.
+    /// Prefer using ``FavoriteToggle`` in new code — this method exists for
+    /// backward compatibility during the migration.
     func toggleFavorite(itemId: ItemID, isFavorite: Bool) async {
         do {
-            try await authManager.provider.setFavorite(itemId: itemId, isFavorite: !isFavorite)
+            let newValue = try await userDataStore.toggleFavorite(
+                itemId: itemId,
+                current: UserData(isFavorite: isFavorite)
+            )
             showToast(
-                isFavorite ? "Removed from Favorites" : "Added to Favorites",
-                icon: isFavorite ? "heart" : "heart.fill"
+                newValue ? "Added to Favorites" : "Removed from Favorites",
+                icon: newValue ? "heart.fill" : "heart"
             )
         } catch {
             showToast("Couldn't update favorite", icon: "exclamationmark.triangle")
@@ -210,12 +224,19 @@ final class AppState {
     }
 
     /// Toggle the played/watched state for any media item.
+    ///
+    /// Delegates to ``UserDataStore`` for optimistic updates and cross-view sync.
+    /// Prefer using ``PlayedToggle`` in new code — this method exists for
+    /// backward compatibility during the migration.
     func togglePlayed(itemId: ItemID, isPlayed: Bool) async {
         do {
-            try await authManager.provider.setPlayed(itemId: itemId, isPlayed: !isPlayed)
+            let newValue = try await userDataStore.togglePlayed(
+                itemId: itemId,
+                current: UserData(isPlayed: isPlayed)
+            )
             showToast(
-                isPlayed ? "Marked as Unwatched" : "Marked as Watched",
-                icon: isPlayed ? "eye.slash" : "eye.fill"
+                newValue ? "Marked as Watched" : "Marked as Unwatched",
+                icon: newValue ? "eye.fill" : "eye.slash"
             )
         } catch {
             showToast("Couldn't update watched status", icon: "exclamationmark.triangle")
@@ -267,7 +288,9 @@ extension AppState {
             offlineMetadataRepository: nil
         )
         downloads.authManager = auth
-        return AppState(authManager: auth, downloadCoordinator: downloads)
+        let state = AppState(authManager: auth, downloadCoordinator: downloads)
+        state.userDataStore = UserDataStore(provider: auth.provider)
+        return state
     }
 
     /// The `AuthManager` used by this state — exposed for preview environment injection.

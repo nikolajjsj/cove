@@ -317,7 +317,7 @@ struct LibraryGridView: View {
         let played = isPlayedFilter
 
         await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
-            let filter = FilterOptions(
+            let filter = await FilterOptions(
                 isPlayed: played,
                 limit: limit,
                 startIndex: startIndex,
