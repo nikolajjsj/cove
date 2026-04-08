@@ -1,3 +1,4 @@
+import CoveUI
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -10,14 +11,12 @@ struct PlaylistListView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
-    @State private var playlists: [Playlist] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
+    @State private var loader = CollectionLoader<Playlist>()
     @State private var showNewPlaylistAlert = false
     @State private var newPlaylistName = ""
 
     private var sortedFilteredPlaylists: [Playlist] {
-        var result = playlists
+        var result = loader.items
         if isFavoriteFilter {
             result = result.filter { $0.userData?.isFavorite == true }
         }
@@ -42,16 +41,19 @@ struct PlaylistListView: View {
 
     var body: some View {
         Group {
-            if isLoading {
+            switch loader.phase {
+            case .loading:
                 ProgressView("Loading playlists…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage {
+
+            case .failed(let message):
                 ContentUnavailableView(
                     "Unable to Load Playlists",
                     systemImage: "exclamationmark.triangle",
-                    description: Text(errorMessage)
+                    description: Text(message)
                 )
-            } else if sortedFilteredPlaylists.isEmpty {
+
+            case .empty:
                 ContentUnavailableView(
                     "No Playlists",
                     systemImage: "music.note.list",
@@ -60,24 +62,33 @@ struct PlaylistListView: View {
                             ? "No favorite playlists found."
                             : "You haven't created any playlists yet.")
                 )
-            } else {
-                List(sortedFilteredPlaylists) { playlist in
-                    NavigationLink(value: playlist) {
-                        PlaylistRow(
+
+            case .loaded:
+                if sortedFilteredPlaylists.isEmpty {
+                    ContentUnavailableView(
+                        "No Playlists",
+                        systemImage: "music.note.list",
+                        description: Text("No favorite playlists found.")
+                    )
+                } else {
+                    List(sortedFilteredPlaylists) { playlist in
+                        NavigationLink(value: playlist) {
+                            PlaylistRow(
+                                playlist: playlist,
+                                imageURL: imageURL(for: playlist.id)
+                            )
+                        }
+                        .playlistContextMenu(
                             playlist: playlist,
-                            imageURL: imageURL(for: playlist.id)
-                        )
+                            onRenamed: {
+                                Task { await loader.load { try await authManager.provider.playlists() } }
+                            },
+                            onDeleted: {
+                                Task { await loader.load { try await authManager.provider.playlists() } }
+                            })
                     }
-                    .playlistContextMenu(
-                        playlist: playlist,
-                        onRenamed: {
-                            Task { await loadPlaylists() }
-                        },
-                        onDeleted: {
-                            Task { await loadPlaylists() }
-                        })
+                    .listStyle(.plain)
                 }
-                .listStyle(.plain)
             }
         }
         .toolbar {
@@ -101,23 +112,13 @@ struct PlaylistListView: View {
             Text("Enter a name for the new playlist.")
         }
         .task {
-            await loadPlaylists()
+            await loader.load {
+                try await authManager.provider.playlists()
+            }
         }
     }
 
     // MARK: - Data Loading
-
-    private func loadPlaylists() async {
-        isLoading = true
-        errorMessage = nil
-        do {
-            playlists = try await authManager.provider.playlists()
-        } catch {
-            errorMessage = error.localizedDescription
-            playlists = []
-        }
-        isLoading = false
-    }
 
     private func createPlaylist() async {
         let name = newPlaylistName.trimmingCharacters(in: .whitespaces)
@@ -125,7 +126,7 @@ struct PlaylistListView: View {
         do {
             let _ = try await authManager.provider.createPlaylist(name: name, trackIds: [])
             appState.showToast("Playlist created", icon: "checkmark.circle")
-            await loadPlaylists()
+            await loader.load { try await authManager.provider.playlists() }
         } catch {
             appState.showToast("Failed to create playlist", icon: "exclamationmark.triangle")
         }

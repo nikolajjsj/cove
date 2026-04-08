@@ -54,20 +54,19 @@ private struct RecentlyPlayedSongsSection: View {
     let library: MediaLibrary
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
-    @State private var songs: [MediaItem] = []
-    @State private var isLoading = true
+    @State private var loader = CollectionLoader<MediaItem>()
 
     private let limit = 20
 
     var body: some View {
-        if isLoading || !songs.isEmpty {
+        if loader.isLoading || !loader.items.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Recently Played")
                     .font(.title2)
                     .fontWeight(.bold)
                     .padding(.horizontal)
 
-                if isLoading {
+                if loader.isLoading {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(0..<5, id: \.self) { _ in
@@ -80,7 +79,9 @@ private struct RecentlyPlayedSongsSection: View {
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                            ForEach(Array(loader.items.enumerated()), id: \.element.id) {
+                                index,
+                                song in
                                 SongCard(
                                     item: song,
                                     subtitle: song.artistName ?? song.genres?.first,
@@ -96,32 +97,23 @@ private struct RecentlyPlayedSongsSection: View {
                 }
             }
             .task(id: library.id) {
-                await loadSongs()
+                await loader.load {
+                    let sort = SortOptions(field: .datePlayed, order: .descending)
+                    let filter = FilterOptions(
+                        limit: limit,
+                        includeItemTypes: ["Audio"]
+                    )
+                    let result = try await authManager.provider.pagedItems(
+                        in: library, sort: sort, filter: filter
+                    )
+                    return result.items
+                }
             }
         }
     }
 
-    private func loadSongs() async {
-        let provider = authManager.provider
-
-        do {
-            let sort = SortOptions(field: .datePlayed, order: .descending)
-            let filter = FilterOptions(
-                limit: limit,
-                includeItemTypes: ["Audio"]
-            )
-            let result = try await provider.pagedItems(
-                in: library, sort: sort, filter: filter
-            )
-            songs = result.items
-        } catch {
-            songs = []
-        }
-        isLoading = false
-    }
-
     private func playSong(at index: Int) {
-        let tracks = songs.map { item in
+        let tracks = loader.items.map { item in
             Track(
                 id: TrackID(item.id.rawValue),
                 title: item.title,
@@ -152,13 +144,12 @@ private struct RecentlyPlayedSongsSection: View {
 private struct ArtistsShelfSection: View {
     let library: MediaLibrary
     @Environment(AuthManager.self) private var authManager
-    @State private var artists: [MediaItem] = []
-    @State private var isLoading = true
+    @State private var loader = CollectionLoader<MediaItem>()
 
     private let limit = 20
 
     var body: some View {
-        if isLoading || !artists.isEmpty {
+        if loader.isLoading || !loader.items.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Artists")
@@ -175,7 +166,7 @@ private struct ArtistsShelfSection: View {
                 }
                 .padding(.horizontal)
 
-                if isLoading {
+                if loader.isLoading {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 14) {
                             ForEach(0..<6, id: \.self) { _ in
@@ -188,7 +179,7 @@ private struct ArtistsShelfSection: View {
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 14) {
-                            ForEach(artists) { artist in
+                            ForEach(loader.items) { artist in
                                 ArtistCard(item: artist, imageURL: imageURL(for: artist))
                                     .frame(width: 120)
                             }
@@ -198,28 +189,19 @@ private struct ArtistsShelfSection: View {
                 }
             }
             .task(id: library.id) {
-                await loadArtists()
+                await loader.load {
+                    let sort = SortOptions(field: .name, order: .ascending)
+                    let filter = FilterOptions(
+                        limit: limit,
+                        includeItemTypes: ["MusicArtist"]
+                    )
+                    let result = try await authManager.provider.pagedItems(
+                        in: library, sort: sort, filter: filter
+                    )
+                    return result.items
+                }
             }
         }
-    }
-
-    private func loadArtists() async {
-        let provider = authManager.provider
-
-        do {
-            let sort = SortOptions(field: .name, order: .ascending)
-            let filter = FilterOptions(
-                limit: limit,
-                includeItemTypes: ["MusicArtist"]
-            )
-            let result = try await provider.pagedItems(
-                in: library, sort: sort, filter: filter
-            )
-            artists = result.items
-        } catch {
-            artists = []
-        }
-        isLoading = false
     }
 
     private func imageURL(for item: MediaItem) -> URL? {
@@ -238,8 +220,7 @@ private struct ArtistsShelfSection: View {
 private struct AlbumsGridSection: View {
     let library: MediaLibrary
     @Environment(AuthManager.self) private var authManager
-    @State private var albums: [MediaItem] = []
-    @State private var isLoading = true
+    @State private var loader = CollectionLoader<MediaItem>()
 
     private let limit = 20
     private let columns = [
@@ -263,14 +244,14 @@ private struct AlbumsGridSection: View {
             }
             .padding(.horizontal)
 
-            if isLoading {
+            if loader.isLoading {
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(0..<6, id: \.self) { _ in
                         SkeletonCard.albumGrid
                     }
                 }
                 .padding(.horizontal)
-            } else if albums.isEmpty {
+            } else if loader.items.isEmpty {
                 Text("No albums found.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -278,7 +259,7 @@ private struct AlbumsGridSection: View {
                     .padding(.vertical, 24)
             } else {
                 LazyVGrid(columns: columns, spacing: 20) {
-                    ForEach(albums) { album in
+                    ForEach(loader.items) { album in
                         AlbumCard(item: album, imageURL: imageURL(for: album))
                     }
                 }
@@ -286,27 +267,18 @@ private struct AlbumsGridSection: View {
             }
         }
         .task(id: library.id) {
-            await loadAlbums()
+            await loader.load {
+                let sort = SortOptions(field: .dateCreated, order: .descending)
+                let filter = FilterOptions(
+                    limit: limit,
+                    includeItemTypes: ["MusicAlbum"]
+                )
+                let result = try await authManager.provider.pagedItems(
+                    in: library, sort: sort, filter: filter
+                )
+                return result.items
+            }
         }
-    }
-
-    private func loadAlbums() async {
-        let provider = authManager.provider
-
-        do {
-            let sort = SortOptions(field: .dateCreated, order: .descending)
-            let filter = FilterOptions(
-                limit: limit,
-                includeItemTypes: ["MusicAlbum"]
-            )
-            let result = try await provider.pagedItems(
-                in: library, sort: sort, filter: filter
-            )
-            albums = result.items
-        } catch {
-            albums = []
-        }
-        isLoading = false
     }
 
     private func imageURL(for item: MediaItem) -> URL? {
