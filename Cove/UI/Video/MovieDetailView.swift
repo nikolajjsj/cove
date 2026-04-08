@@ -23,66 +23,38 @@ struct MovieDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                // MARK: - Hero Backdrop
-
-                heroSection
-
-                // MARK: - Content beneath the hero
-
-                VStack(alignment: .leading, spacing: 20) {
+            VideoDetailScaffold(
+                item: item,
+                displayItem: displayItem,
+                backdropURL: backdropURL,
+                heroSubtitleParts: heroSubtitleParts,
+                metadataPills: buildMetadataPills(),
+                header: {
                     playButton
+                },
+                footer: {
+                    VStack(alignment: .leading, spacing: 20) {
+                        if !displayItem.people.isEmpty {
+                            CastCrewRail(people: displayItem.people)
+                        }
 
-                    // Metadata pills row (ratings + media info)
-                    metadataPills
+                        MediaItemRail(title: "Trailers") { [item] in
+                            try await authManager.provider.localTrailers(for: item)
+                        }
 
-                    // Overview
-                    if let overview = item.overview, !overview.isEmpty {
-                        ExpandableOverview(text: overview)
+                        MediaItemRail(title: "Special Features") { [item] in
+                            try await authManager.provider.specialFeatures(for: item)
+                        }
+
+                        MediaItemRail(title: "More Like This") { [item] in
+                            try await authManager.provider.similarItems(for: item, limit: 12)
+                        }
                     }
-
-                    // External Links (IMDb, TMDB)
-                    if let providerIds = displayItem.providerIds, providerIds.hasAny {
-                        ExternalLinksSection(
-                            providerIds: providerIds,
-                            mediaType: item.mediaType
-                        )
-                    }
-
-                    // Genres
-                    if let genres = item.genres, !genres.isEmpty {
-                        GenreTagsSection(genres: genres)
-                    }
-
-                    // Studios
-                    if let studios = displayItem.studios, !studios.isEmpty {
-                        StudiosSection(studios: studios)
-                    }
-
-                    // Cast & Crew
-                    if !displayItem.people.isEmpty {
-                        CastCrewRail(people: displayItem.people)
-                    }
-
-                    // Trailers
-                    MediaItemRail(title: "Trailers") { [item] in
-                        try await authManager.provider.localTrailers(for: item)
-                    }
-
-                    // Special Features
-                    MediaItemRail(title: "Special Features") { [item] in
-                        try await authManager.provider.specialFeatures(for: item)
-                    }
-
-                    // More Like This
-                    MediaItemRail(title: "More Like This") { [item] in
-                        try await authManager.provider.similarItems(for: item, limit: 12)
-                    }
+                    .padding(.horizontal)
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
                 }
-                .padding(.horizontal)
-                .padding(.top, 20)
-                .padding(.bottom, 32)
-            }
+            )
         }
         .task {
             await detailLoader.load {
@@ -127,18 +99,7 @@ struct MovieDetailView: View {
         detailLoader.displayItem(fallback: item)
     }
 
-    // MARK: - Hero Section
-
-    private var heroSection: some View {
-        HeroSection(imageURL: backdropURL) {
-            VideoHeroOverlay(
-                title: item.title,
-                originalTitle: displayItem.originalTitle,
-                subtitleParts: heroSubtitleParts,
-                tagline: displayItem.tagline
-            )
-        }
-    }
+    // MARK: - Hero Subtitle Parts
 
     private var heroSubtitleParts: [String] {
         var parts: [String] = []
@@ -165,11 +126,6 @@ struct MovieDetailView: View {
     }
 
     // MARK: - Metadata Pills
-
-    @ViewBuilder
-    private var metadataPills: some View {
-        MetadataPillsView(buildMetadataPills())
-    }
 
     private func buildMetadataPills() -> [MetadataPill] {
         var pills = MetadataPill.ratingPills(

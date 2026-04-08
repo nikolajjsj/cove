@@ -64,104 +64,79 @@ struct SeriesDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                // MARK: - Hero Backdrop
+            VideoDetailScaffold(
+                item: item,
+                displayItem: displayItem,
+                backdropURL: backdropURL(for: item),
+                heroSubtitleParts: heroSubtitleParts,
+                metadataPills: buildMetadataPills(),
+                showExternalLinks: !isOffline,
+                overviewLineLimit: 3,
+                overviewFont: .subheadline,
+                overviewExpandThreshold: 150,
+                header: {
+                    EmptyView()
+                },
+                footer: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Divider()
+                            .padding(.horizontal)
 
-                heroSection
+                        // MARK: - Season Picker & Episodes
 
-                // MARK: - Content beneath the hero
+                        if isLoadingSeasons {
+                            HStack {
+                                Spacer()
+                                ProgressView("Loading seasons…")
+                                Spacer()
+                            }
+                            .padding(.vertical, 32)
+                        } else if let error = seasonsError {
+                            ContentUnavailableView(
+                                "Unable to Load Seasons",
+                                systemImage: "exclamationmark.triangle",
+                                description: Text(error)
+                            )
+                            .padding(.vertical, 32)
+                        } else if seasons.isEmpty {
+                            ContentUnavailableView(
+                                "No Seasons",
+                                systemImage: "tv",
+                                description: Text("This series doesn't have any seasons yet.")
+                            )
+                            .padding(.vertical, 32)
+                        } else {
+                            seasonPickerSection
+                                .padding(.top, 16)
 
-                VStack(alignment: .leading, spacing: 16) {
-                    // Metadata pills
-                    metadataPills
-
-                    // Overview
-                    if let overview = item.overview, !overview.isEmpty {
-                        ExpandableOverview(
-                            text: overview, lineLimit: 3, font: .subheadline, expandThreshold: 150)
-                    }
-
-                    // External Links (IMDb, TMDB, TVDB)
-                    if !isOffline,
-                        let providerIds = displayItem.providerIds, providerIds.hasAny
-                    {
-                        ExternalLinksSection(
-                            providerIds: providerIds,
-                            mediaType: item.mediaType
-                        )
-                    }
-
-                    // Genres
-                    if let genres = displayItem.genres, !genres.isEmpty {
-                        GenreTagsSection(genres: genres)
-                    }
-
-                    // Studios
-                    if let studios = displayItem.studios, !studios.isEmpty {
-                        StudiosSection(studios: studios)
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-
-                Divider()
-                    .padding(.horizontal)
-
-                // MARK: - Season Picker & Episodes
-
-                if isLoadingSeasons {
-                    HStack {
-                        Spacer()
-                        ProgressView("Loading seasons…")
-                        Spacer()
-                    }
-                    .padding(.vertical, 32)
-                } else if let error = seasonsError {
-                    ContentUnavailableView(
-                        "Unable to Load Seasons",
-                        systemImage: "exclamationmark.triangle",
-                        description: Text(error)
-                    )
-                    .padding(.vertical, 32)
-                } else if seasons.isEmpty {
-                    ContentUnavailableView(
-                        "No Seasons",
-                        systemImage: "tv",
-                        description: Text("This series doesn't have any seasons yet.")
-                    )
-                    .padding(.vertical, 32)
-                } else {
-                    seasonPickerSection
-                        .padding(.top, 16)
-
-                    episodeListSection
-                        .padding(.top, 8)
-                }
-                // MARK: - Additional Content
-
-                if !isOffline {
-                    VStack(alignment: .leading, spacing: 20) {
-                        // Cast & Crew
-                        if !displayItem.people.isEmpty {
-                            CastCrewRail(people: displayItem.people)
+                            episodeListSection
+                                .padding(.top, 8)
                         }
 
-                        // Special Features
-                        MediaItemRail(title: "Special Features") { [item] in
-                            try await authManager.provider.specialFeatures(for: item)
-                        }
+                        // MARK: - Additional Content
 
-                        // More Like This
-                        MediaItemRail(title: "More Like This") { [item] in
-                            try await authManager.provider.similarItems(for: item, limit: 12)
+                        if !isOffline {
+                            VStack(alignment: .leading, spacing: 20) {
+                                if !displayItem.people.isEmpty {
+                                    CastCrewRail(people: displayItem.people)
+                                }
+
+                                MediaItemRail(title: "Special Features") { [item] in
+                                    try await authManager.provider.specialFeatures(for: item)
+                                }
+
+                                MediaItemRail(title: "More Like This") { [item] in
+                                    try await authManager.provider.similarItems(
+                                        for: item, limit: 12)
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.top, 20)
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 20)
+                    .padding(.bottom, 32)
                 }
-            }
-            .padding(.bottom, 32)
+            )
         }
         .ignoresSafeArea(edges: .top)
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -244,18 +219,7 @@ struct SeriesDetailView: View {
         }
     }
 
-    // MARK: - Hero Section
-
-    private var heroSection: some View {
-        HeroSection(imageURL: backdropURL(for: item)) {
-            VideoHeroOverlay(
-                title: item.title,
-                originalTitle: displayItem.originalTitle,
-                subtitleParts: heroSubtitleParts,
-                tagline: displayItem.tagline
-            )
-        }
-    }
+    // MARK: - Hero Subtitle Parts
 
     private var heroSubtitleParts: [String] {
         var parts: [String] = []
@@ -289,11 +253,6 @@ struct SeriesDetailView: View {
     }
 
     // MARK: - Metadata Pills
-
-    @ViewBuilder
-    private var metadataPills: some View {
-        MetadataPillsView(buildMetadataPills())
-    }
 
     private func buildMetadataPills() -> [MetadataPill] {
         var pills = MetadataPill.ratingPills(
