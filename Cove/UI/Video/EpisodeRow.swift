@@ -73,18 +73,16 @@ struct EpisodeRow: View {
 
             // Progress bar overlay at bottom of thumbnail
             if let progress, progress > 0 {
-                GeometryReader { geo in
-                    VStack {
-                        Spacer()
-                        ZStack(alignment: .leading) {
-                            Rectangle()
-                                .fill(Color.white.opacity(0.3))
-                                .frame(height: 3)
-
-                            Rectangle()
-                                .fill(Color.accentColor)
-                                .frame(width: geo.size.width * min(progress, 1.0), height: 3)
-                        }
+                VStack {
+                    Spacer()
+                    ZStack(alignment: .leading) {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.3))
+                            .frame(height: 3)
+                        Rectangle()
+                            .fill(Color.accentColor)
+                            .frame(maxWidth: .infinity, maxHeight: 3, alignment: .leading)
+                            .scaleEffect(x: min(progress, 1.0), anchor: .leading)
                     }
                 }
             }

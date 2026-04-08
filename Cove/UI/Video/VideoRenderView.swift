@@ -28,7 +28,12 @@ import SwiftUI
         final class PlayerUIView: UIView {
             override static var layerClass: AnyClass { AVPlayerLayer.self }
 
-            var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+            var playerLayer: AVPlayerLayer {
+                guard let playerLayer = layer as? AVPlayerLayer else {
+                    fatalError("Expected AVPlayerLayer but got \(type(of: layer))")
+                }
+                return playerLayer
+            }
 
             var player: AVPlayer? {
                 get { playerLayer.player }

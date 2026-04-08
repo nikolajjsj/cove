@@ -10,6 +10,8 @@ struct RootView: View {
     }
 
     var body: some View {
+        @Bindable var coordinator = coordinator
+
         ZStack {
             // MARK: - Main App Content
 
@@ -50,10 +52,7 @@ struct RootView: View {
         // Resume prompt — "Resume" vs "Play from Beginning"
         .alert(
             "Resume Playback",
-            isPresented: Binding(
-                get: { coordinator.showResumePrompt },
-                set: { coordinator.showResumePrompt = $0 }
-            )
+            isPresented: $coordinator.showResumePrompt
         ) {
             Button("Resume") {
                 coordinator.resumePlayback()
@@ -74,10 +73,7 @@ struct RootView: View {
         // Playback error alert — shown at the root so it's always reachable
         .alert(
             "Playback Error",
-            isPresented: Binding(
-                get: { coordinator.showError },
-                set: { coordinator.showError = $0 }
-            )
+            isPresented: $coordinator.showError
         ) {
             Button("OK", role: .cancel) {
                 coordinator.error = nil

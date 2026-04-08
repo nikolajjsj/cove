@@ -97,19 +97,17 @@ struct StorageManagementView: View {
 
     /// A visual bar showing the proportion of storage consumed by downloads.
     private var storageBar: some View {
-        GeometryReader { geometry in
-            let total = max(totalUsedBytes + availableBytes, 1)
-            let fraction = CGFloat(totalUsedBytes) / CGFloat(total)
-            let barWidth = max(geometry.size.width * fraction, fraction > 0 ? 4 : 0)
+        let total = max(totalUsedBytes + availableBytes, 1)
+        let fraction = CGFloat(totalUsedBytes) / CGFloat(total)
 
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(.quaternary)
+        return ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(.quaternary)
 
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(.tint)
-                    .frame(width: barWidth)
-            }
+            RoundedRectangle(cornerRadius: 4)
+                .fill(.tint)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .scaleEffect(x: max(fraction, fraction > 0 ? 0.02 : 0), anchor: .leading)
         }
         .frame(height: 8)
         .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20))

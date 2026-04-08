@@ -20,17 +20,15 @@ struct ContinueWatchingCard: View {
 
                 // Progress bar overlay at the bottom
                 if let progress = watchProgress {
-                    GeometryReader { geo in
-                        VStack {
-                            Spacer()
-                            ZStack(alignment: .leading) {
-                                Rectangle()
-                                    .fill(.ultraThinMaterial)
-                                    .frame(height: 4)
-                                Rectangle()
-                                    .fill(Color.accentColor)
-                                    .frame(width: geo.size.width * progress, height: 4)
-                            }
+                    VStack {
+                        Spacer()
+                        ZStack(alignment: .leading) {
+                            Rectangle()
+                                .fill(.ultraThinMaterial)
+                                .frame(height: 4)
+                            Rectangle()
+                                .fill(Color.accentColor)
+                                .frame(width: 240 * progress, height: 4)
                         }
                     }
                     .frame(width: 240)

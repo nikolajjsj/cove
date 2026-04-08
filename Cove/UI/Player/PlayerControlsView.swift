@@ -142,19 +142,22 @@ private struct ScrubberView: View {
 
     private var player: AudioPlaybackManager { appState.audioPlayer }
 
-    var body: some View {
-        let displayTime = isSeeking ? seekTime : player.currentTime
-        let totalDuration = player.duration
+    private var totalDuration: TimeInterval { player.duration }
+    private var displayTime: TimeInterval { isSeeking ? seekTime : player.currentTime }
+    private var sliderBinding: Binding<TimeInterval> {
+        return Binding(
+            get: { displayTime },
+            set: { newValue in
+                if !isSeeking { isSeeking = true }
+                seekTime = newValue
+            }
+        )
+    }
 
+    var body: some View {
         VStack(spacing: 6) {
             Slider(
-                value: Binding(
-                    get: { displayTime },
-                    set: { newValue in
-                        if !isSeeking { isSeeking = true }
-                        seekTime = newValue
-                    }
-                ),
+                value: sliderBinding,
                 in: 0...max(totalDuration, 1),
                 onEditingChanged: { editing in
                     if !editing {
