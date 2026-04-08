@@ -39,7 +39,8 @@ struct ToastView: View {
             isVisible = false
         }
         // Give animation time to complete before removing
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        Task {
+            try? await Task.sleep(for: .seconds(0.25))
             onDismiss()
         }
     }
@@ -55,7 +56,8 @@ struct ToastView: View {
         #endif
 
         // Auto-dismiss after 2 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        Task {
+            try? await Task.sleep(for: .seconds(2.0))
             if isVisible {
                 dismiss()
             }
