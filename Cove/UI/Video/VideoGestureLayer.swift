@@ -353,11 +353,10 @@ extension VideoGestureLayer {
             AVAudioSession.sharedInstance().outputVolume
         }
 
+        @MainActor
         static func setVolume(_ volume: Float) {
             let slider = volumeView.subviews.first(where: { $0 is UISlider }) as? UISlider
-            DispatchQueue.main.async {
-                slider?.value = volume
-            }
+            slider?.value = volume
         }
     }
 #endif
