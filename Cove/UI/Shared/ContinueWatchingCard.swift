@@ -20,19 +20,9 @@ struct ContinueWatchingCard: View {
 
                 // Progress bar overlay at the bottom
                 if let progress = watchProgress {
-                    VStack {
-                        Spacer()
-                        ZStack(alignment: .leading) {
-                            Rectangle()
-                                .fill(.ultraThinMaterial)
-                                .frame(height: 4)
-                            Rectangle()
-                                .fill(Color.accentColor)
-                                .frame(width: 240 * progress, height: 4)
-                        }
-                    }
-                    .frame(width: 240)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    VideoProgressOverlay(progress: progress, trackHeight: 4)
+                        .frame(width: 240)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
                 // Play button overlay

@@ -6,17 +6,14 @@ import SwiftUI
 
 /// Detail view showing a person's filmography.
 ///
-/// Displays a circular portrait, name, type, and a grid of all media items
-/// they appeared in. Each item navigates to its detail view.
+/// Displays a circular portrait, name, type, and filmography items
+/// grouped by media type (Movies, TV Shows, Episodes, etc.) so each
+/// category is visually distinct.
 struct PersonDetailView: View {
     let person: Person
 
     @Environment(AuthManager.self) private var authManager
     @State private var loader = CollectionLoader<MediaItem>()
-
-    private let columns = [
-        GridItem(.adaptive(minimum: 130, maximum: 180), spacing: 16)
-    ]
 
     var body: some View {
         Group {
@@ -55,7 +52,6 @@ struct PersonDetailView: View {
 
     private var personHeader: some View {
         VStack(spacing: 16) {
-            // Circular portrait
             MediaImage(
                 url: person.imageURL,
                 placeholderIcon: "person.fill",
@@ -65,13 +61,11 @@ struct PersonDetailView: View {
             .frame(width: 200, height: 200)
             .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
 
-            // Name
             Text(person.name)
                 .font(.title)
                 .bold()
                 .multilineTextAlignment(.center)
 
-            // Type (Actor, Director, etc.)
             if let type = person.type, !type.isEmpty {
                 Text(type)
                     .font(.subheadline)
@@ -94,22 +88,186 @@ struct PersonDetailView: View {
             )
             .padding(.top, 24)
         } else {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Filmography")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal)
-
-                LazyVGrid(columns: columns, spacing: 20) {
-                    ForEach(loader.items) { item in
-                        NavigationLink(value: item) {
-                            LibraryItemCard(item: item)
-                        }
-                        .buttonStyle(.plain)
-                    }
+            let grouped = groupedFilmography
+            LazyVStack(alignment: .leading, spacing: 32) {
+                ForEach(grouped, id: \.category) { section in
+                    filmographySectionView(for: section)
                 }
-                .padding(.horizontal)
             }
         }
     }
+
+    @ViewBuilder
+    private func filmographySectionView(for section: FilmographySection) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Section header
+            HStack(spacing: 8) {
+                Text(section.category.displayTitle)
+                    .font(.title2)
+                    .fontWeight(.bold)
+
+                Text("\(section.items.count)")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(.quaternary, in: Capsule())
+            }
+            .padding(.horizontal)
+
+            // Items list
+            LazyVStack(spacing: 0) {
+                ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in
+                    NavigationLink(value: item) {
+                        filmographyRow(item: item)
+                    }
+                    .buttonStyle(.plain)
+
+                    if index < section.items.count - 1 {
+                        Divider()
+                            .padding(.leading, 92)
+                            .padding(.horizontal)
+                    }
+                }
+            }
+            .background(.quinary, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal)
+        }
+    }
+
+    private func filmographyRow(item: MediaItem) -> some View {
+        MediaItemRow(
+            imageURL: posterURL(for: item),
+            title: item.title,
+            subtitle: subtitle(for: item),
+            mediaType: item.mediaType,
+            metadata: metadataParts(for: item)
+        ) {
+            RatingBadge(rating: item.communityRating)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    // MARK: - Grouping
+
+    private var groupedFilmography: [FilmographySection] {
+        let grouped = Dictionary(grouping: loader.items) {
+            FilmographyCategory(mediaType: $0.mediaType)
+        }
+
+        return FilmographyCategory.displayOrder.compactMap { category in
+            guard let items = grouped[category], !items.isEmpty else { return nil }
+
+            let sorted = items.sorted { lhs, rhs in
+                // Sort by year descending, then title ascending
+                let lhsYear = lhs.productionYear ?? 0
+                let rhsYear = rhs.productionYear ?? 0
+                if lhsYear != rhsYear { return lhsYear > rhsYear }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+
+            return FilmographySection(category: category, items: sorted)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func posterURL(for item: MediaItem) -> URL? {
+        authManager.provider.imageURL(
+            for: item,
+            type: .primary,
+            maxSize: CGSize(width: 150, height: 225)
+        )
+    }
+
+    private func subtitle(for item: MediaItem) -> String? {
+        switch item.mediaType {
+        case .episode:
+            var parts: [String] = []
+            if let seriesName = item.seriesName {
+                parts.append(seriesName)
+            }
+            if let season = item.parentIndexNumber, let episode = item.indexNumber {
+                parts.append("S\(season)E\(episode)")
+            }
+            return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        case .series:
+            if let year = item.productionYear {
+                if let endDate = item.endDate {
+                    let endYear = Calendar.current.component(.year, from: endDate)
+                    return endYear != year ? "\(year)–\(endYear)" : "\(year)"
+                }
+                return "\(year)–Present"
+            }
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    private func metadataParts(for item: MediaItem) -> [String] {
+        var parts: [String] = []
+
+        if item.mediaType != .series, let year = item.productionYear {
+            parts.append("\(year)")
+        }
+
+        if let officialRating = item.officialRating, !officialRating.isEmpty {
+            parts.append(officialRating)
+        }
+
+        if let runtime = item.runtime, runtime > 0 {
+            parts.append(TimeFormatting.duration(runtime))
+        }
+
+        return parts
+    }
+}
+
+// MARK: - Filmography Category
+
+private enum FilmographyCategory: Hashable {
+    case movies
+    case series
+    case episodes
+    case music
+    case other
+
+    init(mediaType: MediaType) {
+        switch mediaType {
+        case .movie:
+            self = .movies
+        case .series:
+            self = .series
+        case .episode:
+            self = .episodes
+        case .album, .track, .artist, .playlist:
+            self = .music
+        default:
+            self = .other
+        }
+    }
+
+    static let displayOrder: [FilmographyCategory] = [
+        .movies, .series, .episodes, .music, .other,
+    ]
+
+    var displayTitle: String {
+        switch self {
+        case .movies: "Movies"
+        case .series: "TV Shows"
+        case .episodes: "Episodes"
+        case .music: "Music"
+        case .other: "Other"
+        }
+    }
+}
+
+// MARK: - Filmography Section
+
+private struct FilmographySection {
+    let category: FilmographyCategory
+    let items: [MediaItem]
 }

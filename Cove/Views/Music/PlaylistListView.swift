@@ -161,21 +161,11 @@ private struct PlaylistRow: View {
                     .font(.headline)
                     .lineLimit(1)
 
-                HStack(spacing: 6) {
-                    if let count = playlist.itemCount {
-                        Text("\(count) \(count == 1 ? "track" : "tracks")")
-                    }
-
-                    if playlist.itemCount != nil, playlist.duration != nil {
-                        Text("·")
-                    }
-
-                    if let duration = playlist.duration {
-                        Text(TimeFormatting.longDuration(duration))
-                    }
-                }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                DotSeparatedText(
+                    parts: playlistMetadataParts,
+                    font: .subheadline,
+                    foregroundStyle: .secondary
+                )
 
                 if let overview = playlist.overview, !overview.isEmpty {
                     Text(overview)
@@ -188,6 +178,17 @@ private struct PlaylistRow: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
+    }
+
+    private var playlistMetadataParts: [String] {
+        var parts: [String] = []
+        if let count = playlist.itemCount {
+            parts.append("\(count) \(count == 1 ? "track" : "tracks")")
+        }
+        if let duration = playlist.duration {
+            parts.append(TimeFormatting.longDuration(duration))
+        }
+        return parts
     }
 
 }

@@ -53,14 +53,15 @@ struct SongListView: View {
     private var scrollContent: some View {
         List {
             ForEach(Array(loader.items.enumerated()), id: \.element.id) { index, item in
-                SongRow(
-                    item: item,
+                TrackRow(
+                    title: item.title,
+                    subtitle: item.genres?.first,
                     imageURL: imageURL(for: item),
+                    duration: item.runtime,
                     isCurrentTrack: isCurrentTrack(item),
-                    isPlaying: isCurrentTrack(item) && appState.audioPlayer.isPlaying
-                ) {
-                    playFromIndex(index)
-                }
+                    isPlaying: isCurrentTrack(item) && appState.audioPlayer.isPlaying,
+                    onTap: { playFromIndex(index) }
+                )
                 .onAppear { loader.onItemAppeared(item) }
                 .mediaContextMenu(item: item)
             }
@@ -142,56 +143,6 @@ struct SongListView: View {
             type: .primary,
             maxSize: CGSize(width: 80, height: 80)
         )
-    }
-}
-
-// MARK: - Song Row
-
-private struct SongRow: View {
-    let item: MediaItem
-    let imageURL: URL?
-    let isCurrentTrack: Bool
-    let isPlaying: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                MediaImage.trackThumbnail(url: imageURL)
-                    .frame(width: 44, height: 44)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title)
-                        .font(.body)
-                        .foregroundStyle(isCurrentTrack ? Color.accentColor : .primary)
-                        .lineLimit(1)
-
-                    if let genres = item.genres, let firstGenre = genres.first {
-                        Text(firstGenre)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-
-                Spacer(minLength: 0)
-
-                if isCurrentTrack {
-                    Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.fill")
-                        .foregroundStyle(Color.accentColor)
-                        .font(.caption)
-                }
-
-                if let runtime = item.runtime, runtime > 0 {
-                    Text(TimeFormatting.trackTime(runtime))
-                        .font(.subheadline)
-                        .foregroundStyle(.tertiary)
-                        .monospacedDigit()
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 

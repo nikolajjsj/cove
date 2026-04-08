@@ -39,24 +39,11 @@ struct SongCard: View {
     }
 
     private var cardContent: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            MediaImage.artwork(url: imageURL, cornerRadius: 8)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-
-            Text(item.title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(1)
-                .foregroundStyle(.primary)
-
-            if let subtitle, !subtitle.isEmpty {
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        MediaCardContent(
+            imageURL: imageURL,
+            title: item.title,
+            subtitle: subtitle
+        )
     }
 }
 

@@ -129,7 +129,7 @@ struct StorageManagementView: View {
                     let typeBytes = items.reduce(Int64(0)) { $0 + $1.totalBytes }
 
                     HStack {
-                        Image(systemName: iconName(for: type))
+                        Image(systemName: type.placeholderIcon)
                             .foregroundStyle(.secondary)
                             .frame(width: 24)
 
@@ -260,22 +260,6 @@ struct StorageManagementView: View {
         }
     }
 
-    private func iconName(for type: MediaType) -> String {
-        switch type {
-        case .movie: "film"
-        case .episode: "tv"
-        case .track: "music.note"
-        case .album: "square.stack"
-        case .series: "tv.and.mediabox"
-        case .season: "list.and.film"
-        case .artist: "music.mic"
-        case .playlist: "music.note.list"
-        case .book: "book"
-        case .podcast: "antenna.radiowaves.left.and.right"
-        case .collection: "rectangle.stack.fill"
-        case .genre: "guitars"
-        }
-    }
 }
 
 // MARK: - Preview

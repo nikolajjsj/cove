@@ -221,7 +221,7 @@ struct AlbumDetailView: View {
 
                     ForEach(Array(discTracks.enumerated()), id: \.element.id) { localIndex, track in
                         let globalIndex = globalTrackIndex(for: track)
-                        let row = TrackRow(
+                        let row = AlbumTrackRow(
                             track: track,
                             isCurrentTrack: isCurrentTrack(track),
                             isPlaying: isCurrentTrack(track) && appState.audioPlayer.isPlaying
@@ -510,7 +510,7 @@ struct AlbumDetailView: View {
 
 // MARK: - Track Row
 
-private struct TrackRow: View {
+private struct AlbumTrackRow: View {
     let track: Track
     let isCurrentTrack: Bool
     let isPlaying: Bool

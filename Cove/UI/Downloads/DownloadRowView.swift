@@ -92,26 +92,9 @@ struct DownloadRowView: View {
     // MARK: - Media Type Icon
 
     private var mediaTypeIcon: some View {
-        Image(systemName: iconName(for: item.mediaType))
+        Image(systemName: item.mediaType.placeholderIcon)
             .font(.system(size: 16))
             .foregroundStyle(.secondary)
-    }
-
-    private func iconName(for type: MediaType) -> String {
-        switch type {
-        case .movie: "film"
-        case .episode: "tv"
-        case .track: "music.note"
-        case .album: "square.stack"
-        case .series: "tv.and.mediabox"
-        case .season: "list.and.film"
-        case .artist: "music.mic"
-        case .playlist: "music.note.list"
-        case .book: "book"
-        case .podcast: "antenna.radiowaves.left.and.right"
-        case .collection: "rectangle.stack.fill"
-        case .genre: "guitars"
-        }
     }
 
     // MARK: - Subtitle
@@ -143,7 +126,7 @@ struct DownloadRowView: View {
 
         case .completed:
             HStack(spacing: 4) {
-                Text(mediaTypeLabel(for: item.mediaType))
+                Text(item.mediaType.displayLabel)
                 if item.totalBytes > 0 {
                     Text("·")
                     Text(
@@ -155,23 +138,6 @@ struct DownloadRowView: View {
         case .failed:
             Text(item.errorMessage ?? "Download failed")
                 .foregroundStyle(.red)
-        }
-    }
-
-    private func mediaTypeLabel(for type: MediaType) -> String {
-        switch type {
-        case .movie: "Movie"
-        case .episode: "Episode"
-        case .track: "Track"
-        case .album: "Album"
-        case .series: "Series"
-        case .season: "Season"
-        case .artist: "Artist"
-        case .playlist: "Playlist"
-        case .book: "Book"
-        case .podcast: "Podcast"
-        case .collection: "Collection"
-        case .genre: "Genre"
         }
     }
 

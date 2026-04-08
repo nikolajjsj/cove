@@ -162,15 +162,17 @@ struct PlaylistDetailView: View {
     private var trackList: some View {
         LazyVStack(spacing: 0) {
             ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                PlaylistTrackRow(
-                    track: track,
-                    index: index + 1,
+                TrackRow(
+                    title: track.title,
+                    subtitle: track.artistName,
                     imageURL: trackImageURL(for: track),
+                    duration: track.duration,
                     isCurrentTrack: isCurrentTrack(track),
-                    isPlaying: isCurrentTrack(track) && appState.audioPlayer.isPlaying
-                ) {
-                    playAllTracks(startingAt: index)
-                }
+                    isPlaying: isCurrentTrack(track) && appState.audioPlayer.isPlaying,
+                    onTap: { playAllTracks(startingAt: index) }
+                )
+                .padding(.horizontal)
+                .padding(.vertical, 10)
                 .mediaContextMenu(track: track)
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
@@ -287,59 +289,6 @@ struct PlaylistDetailView: View {
         return authManager.provider.imageURL(
             for: track.id, type: .primary, maxSize: CGSize(width: 80, height: 80)
         )
-    }
-}
-
-// MARK: - Playlist Track Row
-
-private struct PlaylistTrackRow: View {
-    let track: Track
-    let index: Int
-    let imageURL: URL?
-    let isCurrentTrack: Bool
-    let isPlaying: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 12) {
-                MediaImage.trackThumbnail(url: imageURL)
-                    .frame(width: 44, height: 44)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(track.title)
-                        .font(.body)
-                        .foregroundStyle(isCurrentTrack ? Color.accentColor : .primary)
-                        .lineLimit(1)
-
-                    if let artistName = track.artistName {
-                        Text(artistName)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-
-                Spacer(minLength: 0)
-
-                if isCurrentTrack {
-                    Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.fill")
-                        .foregroundStyle(Color.accentColor)
-                        .font(.caption)
-                }
-
-                if let duration = track.duration, duration > 0 {
-                    Text(TimeFormatting.trackTime(duration))
-                        .font(.subheadline)
-                        .foregroundStyle(.tertiary)
-                        .monospacedDigit()
-                }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 

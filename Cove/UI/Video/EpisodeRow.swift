@@ -1,3 +1,4 @@
+import ImageService
 import Models
 import SwiftUI
 
@@ -13,8 +14,6 @@ struct EpisodeRow: View {
                 // MARK: - Thumbnail
 
                 thumbnailView
-                    .frame(width: 160, height: 90)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
 
                 // MARK: - Episode Info
 
@@ -70,21 +69,10 @@ struct EpisodeRow: View {
     private var thumbnailView: some View {
         ZStack(alignment: .bottom) {
             MediaImage.videoThumbnail(url: thumbnailURL)
+                .aspectRatio(16/9, contentMode: .fit)
 
-            // Progress bar overlay at bottom of thumbnail
             if let progress, progress > 0 {
-                VStack {
-                    Spacer()
-                    ZStack(alignment: .leading) {
-                        Rectangle()
-                            .fill(Color.white.opacity(0.3))
-                            .frame(height: 3)
-                        Rectangle()
-                            .fill(Color.accentColor)
-                            .frame(maxWidth: .infinity, maxHeight: 3, alignment: .leading)
-                            .scaleEffect(x: min(progress, 1.0), anchor: .leading)
-                    }
-                }
+                VideoProgressOverlay(progress: progress)
             }
         }
     }
