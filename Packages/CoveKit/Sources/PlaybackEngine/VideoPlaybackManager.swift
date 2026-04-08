@@ -616,14 +616,37 @@ public final class VideoPlaybackManager {
             return
         }
         let time = currentTime
-        // Find the first cue that spans the current time
-        let activeCue = externalSubtitleCues.first { cue in
-            time >= cue.startTime && time < cue.endTime
-        }
-        let newText = activeCue?.text
+        // Binary search for the cue whose time range contains the current playback time.
+        // Cues are sorted by startTime, so we find the last cue whose startTime ≤ time.
+        let newText = binarySearchCue(at: time)?.text
         if currentSubtitleText != newText {
             currentSubtitleText = newText
         }
+    }
+
+    /// Binary search for the active subtitle cue at the given time.
+    ///
+    /// Finds the last cue whose `startTime ≤ time`, then checks if `time < endTime`.
+    /// Returns `nil` if no cue spans the given time. O(log n) complexity.
+    private func binarySearchCue(at time: TimeInterval) -> SubtitleCue? {
+        var low = 0
+        var high = externalSubtitleCues.count - 1
+        var result = -1
+
+        // Find the rightmost cue with startTime <= time
+        while low <= high {
+            let mid = (low + high) / 2
+            if externalSubtitleCues[mid].startTime <= time {
+                result = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+
+        guard result >= 0 else { return nil }
+        let cue = externalSubtitleCues[result]
+        return time < cue.endTime ? cue : nil
     }
 
     /// Applies the current `selectedAudioTrackIndex` to the AVPlayer.
