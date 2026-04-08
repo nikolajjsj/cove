@@ -68,7 +68,7 @@ struct PersonDetailView: View {
             // Name
             Text(person.name)
                 .font(.title)
-                .fontWeight(.bold)
+                .bold()
                 .multilineTextAlignment(.center)
 
             // Type (Actor, Director, etc.)

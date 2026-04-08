@@ -12,7 +12,7 @@ struct CastCrewRail: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Cast & Crew")
                     .font(.title3)
-                    .fontWeight(.bold)
+                    .bold()
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {

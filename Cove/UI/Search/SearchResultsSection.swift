@@ -22,7 +22,7 @@ struct SearchResultsSection: View {
                 HStack {
                     Text(title)
                         .font(.title3)
-                        .fontWeight(.bold)
+                        .bold()
 
                     Spacer()
 

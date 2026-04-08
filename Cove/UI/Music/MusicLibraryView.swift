@@ -63,7 +63,7 @@ private struct RecentlyPlayedSongsSection: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Recently Played")
                     .font(.title2)
-                    .fontWeight(.bold)
+                    .bold()
                     .padding(.horizontal)
 
                 if loader.isLoading {
@@ -154,7 +154,7 @@ private struct ArtistsShelfSection: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Artists")
                         .font(.title2)
-                        .fontWeight(.bold)
+                        .bold()
 
                     Spacer()
 
@@ -232,7 +232,7 @@ private struct AlbumsGridSection: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Albums")
                     .font(.title2)
-                    .fontWeight(.bold)
+                    .bold()
 
                 Spacer()
 

@@ -15,7 +15,7 @@ struct SectionHeader: View {
             }
             Text(title)
                 .font(.title2)
-                .fontWeight(.bold)
+                .bold()
         }
     }
 }

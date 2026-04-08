@@ -126,7 +126,7 @@ struct PlaylistDetailView: View {
 
             Text(playlist.name)
                 .font(.title2)
-                .fontWeight(.bold)
+                .bold()
                 .multilineTextAlignment(.center)
 
             playlistMetadata

@@ -149,7 +149,7 @@ struct AlbumDetailView: View {
             // Album title
             Text(albumItem.title)
                 .font(.title2)
-                .fontWeight(.bold)
+                .bold()
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 

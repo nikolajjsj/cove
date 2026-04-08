@@ -63,7 +63,7 @@ struct ArtistDetailView: View {
             // Artist name
             Text(artistItem.title)
                 .font(.title)
-                .fontWeight(.bold)
+                .bold()
                 .multilineTextAlignment(.center)
 
             // Overview

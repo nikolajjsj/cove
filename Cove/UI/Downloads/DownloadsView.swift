@@ -485,7 +485,7 @@ struct DownloadsView: View {
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
             .font(.title2)
-            .fontWeight(.bold)
+            .bold()
     }
 
     // MARK: - Actions
