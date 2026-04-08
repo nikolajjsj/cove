@@ -14,7 +14,7 @@ struct CastCrewRail: View {
                     .font(.title3)
                     .bold()
 
-                ScrollView(.horizontal, showsIndicators: false) {
+                ScrollView(.horizontal) {
                     LazyHStack(spacing: 16) {
                         ForEach(people, id: \.uniqueID) { person in
                             NavigationLink(value: person) {
@@ -24,6 +24,7 @@ struct CastCrewRail: View {
                         }
                     }
                 }
+                .scrollIndicators(.hidden)
             }
         }
     }
