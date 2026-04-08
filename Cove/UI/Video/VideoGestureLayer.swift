@@ -270,50 +270,6 @@ struct VideoGestureLayer: View {
         .background(.ultraThinMaterial.opacity(0.8), in: RoundedRectangle(cornerRadius: 14))
         .environment(\.colorScheme, .dark)
     }
-
-    // MARK: - Vertical Indicators (Brightness / Volume)
-
-    #if os(iOS)
-        @ViewBuilder
-        private func verticalIndicator(icon: String, value: CGFloat, maxValue: CGFloat) -> some View
-        {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.white)
-
-                GeometryReader { geo in
-                    ZStack(alignment: .bottom) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(.white.opacity(0.3))
-
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(.white)
-                            .frame(
-                                height: geo.size.height * min(max(value / maxValue, 0), 1)
-                            )
-                    }
-                }
-                .frame(width: 4, height: 100)
-            }
-            .padding(16)
-            .background(.ultraThinMaterial.opacity(0.8), in: RoundedRectangle(cornerRadius: 14))
-            .environment(\.colorScheme, .dark)
-        }
-
-        private func brightnessIcon(for value: CGFloat) -> String {
-            if value > 0.66 { return "sun.max.fill" }
-            if value > 0.33 { return "sun.min.fill" }
-            return "sun.min"
-        }
-
-        private func volumeIcon(for value: Float) -> String {
-            if value <= 0 { return "speaker.slash.fill" }
-            if value < 0.33 { return "speaker.wave.1.fill" }
-            if value < 0.66 { return "speaker.wave.2.fill" }
-            return "speaker.wave.3.fill"
-        }
-    #endif
 }
 
 // MARK: - Supporting Types
@@ -326,37 +282,5 @@ extension VideoGestureLayer {
 
     enum DragType {
         case horizontalSeek
-        #if os(iOS)
-            case verticalBrightness
-            case verticalVolume
-        #endif
     }
 }
-
-// MARK: - System Volume Helper (iOS)
-
-#if os(iOS)
-    import MediaPlayer
-
-    /// Helper to get/set system volume without showing the system HUD.
-    ///
-    /// Uses `MPVolumeView` to access the volume slider, which bypasses the
-    /// default system volume overlay.
-    enum SystemVolumeHelper {
-        private static var volumeView: MPVolumeView = {
-            let view = MPVolumeView(frame: .zero)
-            view.isHidden = true
-            return view
-        }()
-
-        static func getVolume() -> Float {
-            AVAudioSession.sharedInstance().outputVolume
-        }
-
-        @MainActor
-        static func setVolume(_ volume: Float) {
-            let slider = volumeView.subviews.first(where: { $0 is UISlider }) as? UISlider
-            slider?.value = volume
-        }
-    }
-#endif
