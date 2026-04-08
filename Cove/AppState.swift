@@ -20,7 +20,7 @@ final class AppState {
 
     /// Centralized store for optimistic user data mutations (favorite, played, etc.).
     /// Set during app initialization in `CoveApp`.
-    var userDataStore: UserDataStore!
+    var userDataStore: UserDataStore?
 
     // MARK: - UI State
 
@@ -210,10 +210,12 @@ final class AppState {
     /// backward compatibility during the migration.
     func toggleFavorite(itemId: ItemID, isFavorite: Bool) async {
         do {
-            let newValue = try await userDataStore.toggleFavorite(
-                itemId: itemId,
-                current: UserData(isFavorite: isFavorite)
-            )
+            guard
+                let newValue = try await userDataStore?.toggleFavorite(
+                    itemId: itemId,
+                    current: UserData(isFavorite: isFavorite)
+                )
+            else { return }
             showToast(
                 newValue ? "Added to Favorites" : "Removed from Favorites",
                 icon: newValue ? "heart.fill" : "heart"
@@ -230,10 +232,12 @@ final class AppState {
     /// backward compatibility during the migration.
     func togglePlayed(itemId: ItemID, isPlayed: Bool) async {
         do {
-            let newValue = try await userDataStore.togglePlayed(
-                itemId: itemId,
-                current: UserData(isPlayed: isPlayed)
-            )
+            guard
+                let newValue = try await userDataStore?.togglePlayed(
+                    itemId: itemId,
+                    current: UserData(isPlayed: isPlayed)
+                )
+            else { return }
             showToast(
                 newValue ? "Marked as Watched" : "Marked as Unwatched",
                 icon: newValue ? "eye.fill" : "eye.slash"
