@@ -60,8 +60,8 @@ extension MetadataPill {
         guard rating > 0 else { return nil }
         let formatted =
             rating.truncatingRemainder(dividingBy: 1) == 0
-            ? String(format: "%.0f", rating)
-            : String(format: "%.1f", rating)
+            ? rating.formatted(.number.precision(.fractionLength(0)))
+            : rating.formatted(.number.precision(.fractionLength(1)))
         let label = source.map { "\($0) \(formatted)" } ?? formatted
         return MetadataPill(icon: "star.fill", label: label, tint: .yellow)
     }

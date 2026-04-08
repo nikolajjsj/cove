@@ -45,14 +45,11 @@ enum TimeFormatting {
     /// anywhere a precise timestamp is shown.
     static func playbackPosition(_ seconds: TimeInterval) -> String {
         guard seconds.isFinite && seconds >= 0 else { return "0:00" }
-        let total = Int(seconds)
-        let hours = total / 3600
-        let mins = (total % 3600) / 60
-        let secs = total % 60
-        if hours > 0 {
-            return "\(hours):\(String(format: "%02d", mins)):\(String(format: "%02d", secs))"
+        let duration = Duration.seconds(Int(seconds))
+        if seconds >= 3600 {
+            return duration.formatted(.time(pattern: .hourMinuteSecond(padHourToLength: 1)))
         }
-        return "\(mins):\(String(format: "%02d", secs))"
+        return duration.formatted(.time(pattern: .minuteSecond(padMinuteToLength: 1)))
     }
 
     // MARK: - Track Time ("3:45")
@@ -65,9 +62,7 @@ enum TimeFormatting {
     /// on tracks with unknown length.
     static func trackTime(_ seconds: TimeInterval) -> String {
         guard seconds.isFinite && seconds > 0 else { return "" }
-        let total = Int(seconds)
-        let mins = total / 60
-        let secs = total % 60
-        return "\(mins):\(String(format: "%02d", secs))"
+        let duration = Duration.seconds(Int(seconds))
+        return duration.formatted(.time(pattern: .minuteSecond(padMinuteToLength: 1)))
     }
 }

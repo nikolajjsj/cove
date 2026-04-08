@@ -479,7 +479,8 @@ struct VideoPlayerView: View {
         if quality == .auto, let height = coordinator.sourceVideoHeight {
             let resolution = height >= 2160 ? "4K" : "\(height)p"
             if let bitrate = coordinator.sourceVideoBitrate {
-                let mbps = String(format: "%.0f", Double(bitrate) / 1_000_000)
+                let mbps = (Double(bitrate) / 1_000_000).formatted(
+                    .number.precision(.fractionLength(0)))
                 return "Auto (\(resolution) · \(mbps) Mbps)"
             }
             return "Auto (\(resolution))"
@@ -525,14 +526,14 @@ struct VideoPlayerView: View {
         if speed == Float(Int(speed)) {
             return "\(Int(speed))×"
         }
-        return String(format: "%.1f×", speed)
+        return "\(speed.formatted(.number.precision(.fractionLength(1))))×"
     }
 
     private func speedDisplayText(_ speed: Float) -> String {
         if speed == Float(Int(speed)) {
             return "\(Int(speed))×"
         }
-        return String(format: "%.2g×", speed)
+        return "\(speed.formatted(.number.precision(.significantDigits(2))))×"
     }
 
     // MARK: - Seek Slider

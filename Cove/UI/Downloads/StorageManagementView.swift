@@ -89,7 +89,7 @@ struct StorageManagementView: View {
                 let total = totalUsedBytes + availableBytes
                 let percentage = Double(totalUsedBytes) / Double(total) * 100
                 Text(
-                    "Downloads use \(String(format: "%.1f", percentage))% of available storage."
+                    "Downloads use \(percentage.formatted(.number.precision(.fractionLength(1))))% of available storage."
                 )
             }
         }
