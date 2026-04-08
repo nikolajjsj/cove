@@ -50,7 +50,7 @@ struct HeroBannerView: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .always))
-        .frame(height: bannerHeight)
+        .aspectRatio(16/9, contentMode: .fill)
         .clipShape(RoundedRectangle(cornerRadius: CORNER_RADIUS))
         .onChange(of: currentIndex) { _, _ in
             lastInteractionDate = Date()
