@@ -119,6 +119,11 @@ let package = Package(
             path: "Tests/DownloadManagerTests"
         ),
         .testTarget(
+            name: "NetworkingTests",
+            dependencies: ["Networking"],
+            path: "Tests/NetworkingTests"
+        ),
+        .testTarget(
             name: "CoveUITests",
             dependencies: ["CoveUI"],
             path: "Tests/CoveUITests"
