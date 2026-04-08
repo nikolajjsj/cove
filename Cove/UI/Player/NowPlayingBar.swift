@@ -18,15 +18,9 @@ struct NowPlayingBar: View {
             VStack(spacing: 0) {
                 // MARK: - Progress Bar
 
-                GeometryReader { geometry in
-                    Rectangle()
-                        .fill(Color.accentColor)
-                        .frame(
-                            width: geometry.size.width * progressFraction,
-                            height: 2
-                        )
-                }
-                .frame(height: 2)
+                ProgressView(value: progressFraction)
+                    .progressViewStyle(.linear)
+                    .tint(.accentColor)
 
                 HStack(spacing: 12) {
                     // MARK: - Album Artwork
