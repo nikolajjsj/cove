@@ -78,8 +78,8 @@ private struct RecentlyPlayedSongsSection: View {
                     }
                     .scrollIndicators(.hidden)
                 } else {
-                        HStack(spacing: 12) {
                     ScrollView(.horizontal) {
+                        LazyHStack(spacing: 12) {
                             ForEach(Array(loader.items.enumerated()), id: \.element.id) {
                                 index,
                                 song in
@@ -180,8 +180,8 @@ private struct ArtistsShelfSection: View {
                     }
                     .scrollIndicators(.hidden)
                 } else {
-                        HStack(spacing: 14) {
                     ScrollView(.horizontal) {
+                        LazyHStack(spacing: 14) {
                             ForEach(loader.items) { artist in
                                 ArtistCard(item: artist, imageURL: imageURL(for: artist))
                                     .frame(width: 120)

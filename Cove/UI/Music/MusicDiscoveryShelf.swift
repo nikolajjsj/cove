@@ -33,8 +33,8 @@ struct MusicDiscoveryShelf: View {
                     }
                     .scrollIndicators(.hidden)
                 } else {
-                        HStack(spacing: 12) {
                     ScrollView(.horizontal) {
+                        LazyHStack(spacing: 12) {
                             ForEach(items) { item in
                                 AlbumCard(item: item, imageURL: imageURL(for: item))
                                     .frame(width: 140)
