@@ -81,10 +81,14 @@ struct PlaylistListView: View {
                         .playlistContextMenu(
                             playlist: playlist,
                             onRenamed: {
-                                Task { await loader.load { try await authManager.provider.playlists() } }
+                                Task {
+                                    await loader.load { try await authManager.provider.playlists() }
+                                }
                             },
                             onDeleted: {
-                                Task { await loader.load { try await authManager.provider.playlists() } }
+                                Task {
+                                    await loader.load { try await authManager.provider.playlists() }
+                                }
                             })
                     }
                     .listStyle(.plain)

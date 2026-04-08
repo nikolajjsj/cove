@@ -56,10 +56,10 @@ struct MediaImage: View {
                 image
                     .resizable()
                     .maybeAspectRatio(aspectRatio, contentMode: contentMode)
-                    .overlay(
+                    .overlay {
                         RoundedRectangle(cornerRadius: cornerRadius)
                             .stroke(.primary.opacity(0.4), lineWidth: 1)
-                    )
+                    }
             } else if state.isLoading {
                 placeholder
                     .overlay {
