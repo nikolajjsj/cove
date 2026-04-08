@@ -284,19 +284,7 @@ private struct FavoriteButton: View {
         let isFav = store.isFavorite(track.id, fallback: track.userData)
 
         Button {
-            Task {
-                do {
-                    let newValue = try await store.toggleFavorite(
-                        itemId: track.id, current: track.userData
-                    )
-                    appState.showToast(
-                        newValue ? "Added to Favorites" : "Removed from Favorites",
-                        icon: newValue ? "heart.fill" : "heart"
-                    )
-                } catch {
-                    // Silently fail
-                }
-            }
+            toggleFavorite()
         } label: {
             Image(systemName: isFav ? "heart.fill" : "heart")
                 .font(.title3)
@@ -305,6 +293,22 @@ private struct FavoriteButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func toggleFavorite() {
+        Task {
+            do {
+                let newValue = try await store.toggleFavorite(
+                    itemId: track.id, current: track.userData
+                )
+                appState.showToast(
+                    newValue ? "Added to Favorites" : "Removed from Favorites",
+                    icon: newValue ? "heart.fill" : "heart"
+                )
+            } catch {
+                // Silently fail
+            }
+        }
     }
 }
 

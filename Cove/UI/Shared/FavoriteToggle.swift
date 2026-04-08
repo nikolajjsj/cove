@@ -26,27 +26,31 @@ struct FavoriteToggle: View {
         let isFav = store.isFavorite(itemId, fallback: userData)
 
         Button {
-            Task {
-                do {
-                    let newValue = try await store.toggleFavorite(
-                        itemId: itemId, current: userData
-                    )
-                    appState.showToast(
-                        newValue ? "Added to Favorites" : "Removed from Favorites",
-                        icon: newValue ? "heart.fill" : "heart"
-                    )
-                } catch {
-                    appState.showToast(
-                        "Couldn't update favorite",
-                        icon: "exclamationmark.triangle"
-                    )
-                }
-            }
+            toggleFavorite()
         } label: {
             Label(
                 isFav ? "Unfavorite" : "Favorite",
                 systemImage: isFav ? "heart.fill" : "heart"
             )
+        }
+    }
+
+    private func toggleFavorite() {
+        Task {
+            do {
+                let newValue = try await store.toggleFavorite(
+                    itemId: itemId, current: userData
+                )
+                appState.showToast(
+                    newValue ? "Added to Favorites" : "Removed from Favorites",
+                    icon: newValue ? "heart.fill" : "heart"
+                )
+            } catch {
+                appState.showToast(
+                    "Couldn't update favorite",
+                    icon: "exclamationmark.triangle"
+                )
+            }
         }
     }
 }

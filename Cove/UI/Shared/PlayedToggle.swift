@@ -26,27 +26,31 @@ struct PlayedToggle: View {
         let isPlayed = store.isPlayed(itemId, fallback: userData)
 
         Button {
-            Task {
-                do {
-                    let newValue = try await store.togglePlayed(
-                        itemId: itemId, current: userData
-                    )
-                    appState.showToast(
-                        newValue ? "Marked as Watched" : "Marked as Unwatched",
-                        icon: newValue ? "eye.fill" : "eye.slash"
-                    )
-                } catch {
-                    appState.showToast(
-                        "Couldn't update watched status",
-                        icon: "exclamationmark.triangle"
-                    )
-                }
-            }
+            togglePlayed()
         } label: {
             Label(
                 isPlayed ? "Mark as Unwatched" : "Mark as Watched",
                 systemImage: isPlayed ? "eye.slash" : "eye"
             )
+        }
+    }
+
+    private func togglePlayed() {
+        Task {
+            do {
+                let newValue = try await store.togglePlayed(
+                    itemId: itemId, current: userData
+                )
+                appState.showToast(
+                    newValue ? "Marked as Watched" : "Marked as Unwatched",
+                    icon: newValue ? "eye.fill" : "eye.slash"
+                )
+            } catch {
+                appState.showToast(
+                    "Couldn't update watched status",
+                    icon: "exclamationmark.triangle"
+                )
+            }
         }
     }
 }

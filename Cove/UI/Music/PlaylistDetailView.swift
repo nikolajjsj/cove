@@ -60,13 +60,7 @@ struct PlaylistDetailView: View {
             ToolbarItem(placement: .primaryAction) {
                 if downloadCoordinator.downloadManager != nil && !tracks.isEmpty {
                     Button {
-                        Task {
-                            isDownloading = true
-                            try? await downloadCoordinator.downloadPlaylist(
-                                playlist: playlist, tracks: tracks)
-                            isDownloading = false
-                            appState.showToast("Downloading playlist", icon: "arrow.down.circle")
-                        }
+                        downloadPlaylist()
                     } label: {
                         if isDownloading {
                             ProgressView()
@@ -262,6 +256,18 @@ struct PlaylistDetailView: View {
             tracks = []
         }
         isLoading = false
+    }
+
+    // MARK: - Download
+
+    private func downloadPlaylist() {
+        Task {
+            isDownloading = true
+            try? await downloadCoordinator.downloadPlaylist(
+                playlist: playlist, tracks: tracks)
+            isDownloading = false
+            appState.showToast("Downloading playlist", icon: "arrow.down.circle")
+        }
     }
 
     // MARK: - Image Helpers

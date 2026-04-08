@@ -2,16 +2,6 @@ import MediaServerKit
 import Models
 import SwiftUI
 
-// MARK: - Music Browse Routes
-
-/// Routes for "See All" navigation from the music library shelves.
-/// Registered in the centralized `NavigationDestinations` modifier so
-/// all navigation goes through `NavigationLink(value:)` — no inline destinations.
-enum MusicBrowseRoute: Hashable {
-    case allArtists(libraryId: ItemID)
-    case allAlbums(libraryId: ItemID)
-}
-
 /// Centralized navigation routing for media items.
 /// Keeps the mapping from `MediaItem.mediaType` → detail view in one place.
 enum NavigationRouter {
@@ -126,27 +116,5 @@ private struct NavigationDestinations: ViewModifier {
 extension View {
     func withNavigationDestinations() -> some View {
         modifier(NavigationDestinations())
-    }
-}
-
-// MARK: - Library Type Helpers
-
-extension MediaLibrary {
-    /// Returns the Jellyfin `IncludeItemTypes` values appropriate for this library's collection type.
-    /// This ensures TV Shows libraries return only Series (not Seasons/Episodes),
-    /// Movies libraries return only Movies, etc.
-    var includeItemTypes: [String]? {
-        switch collectionType {
-        case .movies:
-            return ["Movie"]
-        case .tvshows:
-            return ["Series"]
-        case .boxsets:
-            return ["BoxSet"]
-        case .music:
-            return ["MusicAlbum"]
-        default:
-            return nil
-        }
     }
 }
