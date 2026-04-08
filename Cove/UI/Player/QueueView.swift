@@ -43,20 +43,9 @@ struct QueueView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "music.note.list")
-                .font(.system(size: 44))
-                .foregroundStyle(.secondary.opacity(0.5))
-
-            Text("Queue Empty")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            Text("Add some tracks to get started.")
-                .font(.subheadline)
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ContentUnavailableView(
+            "Queue Empty", systemImage: "music.note.list",
+            description: Text("Add some tracks to get started."))
     }
 
     // MARK: - Queue Content
