@@ -29,13 +29,14 @@ public struct MetadataPillsView: View {
 
     public var body: some View {
         if !pills.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 HStack(spacing: 10) {
                     ForEach(pills, id: \.label) { pill in
                         pillView(pill)
                     }
                 }
             }
+            .scrollIndicators(.hidden)
         }
     }
 

@@ -272,7 +272,7 @@ struct SeriesDetailView: View {
 
     @ViewBuilder
     private var seasonPickerSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 ForEach(seasons) { season in
                     Button {
@@ -299,6 +299,7 @@ struct SeriesDetailView: View {
             }
             .padding(.horizontal)
         }
+        .scrollIndicators(.hidden)
     }
 
     // MARK: - Episode List

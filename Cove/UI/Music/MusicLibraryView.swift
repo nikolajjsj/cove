@@ -67,7 +67,7 @@ private struct RecentlyPlayedSongsSection: View {
                     .padding(.horizontal)
 
                 if loader.isLoading {
-                    ScrollView(.horizontal, showsIndicators: false) {
+                    ScrollView(.horizontal) {
                         HStack(spacing: 12) {
                             ForEach(0..<5, id: \.self) { _ in
                                 SkeletonCard.song
@@ -76,9 +76,10 @@ private struct RecentlyPlayedSongsSection: View {
                         }
                         .padding(.horizontal)
                     }
+                    .scrollIndicators(.hidden)
                 } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
+                    ScrollView(.horizontal) {
                             ForEach(Array(loader.items.enumerated()), id: \.element.id) {
                                 index,
                                 song in
@@ -94,6 +95,7 @@ private struct RecentlyPlayedSongsSection: View {
                         }
                         .padding(.horizontal)
                     }
+                    .scrollIndicators(.hidden)
                 }
             }
             .task(id: library.id) {
@@ -167,7 +169,7 @@ private struct ArtistsShelfSection: View {
                 .padding(.horizontal)
 
                 if loader.isLoading {
-                    ScrollView(.horizontal, showsIndicators: false) {
+                    ScrollView(.horizontal) {
                         HStack(spacing: 14) {
                             ForEach(0..<6, id: \.self) { _ in
                                 SkeletonCard.artist
@@ -176,9 +178,10 @@ private struct ArtistsShelfSection: View {
                         }
                         .padding(.horizontal)
                     }
+                    .scrollIndicators(.hidden)
                 } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 14) {
+                    ScrollView(.horizontal) {
                             ForEach(loader.items) { artist in
                                 ArtistCard(item: artist, imageURL: imageURL(for: artist))
                                     .frame(width: 120)
@@ -186,6 +189,7 @@ private struct ArtistsShelfSection: View {
                         }
                         .padding(.horizontal)
                     }
+                    .scrollIndicators(.hidden)
                 }
             }
             .task(id: library.id) {

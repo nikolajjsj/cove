@@ -141,13 +141,14 @@ struct LibraryGridView: View {
 
     @ViewBuilder
     private var filterChipBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 watchedChip
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
         }
+        .scrollIndicators(.hidden)
     }
 
     private var watchedChip: some View {

@@ -23,7 +23,7 @@ struct MusicDiscoveryShelf: View {
                     .padding(.horizontal)
 
                 if isLoading {
-                    ScrollView(.horizontal, showsIndicators: false) {
+                    ScrollView(.horizontal) {
                         HStack(spacing: 12) {
                             ForEach(0..<5, id: \.self) { _ in
                                 SkeletonCard.albumShelf()
@@ -31,9 +31,10 @@ struct MusicDiscoveryShelf: View {
                         }
                         .padding(.horizontal)
                     }
+                    .scrollIndicators(.hidden)
                 } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
+                    ScrollView(.horizontal) {
                             ForEach(items) { item in
                                 AlbumCard(item: item, imageURL: imageURL(for: item))
                                     .frame(width: 140)
@@ -41,6 +42,7 @@ struct MusicDiscoveryShelf: View {
                         }
                         .padding(.horizontal)
                     }
+                    .scrollIndicators(.hidden)
                 }
             }
             .task(id: library.id) {

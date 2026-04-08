@@ -83,13 +83,14 @@ struct ContentRail<Card: View, Skeleton: View, Header: View>: View {
         VStack(alignment: .leading, spacing: 12) {
             header()
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 LazyHStack(spacing: spacing) {
                     ForEach(0..<skeletonCount, id: \.self) { _ in
                         skeleton()
                     }
                 }
             }
+            .scrollIndicators(.hidden)
         }
     }
 
@@ -99,7 +100,7 @@ struct ContentRail<Card: View, Skeleton: View, Header: View>: View {
         VStack(alignment: .leading, spacing: 12) {
             header()
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 LazyHStack(spacing: spacing) {
                     ForEach(items) { item in
                         NavigationLink(value: item) {
@@ -114,6 +115,7 @@ struct ContentRail<Card: View, Skeleton: View, Header: View>: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
         }
     }
 
