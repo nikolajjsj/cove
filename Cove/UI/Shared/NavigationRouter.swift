@@ -10,8 +10,10 @@ enum NavigationRouter {
     @ViewBuilder
     static func destination(for item: MediaItem) -> some View {
         switch item.mediaType {
-        case .movie, .episode:
+        case .movie:
             MovieDetailView(item: item)
+        case .episode:
+            EpisodeDetailView(item: item)
         case .series:
             SeriesDetailView(item: item)
         case .collection:
