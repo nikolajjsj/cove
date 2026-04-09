@@ -409,6 +409,39 @@ enum JellyfinMapper {
         return items.compactMap { mapMediaSegment($0) }
     }
 
+    /// Map Intro Skipper plugin response to domain MediaSegments.
+    ///
+    /// The plugin returns a dictionary like:
+    /// `{"Introduction": {...}, "Credits": {...}}`
+    /// where keys map to segment types and values contain timing info.
+    static func mapIntroSkipperSegments(
+        _ segments: [String: IntroSkipperSegment],
+        itemId: ItemID
+    ) -> [MediaSegment] {
+        segments.compactMap { key, segment in
+            guard segment.valid == true,
+                let start = segment.start,
+                let end = segment.end,
+                end > start
+            else { return nil }
+
+            let type: MediaSegmentType =
+                switch key {
+                case "Introduction": .intro
+                case "Credits": .outro
+                default: .unknown
+                }
+
+            return MediaSegment(
+                id: "\(itemId.rawValue)-\(key)",
+                itemId: itemId,
+                type: type,
+                startTime: start,
+                endTime: end
+            )
+        }
+    }
+
     // MARK: - Helpers
 
     private static let dateFormatters: [DateFormatter] = {

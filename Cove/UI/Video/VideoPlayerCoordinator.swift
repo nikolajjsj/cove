@@ -307,6 +307,45 @@ final class VideoPlayerCoordinator {
         }
     }
 
+    /// Transition to the next episode without dismissing the player.
+    ///
+    /// Reports playback stopped on the current item, resolves the stream
+    /// for the next episode, and swaps the player content in place.
+    func transitionToNextEpisode(
+        _ nextItem: MediaItem,
+        using provider: JellyfinServerProvider
+    ) async {
+        do {
+            let quality = Defaults[.maxStreamingQuality]
+            let profile = profileForQuality(quality)
+
+            async let infoTask = provider.streamURL(for: nextItem, profile: profile)
+            async let segmentsTask = provider.mediaSegments(for: nextItem.id)
+
+            let info = try await infoTask
+            let segments = try await segmentsTask
+
+            // Update coordinator state for the new item
+            let videoStream = info.mediaStreams.first { $0.type == .video }
+            sourceVideoHeight = videoStream?.height
+            sourceVideoBitrate = videoStream?.bitrate
+            activeQuality = quality
+            activeProvider = provider
+
+            currentItem = nextItem
+            streamInfo = info
+            mediaSegments = segments
+            startPosition = 0
+        } catch {
+            // If transition fails, surface the error and dismiss
+            self.error = PlaybackError(
+                itemTitle: nextItem.title,
+                underlyingError: error
+            )
+            dismiss()
+        }
+    }
+
     /// Check if a specific item is currently being resolved.
     func isLoadingItem(_ id: ItemID) -> Bool {
         isLoading && loadingItemId == id

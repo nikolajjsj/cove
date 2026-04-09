@@ -628,7 +628,10 @@ public final class JellyfinAPIClient: Sendable {
 
     /// Get episodes for a series, optionally filtered by season.
     /// `GET /Shows/{seriesId}/Episodes`
-    public func getEpisodes(seriesId: String, seasonId: String? = nil, userId: String) async throws
+    public func getEpisodes(
+        seriesId: String, seasonId: String? = nil, startItemId: String? = nil, limit: Int? = nil,
+        userId: String
+    ) async throws
         -> ItemsResult
     {
         let url = baseURL.appendingPathComponent("Shows/\(seriesId)/Episodes")
@@ -638,6 +641,12 @@ public final class JellyfinAPIClient: Sendable {
         ]
         if let seasonId {
             queryItems.append(URLQueryItem(name: "SeasonId", value: seasonId))
+        }
+        if let startItemId {
+            queryItems.append(URLQueryItem(name: "StartItemId", value: startItemId))
+        }
+        if let limit {
+            queryItems.append(URLQueryItem(name: "Limit", value: String(limit)))
         }
         logger.debug("Fetching episodes for series \(seriesId)")
         return try await httpClient.request(
@@ -834,7 +843,7 @@ public final class JellyfinAPIClient: Sendable {
     /// Returns empty array if the server doesn't support media segments (pre-10.9).
     public func getMediaSegments(
         itemId: String,
-        includeSegmentTypes: [String] = ["Intro", "Outro", "Recap", "Credits"]
+        includeSegmentTypes: [String] = ["Intro", "Outro", "Recap", "Commercial", "Preview"]
     ) async throws -> MediaSegmentQueryResult {
         let url = baseURL.appendingPathComponent("MediaSegments/\(itemId)")
         let queryItems = [
@@ -844,6 +853,44 @@ public final class JellyfinAPIClient: Sendable {
         logger.debug("Fetching media segments for item \(itemId)")
         return try await httpClient.request(
             url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+    }
+
+    /// Fetch intro/outro segments from the Intro Skipper plugin.
+    /// Returns nil if the plugin is not installed.
+    /// `GET /Episode/{itemId}/IntroSkipperSegments`
+    public func getIntroSkipperSegments(itemId: String) async throws -> [String:
+        IntroSkipperSegment]
+    {
+        let url = baseURL.appendingPathComponent("Episode/\(itemId)/IntroSkipperSegments")
+        logger.debug("Fetching Intro Skipper segments for item \(itemId)")
+
+        // Fetch raw data first so we can log it for diagnostics
+        let data: Data = try await httpClient.requestData(
+            url: url, method: .get, headers: authHeaders, queryItems: [])
+        if let jsonString = String(data: data, encoding: .utf8) {
+            logger.info("IntroSkipperSegments raw JSON for \(itemId): \(jsonString)")
+        }
+
+        let decoder = JSONDecoder()
+        // Don't use convertFromSnakeCase — our IntroSkipperSegment handles
+        // all key casings via its custom Decodable init
+        return try decoder.decode([String: IntroSkipperSegment].self, from: data)
+    }
+
+    /// Fetch intro timestamps from the older Intro Skipper plugin endpoint.
+    /// `GET /Episode/{itemId}/IntroTimestamps`
+    public func getIntroTimestamps(itemId: String) async throws -> IntroSkipperSegment {
+        let url = baseURL.appendingPathComponent("Episode/\(itemId)/IntroTimestamps")
+        logger.debug("Fetching Intro Timestamps for item \(itemId)")
+
+        let data: Data = try await httpClient.requestData(
+            url: url, method: .get, headers: authHeaders, queryItems: [])
+        if let jsonString = String(data: data, encoding: .utf8) {
+            logger.info("IntroTimestamps raw JSON for \(itemId): \(jsonString)")
+        }
+
+        let decoder = JSONDecoder()
+        return try decoder.decode(IntroSkipperSegment.self, from: data)
     }
 }
 

@@ -1,8 +1,15 @@
 import AVFoundation
 import AVKit
 import Foundation
+import MediaPlayer
 import Models
 import os
+
+#if os(iOS)
+    import UIKit
+#elseif os(macOS)
+    import AppKit
+#endif
 
 /// Manages video playback for a single viewing session using AVPlayer.
 ///
@@ -53,6 +60,9 @@ public final class VideoPlaybackManager {
     /// The underlying AVPlayer — exposed for the UI layer to create a video rendering view.
     public let player: AVPlayer = AVPlayer()
 
+    /// Called to get the artwork URL for NowPlaying info. Set by the app layer.
+    public var artworkURLProvider: (@MainActor (MediaItem) -> URL?)?
+
     // MARK: - Callbacks (set by the app layer)
 
     /// Called when playback starts. App layer uses this for server reporting.
@@ -69,6 +79,9 @@ public final class VideoPlaybackManager {
     // MARK: - Internal
 
     @ObservationIgnored private nonisolated(unsafe) var timeObserver: Any?
+    /// The item ID for which we're currently loading artwork (to discard stale loads).
+    @ObservationIgnored private var nowPlayingArtworkItemId: ItemID?
+
     @ObservationIgnored private nonisolated(unsafe) var statusObserver: NSKeyValueObservation?
     @ObservationIgnored private nonisolated(unsafe) var bufferObserver: NSKeyValueObservation?
     @ObservationIgnored private nonisolated(unsafe) var rateObserver: NSKeyValueObservation?
@@ -188,6 +201,9 @@ public final class VideoPlaybackManager {
         }
 
         logger.info("Loading video: \(item.title) (transcoded: \(streamInfo.isTranscoded))")
+
+        setupRemoteCommands()
+        updateNowPlayingInfo()
     }
 
     /// Set the next episode for auto-play (enables countdown near end).
@@ -202,12 +218,14 @@ public final class VideoPlaybackManager {
             player.rate = playbackSpeed
         }
         isPlaying = true
+        updateNowPlayingPlaybackState()
     }
 
     /// Pause playback.
     public func pause() {
         player.pause()
         isPlaying = false
+        updateNowPlayingPlaybackState()
     }
 
     /// Toggle between play and pause.
@@ -223,6 +241,7 @@ public final class VideoPlaybackManager {
             guard finished else { return }
             Task { @MainActor [weak self] in
                 self?.currentTime = time
+                self?.updateNowPlayingPlaybackState()
                 // Reset countdown if user seeks back
                 self?.showNextEpisodeCountdown = false
                 self?.countdownTask?.cancel()
@@ -383,6 +402,8 @@ public final class VideoPlaybackManager {
         progressReportTask?.cancel()
         countdownTask?.cancel()
 
+        teardownRemoteCommands()
+
         // Report playback stopped
         if let item {
             Task { [weak self] in
@@ -402,8 +423,15 @@ public final class VideoPlaybackManager {
     /// Trigger playing the next episode (called by UI countdown or button).
     public func playNextEpisode() {
         guard let next = nextEpisode else { return }
+        nextEpisode = nil
         showNextEpisodeCountdown = false
         countdownTask?.cancel()
+
+        // Reset progress immediately so the UI doesn't show stale values
+        // from the old episode during the async transition to the next one
+        currentTime = 0
+        duration = 0
+
         onPlayNextEpisode?(next)
     }
 
@@ -441,6 +469,9 @@ public final class VideoPlaybackManager {
 
                 // Update external subtitle overlay text
                 self.updateExternalSubtitleText()
+
+                // Update now playing playback position
+                self.updateNowPlayingPlaybackState()
 
                 // Check for next episode countdown trigger (30s from end)
                 self.checkNextEpisodeCountdown()
@@ -710,6 +741,153 @@ public final class VideoPlaybackManager {
     }
 
     // MARK: - Video End
+
+    // MARK: - Now Playing Info
+
+    /// Set up remote command center for video playback controls.
+    private func setupRemoteCommands() {
+        let center = MPRemoteCommandCenter.shared()
+
+        center.playCommand.isEnabled = true
+        center.playCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.play()
+            }
+            return .success
+        }
+
+        center.pauseCommand.isEnabled = true
+        center.pauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.pause()
+            }
+            return .success
+        }
+
+        center.togglePlayPauseCommand.isEnabled = true
+        center.togglePlayPauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.togglePlayPause()
+            }
+            return .success
+        }
+
+        center.skipForwardCommand.isEnabled = true
+        center.skipForwardCommand.preferredIntervals = [10]
+        center.skipForwardCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.skipForward()
+            }
+            return .success
+        }
+
+        center.skipBackwardCommand.isEnabled = true
+        center.skipBackwardCommand.preferredIntervals = [10]
+        center.skipBackwardCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.skipBackward()
+            }
+            return .success
+        }
+
+        center.changePlaybackPositionCommand.isEnabled = true
+        center.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let positionEvent = event as? MPChangePlaybackPositionCommandEvent else {
+                return .commandFailed
+            }
+            let position = positionEvent.positionTime
+            Task { @MainActor [weak self] in
+                self?.seek(to: position)
+            }
+            return .success
+        }
+
+        // Next episode from lock screen
+        center.nextTrackCommand.isEnabled = true
+        center.nextTrackCommand.addTarget { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.playNextEpisode()
+            }
+            return .success
+        }
+    }
+
+    /// Remove all remote command targets and clear now playing info.
+    private func teardownRemoteCommands() {
+        let center = MPRemoteCommandCenter.shared()
+        center.playCommand.removeTarget(nil)
+        center.pauseCommand.removeTarget(nil)
+        center.togglePlayPauseCommand.removeTarget(nil)
+        center.skipForwardCommand.removeTarget(nil)
+        center.skipBackwardCommand.removeTarget(nil)
+        center.changePlaybackPositionCommand.removeTarget(nil)
+        center.nextTrackCommand.removeTarget(nil)
+
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    }
+
+    /// Update now playing info with the current video metadata.
+    private func updateNowPlayingInfo() {
+        guard let item = currentItem else { return }
+
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: item.title,
+            MPMediaItemPropertyPlaybackDuration: duration,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? Double(playbackSpeed) : 0.0,
+            MPMediaItemPropertyMediaType: MPMediaType.movie.rawValue,
+        ]
+
+        if let seriesName = item.seriesName {
+            info[MPMediaItemPropertyArtist] = seriesName
+        }
+
+        if let season = item.parentIndexNumber, let episode = item.indexNumber {
+            info[MPMediaItemPropertyAlbumTitle] = "Season \(season), Episode \(episode)"
+        }
+
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+
+        // Load artwork asynchronously
+        if let url = artworkURLProvider?(item) {
+            loadNowPlayingArtwork(from: url)
+        }
+    }
+
+    /// Update only the playback position in NowPlaying (lightweight, called on timer).
+    private func updateNowPlayingPlaybackState() {
+        guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? Double(playbackSpeed) : 0.0
+        info[MPMediaItemPropertyPlaybackDuration] = duration
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    /// Download artwork and set it in now playing info.
+    private func loadNowPlayingArtwork(from url: URL) {
+        let itemId = currentItem?.id
+        nowPlayingArtworkItemId = itemId
+
+        Task { [weak self] in
+            guard let (data, _) = try? await URLSession.shared.data(from: url) else { return }
+            guard let self, self.nowPlayingArtworkItemId == itemId else { return }
+
+            #if os(iOS)
+                guard let image = UIImage(data: data) else { return }
+                let artwork = MPMediaItemArtwork(image: image)
+                guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
+                info[MPMediaItemPropertyArtwork] = artwork
+                MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            #elseif os(macOS)
+                guard let image = NSImage(data: data) else { return }
+                let size = image.size
+                let artwork = MPMediaItemArtwork(boundsSize: size) { _ in image }
+                guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
+                info[MPMediaItemPropertyArtwork] = artwork
+                MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            #endif
+        }
+    }
 
     private func handleVideoEnded() {
         logger.info("Video ended")

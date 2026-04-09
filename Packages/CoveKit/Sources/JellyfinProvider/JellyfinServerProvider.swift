@@ -454,16 +454,80 @@ public final class JellyfinServerProvider: MediaServerProvider,
     }
 
     /// Fetch skippable segments (intro, credits, recap, etc.) for an item.
-    /// Gracefully returns an empty array if the server doesn't support segments.
+    ///
+    /// Tries multiple sources in order:
+    /// 1. Native Jellyfin 10.9+ MediaSegments API
+    /// 2. Intro Skipper plugin (`/Episode/{id}/IntroSkipperSegments`)
+    /// 3. Older Intro Skipper plugin (`/Episode/{id}/IntroTimestamps`)
     public func mediaSegments(for itemId: ItemID) async throws -> [MediaSegment] {
         let (client, _) = try authenticatedClient()
+
+        // 1. Try native MediaSegments API (Jellyfin 10.9+)
+        //    Use only valid Jellyfin MediaSegmentType values (no "Credits" — it's "Outro")
         do {
-            let result = try await client.getMediaSegments(itemId: itemId.rawValue)
-            return JellyfinMapper.mapMediaSegments(result)
+            let result = try await client.getMediaSegments(
+                itemId: itemId.rawValue,
+                includeSegmentTypes: ["Intro", "Outro", "Recap", "Commercial", "Preview"]
+            )
+            let segments = JellyfinMapper.mapMediaSegments(result)
+            logger.info("Native MediaSegments for \(itemId.rawValue): \(segments.count) segment(s)")
+            if !segments.isEmpty {
+                return segments
+            }
         } catch {
-            // Server might not support MediaSegments (pre-10.9) — fail silently
-            return []
+            logger.warning(
+                "Native MediaSegments API failed for \(itemId.rawValue): \(error.localizedDescription)"
+            )
         }
+
+        // 2. Try Intro Skipper plugin (newer endpoint: /Episode/{id}/IntroSkipperSegments)
+        do {
+            let skipperSegments = try await client.getIntroSkipperSegments(itemId: itemId.rawValue)
+            logger.info(
+                "IntroSkipperSegments raw response for \(itemId.rawValue): \(skipperSegments.count) key(s): \(skipperSegments.keys.sorted().joined(separator: ", "))"
+            )
+            for (key, seg) in skipperSegments {
+                logger.info(
+                    "  [\(key)] valid=\(seg.valid?.description ?? "nil") start=\(seg.start?.description ?? "nil") end=\(seg.end?.description ?? "nil")"
+                )
+            }
+            let segments = JellyfinMapper.mapIntroSkipperSegments(skipperSegments, itemId: itemId)
+            logger.info(
+                "IntroSkipperSegments for \(itemId.rawValue): \(segments.count) mapped segment(s)")
+            if !segments.isEmpty {
+                return segments
+            }
+        } catch {
+            logger.warning(
+                "IntroSkipperSegments API failed for \(itemId.rawValue): \(error.localizedDescription)"
+            )
+        }
+
+        // 3. Try older Intro Skipper plugin endpoint (/Episode/{id}/IntroTimestamps)
+        do {
+            let timestamp = try await client.getIntroTimestamps(itemId: itemId.rawValue)
+            if timestamp.valid == true,
+                let start = timestamp.start,
+                let end = timestamp.end,
+                end > start
+            {
+                let segment = MediaSegment(
+                    id: "\(itemId.rawValue)-intro",
+                    itemId: itemId,
+                    type: .intro,
+                    startTime: start,
+                    endTime: end
+                )
+                logger.info("IntroTimestamps for \(itemId.rawValue): found intro segment")
+                return [segment]
+            }
+        } catch {
+            logger.warning(
+                "IntroTimestamps API failed for \(itemId.rawValue): \(error.localizedDescription)")
+        }
+
+        logger.info("No media segments found for \(itemId.rawValue) from any source")
+        return []
     }
 
     public func resumeItems() async throws -> [MediaItem] {
@@ -691,6 +755,27 @@ public final class JellyfinServerProvider: MediaServerProvider,
         let (client, userId) = try authenticatedClient()
         let result = try await client.getNextUp(userId: userId, seriesId: seriesId?.rawValue)
         return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+    }
+
+    /// Find the next episode after the given item by querying the series episode list.
+    ///
+    /// Unlike `nextUp(seriesId:)` which relies on server-side watch history,
+    /// this method uses the `StartItemId` parameter to get episodes starting
+    /// from the current one, then returns the episode immediately after it.
+    /// This reliably finds the next episode regardless of watch state.
+    public func nextEpisodeAfter(item: MediaItem) async throws -> MediaItem? {
+        guard item.mediaType == .episode, let seriesId = item.seriesId else { return nil }
+        let (client, userId) = try authenticatedClient()
+        // Fetch 2 episodes starting from the current one (current + next)
+        let result = try await client.getEpisodes(
+            seriesId: seriesId.rawValue,
+            startItemId: item.id.rawValue,
+            limit: 2,
+            userId: userId
+        )
+        let items = (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+        // The first item is the current episode; return the second if it exists
+        return items.first { $0.id != item.id }
     }
 
     /// Build a subtitle URL for a video item.

@@ -4,6 +4,7 @@ import JellyfinProvider
 import Models
 import PlaybackEngine
 import SwiftUI
+import os
 
 struct VideoPlayerView: View {
     let item: MediaItem
@@ -89,8 +90,8 @@ struct VideoPlayerView: View {
             )
             .zIndex(1)
 
-            // Buffering indicator (only when controls are hidden)
-            if videoManager.isBuffering && !showControls {
+            // Buffering / loading indicator (only when controls are hidden)
+            if isLoadingVideo && !showControls {
                 ProgressView()
                     .scaleEffect(1.5)
                     .tint(.white)
@@ -107,16 +108,17 @@ struct VideoPlayerView: View {
                 .zIndex(2.5)
             }
 
-            // Skip segment button (intro, credits, recap)
-            skipSegmentButton
-                .zIndex(2.8)
-
             // Custom controls overlay — always in the tree for snappy toggling.
             // We animate opacity instead of inserting/removing the view.
             controlsOverlay
                 .opacity(showControls ? 1 : 0)
                 .allowsHitTesting(showControls)
                 .zIndex(3)
+
+            // Skip segment button (intro, credits, recap)
+            // Placed above controls so it's always visible and tappable
+            skipSegmentButton
+                .zIndex(3.5)
 
             // Next episode countdown
             if videoManager.showNextEpisodeCountdown, let next = videoManager.nextEpisode {
@@ -127,6 +129,7 @@ struct VideoPlayerView: View {
         }
         .animation(.easeOut(duration: 0.15), value: showControls)
         .animation(.easeInOut(duration: 0.3), value: videoManager.showNextEpisodeCountdown)
+        .animation(.spring(duration: 0.4), value: activeSkippableSegment?.id)
         .background(Color.black)
         #if os(iOS)
             .statusBarHidden(true)
@@ -230,8 +233,8 @@ struct VideoPlayerView: View {
                     .padding(.bottom, 8)
             }
 
-            // Buffering spinner shown over center controls
-            if videoManager.isBuffering {
+            // Buffering / loading spinner shown over center controls
+            if isLoadingVideo {
                 ProgressView()
                     .scaleEffect(1.5)
                     .tint(.white)
@@ -394,6 +397,19 @@ struct VideoPlayerView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+
+            if videoManager.nextEpisode != nil {
+                Button("Next Episode", systemImage: "forward.end.fill") {
+                    videoManager.playNextEpisode()
+                    resetControlsTimer()
+                }
+                .labelStyle(.iconOnly)
+                .font(.title2)
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -724,17 +740,29 @@ struct VideoPlayerView: View {
     @ViewBuilder
     private var skipSegmentButton: some View {
         if let segment = activeSkippableSegment {
+            let isCreditsNearEnd =
+                (segment.type == .credits || segment.type == .outro)
+                && videoManager.duration > 0
+                && (videoManager.duration - segment.endTime) < 30
+                && videoManager.nextEpisode != nil
+
             VStack {
                 Spacer()
                 HStack {
                     Spacer()
                     Button {
-                        videoManager.seek(to: segment.endTime)
+                        if isCreditsNearEnd {
+                            videoManager.playNextEpisode()
+                        } else {
+                            videoManager.seek(to: segment.endTime)
+                        }
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "forward.fill")
-                                .font(.subheadline)
-                            Text(segment.skipButtonLabel)
+                            Image(
+                                systemName: isCreditsNearEnd ? "forward.end.fill" : "forward.fill"
+                            )
+                            .font(.subheadline)
+                            Text(isCreditsNearEnd ? "Next Episode" : segment.skipButtonLabel)
                                 .font(.subheadline.weight(.semibold))
                         }
                         .foregroundStyle(.black)
@@ -754,6 +782,13 @@ struct VideoPlayerView: View {
             }
             .animation(.spring(duration: 0.4), value: activeSkippableSegment?.id)
         }
+    }
+
+    /// Whether the video is in a loading state — either actively buffering
+    /// or still waiting for the player item to report its duration.
+    private var isLoadingVideo: Bool {
+        videoManager.isBuffering
+            || (videoManager.currentItem != nil && videoManager.duration <= 0)
     }
 
     /// The currently active skippable segment based on playback position.
@@ -832,7 +867,18 @@ struct VideoPlayerView: View {
 
     // MARK: - Setup
 
+    private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "VideoPlayer")
+
     private func setupAndPlay() {
+        // Debug: log media segments received from the coordinator
+        logger.info("Setting up playback for \(self.item.title) (id: \(self.item.id.rawValue))")
+        logger.info("Media segments received: \(self.mediaSegments.count)")
+        for segment in mediaSegments {
+            logger.info(
+                "  Segment: type=\(segment.type.rawValue) start=\(segment.startTime) end=\(segment.endTime)"
+            )
+        }
+
         // Restore persisted playback speed
         let savedSpeed = Defaults[.videoPlaybackSpeed]
         if savedSpeed != 1.0 {
@@ -843,6 +889,15 @@ struct VideoPlayerView: View {
         let provider = authManager.provider
         let coordinator = self.coordinator
 
+        // Provide artwork URL for lock screen / Control Center NowPlaying info
+        videoManager.artworkURLProvider = { item in
+            provider.imageURL(
+                for: item,
+                type: .primary,
+                maxSize: CGSize(width: 600, height: 340)
+            )
+        }
+
         videoManager.onPlaybackStart = { item, position in
             try? await provider.reportPlaybackStart(item: item, position: position)
         }
@@ -852,8 +907,42 @@ struct VideoPlayerView: View {
         videoManager.onPlaybackStopped = { item, position in
             try? await provider.reportPlaybackStopped(item: item, position: position)
         }
-        videoManager.onPlayNextEpisode = { _ in
-            coordinator.dismiss()
+        videoManager.onPlayNextEpisode = { [self] nextItem in
+            let provider = authManager.provider
+            let vm = videoManager
+
+            // Reset view-level state immediately so the UI doesn't show
+            // stale seeking/progress values from the previous episode
+            hasStartedPlaying = false
+            isSeeking = false
+            seekTime = 0
+            isGestureSeeking = false
+            gestureSeekTime = 0
+            showControls = true
+            controlsTimer?.cancel()
+
+            Task {
+                await coordinator.transitionToNextEpisode(nextItem, using: provider)
+
+                // Reload the player with the new stream
+                if let newStream = coordinator.streamInfo,
+                    let newItem = coordinator.currentItem
+                {
+                    vm.loadAndPlay(
+                        item: newItem,
+                        streamInfo: newStream,
+                        startPosition: coordinator.startPosition
+                    )
+
+                    // Fetch the next-next episode
+                    if newItem.mediaType == .episode,
+                        Defaults[.autoPlayNextEpisode]
+                    {
+                        let next = try? await provider.nextEpisodeAfter(item: newItem)
+                        vm.setNextEpisode(next)
+                    }
+                }
+            }
         }
         videoManager.onPlaybackError = { item, error in
             coordinator.error = VideoPlayerCoordinator.PlaybackError(
@@ -868,6 +957,17 @@ struct VideoPlayerView: View {
             streamInfo: streamInfo,
             startPosition: startPosition
         )
+
+        // Fetch next episode for auto-play
+        if item.mediaType == .episode,
+            Defaults[.autoPlayNextEpisode]
+        {
+            let provider = authManager.provider
+            Task {
+                let next = try? await provider.nextEpisodeAfter(item: item)
+                videoManager.setNextEpisode(next)
+            }
+        }
 
         // Don't schedule auto-hide yet — controls stay visible until
         // playback has actually started (detected via onChange handlers).
