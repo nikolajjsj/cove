@@ -4,7 +4,6 @@ import Foundation
 import JellyfinProvider
 import MediaServerKit
 import Models
-import Networking
 import Persistence
 import PlaybackEngine
 import SwiftUI

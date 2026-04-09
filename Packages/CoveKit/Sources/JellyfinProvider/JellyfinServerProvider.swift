@@ -1,6 +1,7 @@
 import AppGroup
 import Foundation
 import JellyfinAPI
+import Keychain
 import MediaServerKit
 import Models
 import Networking

@@ -27,8 +27,8 @@
 
         /// Default fallback when extraction fails or no artwork is available.
         public static let fallback = ExtractionResult(
-            primary: Color(.systemGray4),
-            darkened: Color(.systemGray6),
+            primary: Color.gray.opacity(0.4),
+            darkened: Color.gray.opacity(0.15),
             isLight: false
         )
 

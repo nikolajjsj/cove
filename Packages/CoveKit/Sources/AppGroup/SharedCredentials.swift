@@ -1,6 +1,6 @@
 import Defaults
 import Foundation
-import Networking
+import Keychain
 
 /// Provides read access to the active server credentials for app extensions.
 ///

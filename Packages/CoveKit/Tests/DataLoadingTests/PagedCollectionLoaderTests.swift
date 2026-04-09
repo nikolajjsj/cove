@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import CoveUI
+@testable import DataLoading
 
 @Suite("PagedCollectionLoader")
 struct PagedCollectionLoaderTests {

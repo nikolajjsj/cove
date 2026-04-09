@@ -1,4 +1,4 @@
-import CoveUI
+import DataLoading
 import JellyfinProvider
 import MediaServerKit
 import Models

@@ -1,4 +1,3 @@
-import CoveUI
 import Defaults
 import JellyfinProvider
 import MediaServerKit

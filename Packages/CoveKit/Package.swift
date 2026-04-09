@@ -17,7 +17,9 @@ let package = Package(
         .library(name: "DownloadManager", targets: ["DownloadManager"]),
         .library(name: "Persistence", targets: ["Persistence"]),
         .library(name: "Networking", targets: ["Networking"]),
+        .library(name: "Keychain", targets: ["Keychain"]),
         .library(name: "ImageService", targets: ["ImageService"]),
+        .library(name: "DataLoading", targets: ["DataLoading"]),
         .library(name: "CoveUI", targets: ["CoveUI"]),
         .library(name: "AppGroup", targets: ["AppGroup"]),
     ],
@@ -29,6 +31,10 @@ let package = Package(
     targets: [
         // MARK: - Source Targets
 
+        .target(
+            name: "DataLoading",
+            path: "Sources/DataLoading"
+        ),
         .target(
             name: "CoveUI",
             path: "Sources/CoveUI"
@@ -49,7 +55,7 @@ let package = Package(
         ),
         .target(
             name: "JellyfinProvider",
-            dependencies: ["AppGroup", "JellyfinAPI", "MediaServerKit", "Networking"],
+            dependencies: ["AppGroup", "JellyfinAPI", "Keychain", "MediaServerKit", "Networking"],
             path: "Sources/JellyfinProvider"
         ),
         .target(
@@ -59,7 +65,7 @@ let package = Package(
         ),
         .target(
             name: "DownloadManager",
-            dependencies: ["Models", "Persistence", "Networking"],
+            dependencies: ["Models", "Persistence"],
             path: "Sources/DownloadManager"
         ),
         .target(
@@ -76,9 +82,14 @@ let package = Package(
             path: "Sources/Networking"
         ),
         .target(
+            name: "Keychain",
+            dependencies: ["Models"],
+            path: "Sources/Keychain"
+        ),
+        .target(
             name: "AppGroup",
             dependencies: [
-                "Networking",
+                "Keychain",
                 .product(name: "Defaults", package: "Defaults"),
             ],
             path: "Sources/AppGroup"
@@ -134,9 +145,9 @@ let package = Package(
             path: "Tests/NetworkingTests"
         ),
         .testTarget(
-            name: "CoveUITests",
-            dependencies: ["CoveUI"],
-            path: "Tests/CoveUITests"
+            name: "DataLoadingTests",
+            dependencies: ["DataLoading"],
+            path: "Tests/DataLoadingTests"
         ),
     ],
     swiftLanguageModes: [.v6]
