@@ -3,6 +3,9 @@ import Foundation
 import Models
 
 extension Defaults.Keys {
+
+    // MARK: - Downloads
+
     /// Whether downloads are allowed over cellular connections.
     /// When `false` (the default), downloads only proceed on WiFi.
     static let downloadOverCellular = Key<Bool>("downloadOverCellular", default: false)
@@ -30,6 +33,15 @@ extension Defaults.Keys {
 
     /// The accent color name. Values: "default", "indigo", "purple", "pink", "red", "orange", "teal", "green".
     static let accentColor = Key<String>("accentColor", default: "default")
+
+    // MARK: - Home Screen
+
+    /// Ordered list of home screen sections with visibility toggles.
+    /// Users can reorder and show/hide sections via the customization sheet.
+    static let homeSections = Key<[HomeSectionConfig]>(
+        "homeSections",
+        default: HomeSectionConfig.defaultSections
+    )
 }
 
 // MARK: - Defaults Conformance

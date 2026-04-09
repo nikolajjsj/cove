@@ -1,4 +1,5 @@
 import CoveUI
+import Defaults
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -7,7 +8,9 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(AppState.self) private var appState
+    @Default(.homeSections) private var sections
     @State private var refreshID = UUID()
+    @State private var showCustomization = false
 
     var body: some View {
         ScrollView {
@@ -19,27 +22,8 @@ struct HomeView: View {
                         description: Text("No libraries found on this server.")
                     )
                 } else {
-                    HeroBannerView()
-
-                    ContinueWatchingSection()
-
-                    UpNextSection()
-
-                    if let movies = appState.libraries.first(where: { $0.collectionType == .movies }
-                    ) {
-                        LibrarySection(library: movies)
-                    }
-
-                    if let tvShows = appState.libraries.first(where: {
-                        $0.collectionType == .tvshows
-                    }) {
-                        LibrarySection(library: tvShows)
-                    }
-
-                    if let collections = appState.libraries.first(where: {
-                        $0.collectionType == .boxsets
-                    }) {
-                        LibrarySection(library: collections)
+                    ForEach(visibleSections, id: \.section) { config in
+                        sectionView(for: config.section)
                     }
                 }
             }
@@ -48,6 +32,58 @@ struct HomeView: View {
         }
         .refreshable {
             refreshID = UUID()
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Customize", systemImage: "slider.horizontal.3") {
+                    showCustomization = true
+                }
+            }
+        }
+        .sheet(isPresented: $showCustomization) {
+            HomeCustomizationSheet()
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var visibleSections: [HomeSectionConfig] {
+        sections.filter(\.isVisible)
+    }
+
+    @ViewBuilder
+    private func sectionView(for section: HomeSection) -> some View {
+        switch section {
+        case .heroBanner:
+            HeroBannerView()
+
+        case .continueWatching:
+            ContinueWatchingSection()
+
+        case .upNext:
+            UpNextSection()
+
+        case .movies:
+            if let movies = appState.libraries.first(where: { $0.collectionType == .movies }) {
+                LibrarySection(library: movies)
+            }
+
+        case .tvShows:
+            if let tvShows = appState.libraries.first(where: { $0.collectionType == .tvshows }) {
+                LibrarySection(library: tvShows)
+            }
+
+        case .collections:
+            if let collections = appState.libraries.first(where: { $0.collectionType == .boxsets })
+            {
+                LibrarySection(library: collections)
+            }
+
+        case .becauseYouWatched:
+            BecauseYouWatchedSection()
+
+        case .recentlyAdded:
+            RecentlyAddedSection()
         }
     }
 }
