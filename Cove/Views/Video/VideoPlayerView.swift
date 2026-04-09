@@ -867,7 +867,7 @@ struct VideoPlayerView: View {
 
     // MARK: - Setup
 
-    private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "VideoPlayer")
+    private let logger = Logger(subsystem: "com.nikolajjsj.cove", category: "VideoPlayer")
 
     private func setupAndPlay() {
         // Debug: log media segments received from the coordinator
