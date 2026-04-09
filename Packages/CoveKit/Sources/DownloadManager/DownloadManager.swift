@@ -36,7 +36,7 @@ public final class DownloadManagerService: @unchecked Sendable {
 
     /// Background session identifier. Must be stable across app launches.
     private static let backgroundSessionIdentifier =
-        "com.nikolajjsj.jellyfin.backgroundDownloads"
+        "\(AppConstants.bundleIdentifier).backgroundDownloads"
 
     /// Maximum number of downloads that may be actively transferring at once.
     private static let maxConcurrentDownloads = 3
@@ -56,7 +56,7 @@ public final class DownloadManagerService: @unchecked Sendable {
     /// Injected by the app layer since the DownloadManager module doesn't depend on Defaults.
     public var isWifiOnlyEnabled: @Sendable () -> Bool = { false }
     private let logger = Logger(
-        subsystem: "com.nikolajjsj.jellyfin", category: "DownloadManager")
+        subsystem: AppConstants.bundleIdentifier, category: "DownloadManager")
 
     // MARK: - URLSession & Delegate
 
@@ -124,7 +124,7 @@ public final class DownloadManagerService: @unchecked Sendable {
         let delegateQueue = OperationQueue()
         delegateQueue.maxConcurrentOperationCount = 1
         delegateQueue.qualityOfService = .utility
-        delegateQueue.name = "com.nikolajjsj.jellyfin.DownloadManagerDelegateQueue"
+        delegateQueue.name = "\(AppConstants.bundleIdentifier).DownloadManagerDelegateQueue"
 
         self.urlSession = URLSession(
             configuration: config, delegate: delegate, delegateQueue: delegateQueue)

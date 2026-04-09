@@ -9,7 +9,7 @@ public enum ImageService {
     /// The shared image pipeline configured with disk + memory cache.
     public static let pipeline: ImagePipeline = {
         var config = ImagePipeline.Configuration.withDataCache(
-            name: "com.nikolajjsj.jellyfin.images",
+            name: "\(AppConstants.bundleIdentifier).images",
             sizeLimit: 500 * 1024 * 1024  // 500 MB disk cache
         )
         config.imageCache = ImageCache.shared

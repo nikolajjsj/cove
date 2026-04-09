@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B51551D02F87D0DB005CC1D3 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B51551CF2F87D0DB005CC1D3 /* WidgetKit.framework */; };
+		B51551D22F87D0DB005CC1D3 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B51551D12F87D0DB005CC1D3 /* SwiftUI.framework */; };
+		B51551DF2F87D0DD005CC1D3 /* CoveWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B51551CD2F87D0DB005CC1D3 /* CoveWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B51551F02F87E000005CC1D3 /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B51551EF2F87E000005CC1D3 /* AppIntents.framework */; };
+		B51553F12F87EE3C005CC1D3 /* AppGroup in Frameworks */ = {isa = PBXBuildFile; productRef = B51553F02F87EE3C005CC1D3 /* AppGroup */; };
+		B51553F32F87EE43005CC1D3 /* AppGroup in Frameworks */ = {isa = PBXBuildFile; productRef = B51553F22F87EE43005CC1D3 /* AppGroup */; };
+		B51553F52F87EE7C005CC1D3 /* JellyfinAPI in Frameworks */ = {isa = PBXBuildFile; productRef = B51553F42F87EE7C005CC1D3 /* JellyfinAPI */; };
 		B5FDE3BF2F83808F00F54FAA /* Defaults in Frameworks */ = {isa = PBXBuildFile; productRef = B5FDE3BE2F83808F00F54FAA /* Defaults */; };
 		B5FDE3C12F83808F00F54FAA /* DefaultsMacros in Frameworks */ = {isa = PBXBuildFile; productRef = B5FDE3C02F83808F00F54FAA /* DefaultsMacros */; };
 		C0000001AAAAAAAAAAAA0001 /* Models in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0001 /* Models */; };
@@ -21,11 +28,47 @@
 		C0000001AAAAAAAAAAAA000A /* CoveUI in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA000A /* CoveUI */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		B51551DD2F87D0DD005CC1D3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B53D7B972F823DC20023368C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B51551CC2F87D0DB005CC1D3;
+			remoteInfo = CoveWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B51551E42F87D0DD005CC1D3 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B51551DF2F87D0DD005CC1D3 /* CoveWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		B51551CD2F87D0DB005CC1D3 /* CoveWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CoveWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B51551CF2F87D0DB005CC1D3 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = /System/Library/Frameworks/WidgetKit.framework; sourceTree = "<absolute>"; };
+		B51551D12F87D0DB005CC1D3 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = /System/Library/Frameworks/SwiftUI.framework; sourceTree = "<absolute>"; };
+		B51551ED2F87D30F005CC1D3 /* CoveWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CoveWidgetExtension.entitlements; sourceTree = "<group>"; };
+		B51551EF2F87E000005CC1D3 /* AppIntents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = /System/Library/Frameworks/AppIntents.framework; sourceTree = "<absolute>"; };
 		B53D7B9F2F823DC20023368C /* Cove.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cove.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B51551E32F87D0DD005CC1D3 /* Exceptions for "CoveWidget" folder in "CoveWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B51551CC2F87D0DB005CC1D3 /* CoveWidgetExtension */;
+		};
 		B5FDE42F2F83AA9F00F54FAA /* Exceptions for "Cove" folder in "Cove" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -36,6 +79,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		B51551D32F87D0DB005CC1D3 /* CoveWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B51551E32F87D0DD005CC1D3 /* Exceptions for "CoveWidget" folder in "CoveWidgetExtension" target */,
+			);
+			path = CoveWidget;
+			sourceTree = "<group>";
+		};
 		B53D7BA12F823DC20023368C /* Cove */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -47,10 +98,23 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		B51551CA2F87D0DB005CC1D3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B51551D22F87D0DB005CC1D3 /* SwiftUI.framework in Frameworks */,
+				B51551D02F87D0DB005CC1D3 /* WidgetKit.framework in Frameworks */,
+				B51553F12F87EE3C005CC1D3 /* AppGroup in Frameworks */,
+				B51551F02F87E000005CC1D3 /* AppIntents.framework in Frameworks */,
+				B51553F52F87EE7C005CC1D3 /* JellyfinAPI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B53D7B9C2F823DC20023368C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B51553F32F87EE43005CC1D3 /* AppGroup in Frameworks */,
 				C0000001AAAAAAAAAAAA0001 /* Models in Frameworks */,
 				C0000001AAAAAAAAAAAA0002 /* MediaServerKit in Frameworks */,
 				C0000001AAAAAAAAAAAA0003 /* JellyfinAPI in Frameworks */,
@@ -69,11 +133,24 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		B51551CE2F87D0DB005CC1D3 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				B51551CF2F87D0DB005CC1D3 /* WidgetKit.framework */,
+				B51551D12F87D0DB005CC1D3 /* SwiftUI.framework */,
+				B51551EF2F87E000005CC1D3 /* AppIntents.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		B53D7B962F823DC20023368C = {
 			isa = PBXGroup;
 			children = (
+				B51551ED2F87D30F005CC1D3 /* CoveWidgetExtension.entitlements */,
 				B53D7BA12F823DC20023368C /* Cove */,
 				C0000003AAAAAAAAAAAA0001 /* Packages */,
+				B51551D32F87D0DB005CC1D3 /* CoveWidget */,
+				B51551CE2F87D0DB005CC1D3 /* Frameworks */,
 				B53D7BA02F823DC20023368C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -82,6 +159,7 @@
 			isa = PBXGroup;
 			children = (
 				B53D7B9F2F823DC20023368C /* Cove.app */,
+				B51551CD2F87D0DB005CC1D3 /* CoveWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -96,6 +174,30 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		B51551CC2F87D0DB005CC1D3 /* CoveWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B51551E02F87D0DD005CC1D3 /* Build configuration list for PBXNativeTarget "CoveWidgetExtension" */;
+			buildPhases = (
+				B51551C92F87D0DB005CC1D3 /* Sources */,
+				B51551CA2F87D0DB005CC1D3 /* Frameworks */,
+				B51551CB2F87D0DB005CC1D3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B51551D32F87D0DB005CC1D3 /* CoveWidget */,
+			);
+			name = CoveWidgetExtension;
+			packageProductDependencies = (
+				B51553F02F87EE3C005CC1D3 /* AppGroup */,
+				B51553F42F87EE7C005CC1D3 /* JellyfinAPI */,
+			);
+			productName = CoveWidgetExtension;
+			productReference = B51551CD2F87D0DB005CC1D3 /* CoveWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		B53D7B9E2F823DC20023368C /* Cove */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B53D7BAA2F823DC40023368C /* Build configuration list for PBXNativeTarget "Cove" */;
@@ -103,10 +205,12 @@
 				B53D7B9B2F823DC20023368C /* Sources */,
 				B53D7B9C2F823DC20023368C /* Frameworks */,
 				B53D7B9D2F823DC20023368C /* Resources */,
+				B51551E42F87D0DD005CC1D3 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				B51551DE2F87D0DD005CC1D3 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				B53D7BA12F823DC20023368C /* Cove */,
@@ -125,6 +229,7 @@
 				C0000002AAAAAAAAAAAA000A /* CoveUI */,
 				B5FDE3BE2F83808F00F54FAA /* Defaults */,
 				B5FDE3C02F83808F00F54FAA /* DefaultsMacros */,
+				B51553F22F87EE43005CC1D3 /* AppGroup */,
 			);
 			productName = Cove;
 			productReference = B53D7B9F2F823DC20023368C /* Cove.app */;
@@ -140,6 +245,9 @@
 				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
+					B51551CC2F87D0DB005CC1D3 = {
+						CreatedOnToolsVersion = 26.4;
+					};
 					B53D7B9E2F823DC20023368C = {
 						CreatedOnToolsVersion = 26.4;
 					};
@@ -164,11 +272,19 @@
 			projectRoot = "";
 			targets = (
 				B53D7B9E2F823DC20023368C /* Cove */,
+				B51551CC2F87D0DB005CC1D3 /* CoveWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		B51551CB2F87D0DB005CC1D3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B53D7B9D2F823DC20023368C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -179,6 +295,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		B51551C92F87D0DB005CC1D3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B53D7B9B2F823DC20023368C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -188,7 +311,103 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		B51551DE2F87D0DD005CC1D3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B51551CC2F87D0DB005CC1D3 /* CoveWidgetExtension */;
+			targetProxy = B51551DD2F87D0DD005CC1D3 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		B51551E12F87D0DD005CC1D3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = CoveWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 9;
+				DEVELOPMENT_TEAM = YRQMPX5YW2;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CoveWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = CoveWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nikolajjsj.cove.CoveWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Debug;
+		};
+		B51551E22F87D0DD005CC1D3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = CoveWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 9;
+				DEVELOPMENT_TEAM = YRQMPX5YW2;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CoveWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = CoveWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nikolajjsj.cove.CoveWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Release;
+		};
 		B53D7BA82F823DC40023368C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -406,6 +625,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		B51551E02F87D0DD005CC1D3 /* Build configuration list for PBXNativeTarget "CoveWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B51551E12F87D0DD005CC1D3 /* Debug */,
+				B51551E22F87D0DD005CC1D3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		B53D7B9A2F823DC20023368C /* Build configuration list for PBXProject "Cove" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -445,6 +673,21 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		B51553F02F87EE3C005CC1D3 /* AppGroup */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0000004AAAAAAAAAAAA0001 /* XCLocalSwiftPackageReference "Packages/CoveKit" */;
+			productName = AppGroup;
+		};
+		B51553F22F87EE43005CC1D3 /* AppGroup */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0000004AAAAAAAAAAAA0001 /* XCLocalSwiftPackageReference "Packages/CoveKit" */;
+			productName = AppGroup;
+		};
+		B51553F42F87EE7C005CC1D3 /* JellyfinAPI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0000004AAAAAAAAAAAA0001 /* XCLocalSwiftPackageReference "Packages/CoveKit" */;
+			productName = JellyfinAPI;
+		};
 		B5FDE3BE2F83808F00F54FAA /* Defaults */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B5FDE3BD2F83808F00F54FAA /* XCRemoteSwiftPackageReference "Defaults" */;

@@ -5,7 +5,7 @@
 Cove is a native Swift media client for Jellyfin servers, targeting iOS, iPadOS, and macOS. It provides a premium music player and video experience with first-class offline support. The architecture is server-agnostic — designed so additional media server backends (Plex, Navidrome, SMB, etc.) can be added in the future without touching the UI or playback layers.
 
 **Working name:** Cove (placeholder)
-**Bundle ID:** `com.nikolajjsj.jellyfin` (development)
+**Bundle ID:** `com.nikolajjsj.cove` (development)
 
 ---
 
@@ -664,13 +664,13 @@ Apple's unified logging via `os.Logger`, one logger per module:
 
 ```swift
 // In JellyfinAPI module
-let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "JellyfinAPI")
+let logger = Logger(subsystem: "com.nikolajjsj.cove", category: "JellyfinAPI")
 
 // In PlaybackEngine module
-let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "PlaybackEngine")
+let logger = Logger(subsystem: "com.nikolajjsj.cove", category: "PlaybackEngine")
 
 // In DownloadManager module
-let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "DownloadManager")
+let logger = Logger(subsystem: "com.nikolajjsj.cove", category: "DownloadManager")
 ```
 
 Categories: `JellyfinAPI`, `JellyfinProvider`, `PlaybackEngine`, `DownloadManager`, `Persistence`, `Networking`, `ImageService`, `UI`

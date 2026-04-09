@@ -1,4 +1,5 @@
 import Foundation
+import Models
 import Network
 import os
 
@@ -24,7 +25,8 @@ public final class NetworkMonitor: @unchecked Sendable {
 
     // MARK: - Private State
 
-    private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "NetworkMonitor")
+    private let logger = Logger(
+        subsystem: AppConstants.bundleIdentifier, category: "NetworkMonitor")
 
     /// Lock protecting all mutable ivars.
     private let lock = NSLock()
@@ -34,7 +36,7 @@ public final class NetworkMonitor: @unchecked Sendable {
 
     /// Dedicated queue for NWPathMonitor callbacks.
     private let monitorQueue = DispatchQueue(
-        label: "com.nikolajjsj.jellyfin.NetworkMonitor",
+        label: "\(AppConstants.bundleIdentifier).NetworkMonitor",
         qos: .utility
     )
 

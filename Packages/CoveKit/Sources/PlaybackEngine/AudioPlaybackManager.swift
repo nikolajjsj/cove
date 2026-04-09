@@ -35,7 +35,7 @@ public final class AudioPlaybackManager {
 
     private let playerBackend: any AudioPlayerBackend
     private let nowPlaying: any NowPlayingProvider
-    private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "AudioPlayback")
+    private let logger = Logger(subsystem: AppConstants.bundleIdentifier, category: "AudioPlayback")
 
     /// Maps backend item tokens to their corresponding Track for identification.
     @ObservationIgnored private var tokenToTrack: [AnyHashable: Track] = [:]

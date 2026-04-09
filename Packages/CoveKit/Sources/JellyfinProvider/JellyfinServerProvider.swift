@@ -1,3 +1,4 @@
+import AppGroup
 import Foundation
 import JellyfinAPI
 import MediaServerKit
@@ -11,11 +12,14 @@ public final class JellyfinServerProvider: MediaServerProvider,
     MusicProvider, VideoProvider, TranscodingProvider,
     PlaybackReportingProvider, DownloadableProvider
 {
-    private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "JellyfinProvider")
+    private let logger = Logger(
+        subsystem: AppConstants.bundleIdentifier, category: "JellyfinProvider")
     private let keychain: KeychainService
     private let state: ProviderState
 
-    public init(keychain: KeychainService = KeychainService()) {
+    public init(
+        keychain: KeychainService = KeychainService(accessGroup: AppGroupConstants.identifier)
+    ) {
         self.keychain = keychain
         self.state = ProviderState()
     }
@@ -534,6 +538,35 @@ public final class JellyfinServerProvider: MediaServerProvider,
         let (client, userId) = try authenticatedClient()
         let result = try await client.getResumeItems(
             userId: userId, mediaTypes: ["Video"], limit: 12)
+        return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+    }
+
+    // MARK: - Recommendations
+
+    /// Fetch the most-played content across all users on the server.
+    public func popularItems(limit: Int = 20) async throws -> [MediaItem] {
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getItems(
+            userId: userId,
+            includeItemTypes: ["Movie", "Series"],
+            sortBy: "PlayCount",
+            sortOrder: "Descending",
+            limit: limit
+        )
+        return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+    }
+
+    /// Fetch recently added content across all libraries.
+    /// Episodes are collapsed into their parent series to avoid duplicates.
+    public func recentlyAdded(limit: Int = 20) async throws -> [MediaItem] {
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getItems(
+            userId: userId,
+            includeItemTypes: ["Movie", "Series"],
+            sortBy: "DateCreated",
+            sortOrder: "Descending",
+            limit: limit
+        )
         return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
     }
 

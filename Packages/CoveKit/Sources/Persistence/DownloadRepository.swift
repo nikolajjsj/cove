@@ -10,7 +10,7 @@ import os
 /// All methods are async and safe to call from any concurrency context.
 public final class DownloadRepository: Sendable {
     private let dbWriter: any DatabaseWriter
-    private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "Persistence")
+    private let logger = Logger(subsystem: AppConstants.bundleIdentifier, category: "Persistence")
 
     public init(database: DatabaseManager) {
         self.dbWriter = database.dbWriter

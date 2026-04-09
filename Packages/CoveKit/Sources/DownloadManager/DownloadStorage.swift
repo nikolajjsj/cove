@@ -16,7 +16,8 @@ public struct DownloadStorage: Sendable {
 
     public static let shared = DownloadStorage()
 
-    private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "DownloadStorage")
+    private let logger = Logger(
+        subsystem: AppConstants.bundleIdentifier, category: "DownloadStorage")
 
     // MARK: - Base Directory
 

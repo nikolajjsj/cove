@@ -9,7 +9,7 @@ public final class DatabaseManager: Sendable {
     /// `DatabasePool` for file-backed databases, `DatabaseQueue` for in-memory (testing).
     public let dbWriter: any DatabaseWriter
 
-    private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "Persistence")
+    private let logger = Logger(subsystem: AppConstants.bundleIdentifier, category: "Persistence")
 
     /// Initialize with a database at the given path.
     /// Creates the database file and parent directories if needed, then runs all migrations.
@@ -195,7 +195,7 @@ public final class DatabaseManager: Sendable {
             for: .applicationSupportDirectory, in: .userDomainMask
         ).first!
         let dbDirectory = appSupport.appendingPathComponent(
-            "com.nikolajjsj.jellyfin", isDirectory: true)
+            AppConstants.bundleIdentifier, isDirectory: true)
         return dbDirectory.appendingPathComponent("cove.db").path
     }
 }

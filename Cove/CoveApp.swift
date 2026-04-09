@@ -1,6 +1,8 @@
 import Defaults
 import DownloadManager
 import ImageService
+import JellyfinProvider
+import Models
 import Persistence
 import SwiftUI
 import UserNotifications
@@ -93,6 +95,47 @@ struct CoveApp: App {
                 .task {
                     await requestNotificationPermissions()
                 }
+                .onOpenURL { url in
+                    handleDeepLink(url)
+                }
+        }
+    }
+
+    /// Handles deep links from widgets and other sources.
+    ///
+    /// Supported URL schemes:
+    /// - `cove://item/{itemId}` — navigates to the item's detail view.
+    /// - `cove://play/{itemId}` — resolves the item and starts playback immediately.
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme == "cove",
+            let host = url.host,
+            let itemIdString = url.pathComponents.dropFirst().first
+        else { return }
+
+        let itemId = ItemID(itemIdString)
+
+        Task {
+            guard authManager.isAuthenticated else { return }
+            do {
+                let item = try await authManager.provider.item(id: itemId)
+                switch host {
+                case "play":
+                    appState.videoPlayerCoordinator.play(
+                        item: item,
+                        using: authManager.provider
+                    )
+                case "item":
+                    appState.selectedTab = .home
+                    appState.navigationPaths[.home, default: NavigationPath()].append(item)
+                default:
+                    break
+                }
+            } catch {
+                appState.showToast(
+                    "Couldn't open item",
+                    icon: "exclamationmark.triangle"
+                )
+            }
         }
     }
 

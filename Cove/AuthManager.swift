@@ -1,3 +1,5 @@
+import AppGroup
+import Defaults
 import Foundation
 import JellyfinProvider
 import MediaServerKit
@@ -37,6 +39,7 @@ final class AuthManager {
                 if provider.restore(connection: last) {
                     activeConnection = last
                     isAuthenticated = true
+                    syncConnectionToSharedDefaults()
                     return true
                 }
             }
@@ -59,6 +62,7 @@ final class AuthManager {
 
         activeConnection = connection
         isAuthenticated = true
+        syncConnectionToSharedDefaults()
     }
 
     /// Disconnect from the current server and clear auth state.
@@ -69,5 +73,34 @@ final class AuthManager {
         await provider.disconnect()
         activeConnection = nil
         isAuthenticated = false
+        clearSharedDefaults()
+    }
+
+    // MARK: - Shared Defaults Sync
+
+    /// Writes the active server connection info to the shared App Group
+    /// `Defaults` suite so widget extensions can discover the server.
+    ///
+    /// Uses the keys defined in `AppGroup` so both the app and
+    /// widget read/write the exact same `Defaults.Keys`.
+    ///
+    /// The auth token itself is stored in the shared Keychain (via the
+    /// provider's `KeychainService` which uses the App Group access group),
+    /// so it is never written to `UserDefaults`.
+    private func syncConnectionToSharedDefaults() {
+        guard let connection = activeConnection else { return }
+
+        Defaults[.activeServerURL] = connection.url.absoluteString
+        Defaults[.activeUserId] = connection.userId
+        Defaults[.activeServerName] = connection.name
+        Defaults[.activeServerID] = connection.id.uuidString
+    }
+
+    /// Clears widget-shared connection info from the App Group `Defaults` suite.
+    private func clearSharedDefaults() {
+        Defaults[.activeServerURL] = nil
+        Defaults[.activeUserId] = nil
+        Defaults[.activeServerName] = nil
+        Defaults[.activeServerID] = nil
     }
 }

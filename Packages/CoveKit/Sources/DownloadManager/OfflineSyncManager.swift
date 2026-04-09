@@ -17,7 +17,7 @@ public final class OfflineSyncManager: Sendable {
 
     private let reportRepository: OfflinePlaybackReportRepository
     private let logger = Logger(
-        subsystem: "com.nikolajjsj.jellyfin", category: "OfflineSyncManager")
+        subsystem: AppConstants.bundleIdentifier, category: "OfflineSyncManager")
 
     /// How long synced reports are kept before `cleanup()` deletes them.
     private let retentionInterval: TimeInterval = 7 * 24 * 60 * 60  // 7 days

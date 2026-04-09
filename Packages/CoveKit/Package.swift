@@ -19,10 +19,12 @@ let package = Package(
         .library(name: "Networking", targets: ["Networking"]),
         .library(name: "ImageService", targets: ["ImageService"]),
         .library(name: "CoveUI", targets: ["CoveUI"]),
+        .library(name: "AppGroup", targets: ["AppGroup"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
         .package(url: "https://github.com/kean/Nuke", from: "12.0.0"),
+        .package(url: "https://github.com/sindresorhus/Defaults", from: "9.0.0"),
     ],
     targets: [
         // MARK: - Source Targets
@@ -47,7 +49,7 @@ let package = Package(
         ),
         .target(
             name: "JellyfinProvider",
-            dependencies: ["JellyfinAPI", "MediaServerKit", "Networking"],
+            dependencies: ["AppGroup", "JellyfinAPI", "MediaServerKit", "Networking"],
             path: "Sources/JellyfinProvider"
         ),
         .target(
@@ -72,6 +74,14 @@ let package = Package(
             name: "Networking",
             dependencies: ["Models"],
             path: "Sources/Networking"
+        ),
+        .target(
+            name: "AppGroup",
+            dependencies: [
+                "Networking",
+                .product(name: "Defaults", package: "Defaults"),
+            ],
+            path: "Sources/AppGroup"
         ),
         .target(
             name: "ImageService",

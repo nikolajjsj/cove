@@ -107,7 +107,7 @@ public final class VideoPlaybackManager {
         @ObservationIgnored private nonisolated(unsafe) var pipDelegate: PiPDelegate?
     #endif
 
-    private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "VideoPlayback")
+    private let logger = Logger(subsystem: AppConstants.bundleIdentifier, category: "VideoPlayback")
 
     /// The available playback speed options.
     public static let speedOptions: [Float] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]

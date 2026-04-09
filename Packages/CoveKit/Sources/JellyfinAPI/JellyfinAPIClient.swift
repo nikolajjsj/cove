@@ -8,7 +8,7 @@ import os
 public final class JellyfinAPIClient: Sendable {
     public let httpClient: HTTPClient
     public let baseURL: URL
-    private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "JellyfinAPI")
+    private let logger = Logger(subsystem: AppConstants.bundleIdentifier, category: "JellyfinAPI")
 
     /// Encoder that preserves PascalCase CodingKeys exactly as written.
     /// The shared HTTPClient encoder uses `.convertToSnakeCase`, which mangles
@@ -112,7 +112,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Library/VirtualFolders")
         logger.debug("Fetching virtual folders")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders)
+            url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Fetch the media views (libraries) accessible to the given user.
@@ -122,7 +122,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Users/\(userId)/Views")
         logger.debug("Fetching user views for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders)
+            url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     // MARK: - Items
@@ -188,7 +188,8 @@ public final class JellyfinAPIClient: Sendable {
         logger.debug(
             "Fetching \(includeItemTypes?.joined(separator: ", ") ?? "items") for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Get a single item's full details.
@@ -203,7 +204,8 @@ public final class JellyfinAPIClient: Sendable {
         let queryItems = [URLQueryItem(name: "Fields", value: fields.joined(separator: ","))]
         logger.debug("Fetching item \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     // MARK: - Image URLs
@@ -274,7 +276,8 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching album artists for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// List all artists.
@@ -305,7 +308,8 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching artists for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     // MARK: - Audio Streaming
@@ -353,7 +357,9 @@ public final class JellyfinAPIClient: Sendable {
         let body = PlaybackStartInfo(
             itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId)
         logger.debug("Reporting playback start for item \(itemId)")
-        try await httpClient.request(url: url, method: .post, headers: authHeaders, body: body)
+        try await httpClient.request(
+            url: url, method: .post, headers: authHeaders, body: body,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Report playback progress.
@@ -369,7 +375,9 @@ public final class JellyfinAPIClient: Sendable {
             itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId,
             isPaused: isPaused)
         logger.debug("Reporting playback progress for item \(itemId)")
-        try await httpClient.request(url: url, method: .post, headers: authHeaders, body: body)
+        try await httpClient.request(
+            url: url, method: .post, headers: authHeaders, body: body,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Report playback stopped.
@@ -383,7 +391,9 @@ public final class JellyfinAPIClient: Sendable {
         let body = PlaybackStopInfo(
             itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId)
         logger.debug("Reporting playback stopped for item \(itemId)")
-        try await httpClient.request(url: url, method: .post, headers: authHeaders, body: body)
+        try await httpClient.request(
+            url: url, method: .post, headers: authHeaders, body: body,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     // MARK: - Video Playback Info
@@ -546,7 +556,8 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching similar items for \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     // MARK: - Suggestions
@@ -594,7 +605,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Users/\(userId)/Items/\(itemId)/SpecialFeatures")
         logger.debug("Fetching special features for \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders)
+            url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     // MARK: - Local Trailers
@@ -608,7 +619,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Users/\(userId)/Items/\(itemId)/LocalTrailers")
         logger.debug("Fetching local trailers for \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders)
+            url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     // MARK: - Shows (TV Series)
@@ -623,7 +634,8 @@ public final class JellyfinAPIClient: Sendable {
         ]
         logger.debug("Fetching seasons for series \(seriesId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Get episodes for a series, optionally filtered by season.
@@ -650,7 +662,8 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching episodes for series \(seriesId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Get "next up" episodes to watch.
@@ -669,7 +682,8 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching next up episodes")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Get items to resume (continue watching).
@@ -688,7 +702,8 @@ public final class JellyfinAPIClient: Sendable {
         }
         logger.debug("Fetching resume items for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     // MARK: - Music Features
@@ -699,7 +714,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Audio/\(itemId)/Lyrics")
         logger.debug("Fetching lyrics for item \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders)
+            url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Mark an item as a favorite.
@@ -707,7 +722,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Users/\(userId)/FavoriteItems/\(itemId)")
         logger.debug("Adding favorite for item \(itemId)")
         try await httpClient.request(
-            url: url, method: .post, headers: authHeaders)
+            url: url, method: .post, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Remove an item from favorites.
@@ -715,7 +730,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Users/\(userId)/FavoriteItems/\(itemId)")
         logger.debug("Removing favorite for item \(itemId)")
         try await httpClient.request(
-            url: url, method: .delete, headers: authHeaders)
+            url: url, method: .delete, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     // MARK: - Played Status
@@ -725,7 +740,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Users/\(userId)/PlayedItems/\(itemId)")
         logger.debug("Marking item \(itemId) as played")
         try await httpClient.request(
-            url: url, method: .post, headers: authHeaders)
+            url: url, method: .post, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Mark an item as unplayed.
@@ -733,7 +748,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Users/\(userId)/PlayedItems/\(itemId)")
         logger.debug("Marking item \(itemId) as unplayed")
         try await httpClient.request(
-            url: url, method: .delete, headers: authHeaders)
+            url: url, method: .delete, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Fetch an instant mix (radio) seeded from an item.
@@ -752,7 +767,7 @@ public final class JellyfinAPIClient: Sendable {
         logger.debug("Fetching instant mix for item \(itemId)")
         return try await httpClient.request(
             url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .networkOnly)
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     // MARK: - Playlist CRUD
@@ -787,7 +802,8 @@ public final class JellyfinAPIClient: Sendable {
         ]
         logger.debug("Adding \(trackIds.count) tracks to playlist \(playlistId)")
         try await httpClient.request(
-            url: url, method: .post, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .post, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Remove tracks from a playlist by their entry IDs.
@@ -801,7 +817,8 @@ public final class JellyfinAPIClient: Sendable {
         ]
         logger.debug("Removing \(entryIds.count) entries from playlist \(playlistId)")
         try await httpClient.request(
-            url: url, method: .delete, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .delete, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Get items in a playlist.
@@ -817,7 +834,8 @@ public final class JellyfinAPIClient: Sendable {
         ]
         logger.debug("Fetching items for playlist \(playlistId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Update an item (e.g., rename a playlist).
@@ -826,7 +844,8 @@ public final class JellyfinAPIClient: Sendable {
         let body = UpdateItemRequest(name: name)
         logger.debug("Updating item \(itemId) name to '\(name)'")
         try await httpClient.request(
-            url: url, method: .post, headers: authHeaders, body: body)
+            url: url, method: .post, headers: authHeaders, body: body,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Delete an item (e.g., delete a playlist).
@@ -834,7 +853,7 @@ public final class JellyfinAPIClient: Sendable {
         let url = baseURL.appendingPathComponent("Items/\(itemId)")
         logger.debug("Deleting item \(itemId)")
         try await httpClient.request(
-            url: url, method: .delete, headers: authHeaders)
+            url: url, method: .delete, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     // MARK: - Media Segments
@@ -852,7 +871,8 @@ public final class JellyfinAPIClient: Sendable {
         ]
         logger.debug("Fetching media segments for item \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems)
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Fetch intro/outro segments from the Intro Skipper plugin.
@@ -866,7 +886,8 @@ public final class JellyfinAPIClient: Sendable {
 
         // Fetch raw data first so we can log it for diagnostics
         let data: Data = try await httpClient.requestData(
-            url: url, method: .get, headers: authHeaders, queryItems: [])
+            url: url, method: .get, headers: authHeaders, queryItems: [],
+            cachePolicy: .cacheFirst(maxAge: 30))
         if let jsonString = String(data: data, encoding: .utf8) {
             logger.info("IntroSkipperSegments raw JSON for \(itemId): \(jsonString)")
         }
@@ -884,7 +905,8 @@ public final class JellyfinAPIClient: Sendable {
         logger.debug("Fetching Intro Timestamps for item \(itemId)")
 
         let data: Data = try await httpClient.requestData(
-            url: url, method: .get, headers: authHeaders, queryItems: [])
+            url: url, method: .get, headers: authHeaders, queryItems: [],
+            cachePolicy: .cacheFirst(maxAge: 30))
         if let jsonString = String(data: data, encoding: .utf8) {
             logger.info("IntroTimestamps raw JSON for \(itemId): \(jsonString)")
         }

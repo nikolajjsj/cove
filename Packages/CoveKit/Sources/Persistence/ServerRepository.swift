@@ -6,7 +6,7 @@ import os
 /// Repository for persisting and querying server connections.
 public final class ServerRepository: Sendable {
     private let dbWriter: any DatabaseWriter
-    private let logger = Logger(subsystem: "com.nikolajjsj.jellyfin", category: "Persistence")
+    private let logger = Logger(subsystem: AppConstants.bundleIdentifier, category: "Persistence")
 
     public init(database: DatabaseManager) {
         self.dbWriter = database.dbWriter
