@@ -16,10 +16,11 @@ Cove is a native Swift media client for Jellyfin servers, targeting iOS, iPadOS,
 | iOS | v1 | Primary target |
 | iPadOS | v1 | Adaptive sidebar layout |
 | macOS | v1 | Catalyst-free, native SwiftUI |
-| tvOS | Architecture-ready, UI deferred | Shared core modules, platform-specific UI later |
+| tvOS | Core-ready, UI in progress | CoveKit compiles for tvOS; app shell has `TVTabShell`; video player UI deferred |
 | visionOS | Deferred | Dropped for now, easy to add later |
+| watchOS | Deferred | CoveKit platform-agnostic modules ready; UI deferred |
 
-**Minimum deployment target:** iOS 26.4 / macOS 26.4 (latest only)
+**Minimum deployment target:** iOS 26.4 / macOS 26.4 / tvOS 18.0 (latest only)
 
 ---
 
