@@ -165,6 +165,16 @@ struct SettingsView: View {
                 .pickerStyle(.menu)
             }
 
+            // MARK: - Subtitles
+
+            Section("Subtitles") {
+                NavigationLink {
+                    SubtitleSettingsView()
+                } label: {
+                    Label("Subtitle Appearance", systemImage: "captions.bubble")
+                }
+            }
+
             // MARK: - About
 
             Section("About") {

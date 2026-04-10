@@ -34,6 +34,17 @@ extension Defaults.Keys {
     /// The accent color name. Values: "default", "indigo", "purple", "pink", "red", "orange", "teal", "green".
     static let accentColor = Key<String>("accentColor", default: "default")
 
+    // MARK: - Subtitle Appearance
+
+    /// The size of subtitle text during video playback.
+    static let subtitleSize = Key<SubtitleSize>("subtitleSize", default: .medium)
+
+    /// The color of subtitle text during video playback.
+    static let subtitleColor = Key<SubtitleColor>("subtitleColor", default: .white)
+
+    /// The background style applied to subtitle text during video playback.
+    static let subtitleBackground = Key<SubtitleBackground>("subtitleBackground", default: .outline)
+
     // MARK: - Home Screen
 
     /// Ordered list of home screen sections with visibility toggles.
