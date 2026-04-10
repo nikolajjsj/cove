@@ -214,6 +214,23 @@ public final class JellyfinServerProvider: MediaServerProvider,
         return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
     }
 
+    /// Fetch genres available in a library.
+    public func genres(in library: MediaLibrary) async throws -> [MediaItem] {
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getGenres(
+            userId: userId,
+            parentId: library.id.rawValue
+        )
+        return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+    }
+
+    /// Fetch all genres across all libraries.
+    public func allGenres() async throws -> [MediaItem] {
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getGenres(userId: userId)
+        return (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+    }
+
     public func imageURL(for item: MediaItem, type: ImageType, maxSize: CGSize?) -> URL? {
         guard let client = state.client else { return nil }
 

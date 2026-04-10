@@ -312,6 +312,30 @@ public final class JellyfinAPIClient: Sendable {
             cachePolicy: .cacheFirst(maxAge: 30))
     }
 
+    /// Fetch genres for a library.
+    /// `GET /Genres`
+    public func getGenres(
+        userId: String,
+        parentId: String? = nil,
+        sortBy: String? = "SortName",
+        sortOrder: String? = "Ascending",
+        searchTerm: String? = nil
+    ) async throws -> ItemsResult {
+        let url = baseURL.appending(path: "Genres")
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "UserId", value: userId),
+            URLQueryItem(name: "Fields", value: "Overview,DateCreated"),
+        ]
+        if let parentId { queryItems.append(URLQueryItem(name: "ParentId", value: parentId)) }
+        if let sortBy { queryItems.append(URLQueryItem(name: "SortBy", value: sortBy)) }
+        if let sortOrder { queryItems.append(URLQueryItem(name: "SortOrder", value: sortOrder)) }
+        if let searchTerm { queryItems.append(URLQueryItem(name: "SearchTerm", value: searchTerm)) }
+        logger.debug("Fetching genres")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 60))
+    }
+
     // MARK: - Audio Streaming
 
     /// Build a universal audio stream URL for a track. This is synchronous — no network call.
