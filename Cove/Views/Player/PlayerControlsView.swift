@@ -121,6 +121,7 @@ struct PlayerControlsView: View {
                     .font(.title3)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
+                    .labelStyle(.iconOnly)
             }
             .buttonStyle(.plain)
         }
