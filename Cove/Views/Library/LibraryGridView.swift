@@ -20,6 +20,8 @@ struct LibraryGridView: View {
     @State private var sortField: SortField = .name
     @State private var sortOrder: Models.SortOrder = .ascending
     @State private var watchedFilter: WatchedFilter = .all
+    @State private var selectedGenres: Set<String> = []
+    @State private var availableGenres: [String] = []
 
     /// Number of items to fetch per page.
     private let pageSize = 40
@@ -88,18 +90,17 @@ struct LibraryGridView: View {
         .searchable(text: $searchText, prompt: "Search this library…")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                if isVideoLibrary {
-                    NavigationLink {
-                        VideoGenreListView(library: library)
-                    } label: {
-                        Label("Genres", systemImage: "tag")
-                    }
-                }
                 sortMenu
             }
         }
         .task(id: library?.id) {
             await loadFirstPage()
+        }
+        .task(id: library?.id) {
+            availableGenres = []
+            selectedGenres = []
+            guard isVideoLibrary, let library else { return }
+            await loadGenres(for: library)
         }
         .task(id: searchText) {
             await performLibrarySearch()
@@ -111,6 +112,9 @@ struct LibraryGridView: View {
             reloadAfterFilterChange()
         }
         .onChange(of: watchedFilter) { _, _ in
+            reloadAfterFilterChange()
+        }
+        .onChange(of: selectedGenres) { _, _ in
             reloadAfterFilterChange()
         }
     }
@@ -161,11 +165,54 @@ struct LibraryGridView: View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 watchedChip
+                if isVideoLibrary && !availableGenres.isEmpty {
+                    genreChip
+                }
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
         }
         .scrollIndicators(.hidden)
+    }
+
+    private var genreChip: some View {
+        Menu {
+            if !selectedGenres.isEmpty {
+                Button("Clear") {
+                    selectedGenres.removeAll()
+                }
+                Divider()
+            }
+            ForEach(availableGenres, id: \.self) { genre in
+                Button {
+                    if selectedGenres.contains(genre) {
+                        selectedGenres.remove(genre)
+                    } else {
+                        selectedGenres.insert(genre)
+                    }
+                } label: {
+                    if selectedGenres.contains(genre) {
+                        Label(genre, systemImage: "checkmark")
+                    } else {
+                        Text(genre)
+                    }
+                }
+            }
+        } label: {
+            Label(genreChipLabel, systemImage: "tag")
+                .font(.subheadline)
+        }
+        .buttonStyle(.bordered)
+        .tint(!selectedGenres.isEmpty ? .accentColor : .secondary)
+        .buttonBorderShape(.capsule)
+    }
+
+    private var genreChipLabel: String {
+        switch selectedGenres.count {
+        case 0: "Genre"
+        case 1: selectedGenres.first ?? "Genre"
+        default: "\(selectedGenres.count) Genres"
+        }
     }
 
     private var watchedChip: some View {
@@ -333,9 +380,11 @@ struct LibraryGridView: View {
         let provider = authManager.provider
         let sort = sortOptions
         let played = isPlayedFilter
+        let genres = selectedGenres.isEmpty ? nil : Array(selectedGenres)
 
         await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
-            let filter = await FilterOptions(
+            let filter = FilterOptions(
+                genres: genres,
                 isPlayed: played,
                 limit: limit,
                 startIndex: startIndex,
@@ -345,6 +394,15 @@ struct LibraryGridView: View {
                 in: library, sort: sort, filter: filter
             )
             return .init(items: result.items, totalCount: result.totalCount)
+        }
+    }
+
+    private func loadGenres(for library: MediaLibrary) async {
+        do {
+            let items = try await authManager.provider.genres(in: library)
+            availableGenres = items.map(\.title)
+        } catch {
+            availableGenres = []
         }
     }
 
@@ -367,6 +425,7 @@ struct LibraryGridView: View {
 
         let sort = sortOptions
         let filter = FilterOptions(
+            genres: selectedGenres.isEmpty ? nil : Array(selectedGenres),
             isPlayed: isPlayedFilter,
             limit: pageSize,
             startIndex: 0,
