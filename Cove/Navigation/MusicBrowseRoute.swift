@@ -8,4 +8,5 @@ import Models
 enum MusicBrowseRoute: Hashable {
     case allArtists(libraryId: ItemID)
     case allAlbums(libraryId: ItemID)
+    case allPlaylists
 }

@@ -76,6 +76,12 @@ enum NavigationRouter {
                 #if os(iOS)
                     .navigationBarTitleDisplayMode(.large)
                 #endif
+        case .allPlaylists:
+            PlaylistListView()
+                .navigationTitle("Playlists")
+                #if os(iOS)
+                    .navigationBarTitleDisplayMode(.large)
+                #endif
         }
     }
 }

@@ -36,6 +36,10 @@ struct MusicLibraryView: View {
 
                     ArtistsShelfSection(library: library)
 
+                    // MARK: - Playlists
+
+                    PlaylistsShelfSection()
+
                     // MARK: - Albums
 
                     AlbumsGridSection(library: library)
@@ -211,6 +215,76 @@ private struct ArtistsShelfSection: View {
     private func imageURL(for item: MediaItem) -> URL? {
         authManager.provider.imageURL(
             for: item,
+            type: .primary,
+            maxSize: CGSize(width: 240, height: 240)
+        )
+    }
+}
+
+// MARK: - Playlists Shelf Section
+
+/// Loads the user's playlists and displays them in a horizontal shelf.
+/// A "See All" link navigates to the full playlist list via `MusicBrowseRoute`.
+private struct PlaylistsShelfSection: View {
+    @Environment(AuthManager.self) private var authManager
+    @State private var loader = CollectionLoader<Playlist>()
+
+    private let limit = 20
+
+    var body: some View {
+        if loader.isLoading || !loader.items.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Playlists")
+                        .font(.title2)
+                        .bold()
+
+                    Spacer()
+
+                    NavigationLink(value: MusicBrowseRoute.allPlaylists) {
+                        Text("See All")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                }
+                .padding(.horizontal)
+
+                if loader.isLoading {
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 12) {
+                            ForEach(0..<5, id: \.self) { _ in
+                                SkeletonCard.albumShelf()
+                                    .frame(width: 140)
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    .scrollIndicators(.hidden)
+                } else {
+                    ScrollView(.horizontal) {
+                        LazyHStack(spacing: 12) {
+                            ForEach(loader.items) { playlist in
+                                PlaylistCard(playlist: playlist, imageURL: imageURL(for: playlist))
+                                    .frame(width: 140)
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    .scrollIndicators(.hidden)
+                }
+            }
+            .task {
+                await loader.load {
+                    let all = try await authManager.provider.playlists()
+                    return Array(all.prefix(limit))
+                }
+            }
+        }
+    }
+
+    private func imageURL(for playlist: Playlist) -> URL? {
+        authManager.provider.imageURL(
+            for: playlist.id,
             type: .primary,
             maxSize: CGSize(width: 240, height: 240)
         )
