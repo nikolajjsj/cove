@@ -284,6 +284,31 @@ public final class JellyfinServerProvider: MediaServerProvider,
         return SearchResults(items: items)
     }
 
+    /// Search the library with optional filter criteria applied server-side.
+    ///
+    /// Unlike ``search(query:mediaTypes:)``, this method forwards `isFavorite`,
+    /// `isPlayed`, `years`, and `minCommunityRating` to the server so filtering
+    /// happens before items are returned rather than client-side.
+    public func filteredSearch(
+        query: String,
+        isFavorite: Bool?,
+        isPlayed: Bool?,
+        years: [Int]?,
+        minCommunityRating: Double?
+    ) async throws -> SearchResults {
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getItems(
+            userId: userId,
+            searchTerm: query,
+            isFavorite: isFavorite,
+            isPlayed: isPlayed,
+            years: years,
+            minCommunityRating: minCommunityRating
+        )
+        let items = (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
+        return SearchResults(items: items)
+    }
+
     public func searchPaged(
         query: String, includeItemTypes: [String]?, limit: Int?, startIndex: Int?
     ) async throws -> PagedResult<MediaItem> {

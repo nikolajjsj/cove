@@ -4,48 +4,6 @@ import MediaServerKit
 import Models
 import SwiftUI
 
-// MARK: - Filter Enums (file-level so LibraryFilterSheet can access them)
-
-private enum WatchedFilter: String, Hashable, CaseIterable {
-    case all
-    case unwatched
-    case watched
-
-    var label: String {
-        switch self {
-        case .all: "All"
-        case .unwatched: "Unwatched"
-        case .watched: "Watched"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .all: "line.3.horizontal.decrease.circle"
-        case .unwatched: "eye.slash"
-        case .watched: "eye"
-        }
-    }
-}
-
-private enum Decade: String, CaseIterable, Equatable {
-    case twenties = "2020s"
-    case tens = "2010s"
-    case noughties = "2000s"
-    case nineties = "1990s"
-    case eighties = "1980s"
-
-    var years: [Int] {
-        switch self {
-        case .twenties: return Array(2020...2029)
-        case .tens: return Array(2010...2019)
-        case .noughties: return Array(2000...2009)
-        case .nineties: return Array(1990...1999)
-        case .eighties: return Array(1980...1989)
-        }
-    }
-}
-
 // MARK: - Library Grid
 
 struct LibraryGridView: View {
@@ -588,49 +546,6 @@ private struct FilterChipBar: View {
     }
 }
 
-// MARK: - Individual Chips
-
-private struct WatchedFilterChip: View {
-    @Binding var selection: WatchedFilter
-
-    var body: some View {
-        Menu {
-            Picker("Status", selection: $selection) {
-                ForEach(WatchedFilter.allCases, id: \.self) { filter in
-                    Label(filter.label, systemImage: filter.systemImage).tag(filter)
-                }
-            }
-        } label: {
-            Label(
-                selection == .all ? "Watched" : selection.label,
-                systemImage: selection.systemImage
-            )
-            .font(.subheadline)
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.bordered)
-        .tint(selection != .all ? .accentColor : .secondary)
-        .buttonBorderShape(.capsule)
-    }
-}
-
-private struct FavoriteChip: View {
-    @Binding var isOn: Bool
-
-    var body: some View {
-        Button {
-            isOn.toggle()
-        } label: {
-            Label("Favorites", systemImage: isOn ? "heart.fill" : "heart")
-                .font(.subheadline)
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.bordered)
-        .tint(isOn ? .pink : .secondary)
-        .buttonBorderShape(.capsule)
-    }
-}
-
 private struct GenreChip: View {
     @Binding var selectedGenres: Set<String>
     let availableGenres: [String]
@@ -675,55 +590,6 @@ private struct GenreChip: View {
         }
         .buttonStyle(.bordered)
         .tint(!selectedGenres.isEmpty ? .accentColor : .secondary)
-        .buttonBorderShape(.capsule)
-    }
-}
-
-private struct DecadeChip: View {
-    @Binding var selection: Decade?
-
-    var body: some View {
-        Menu {
-            Picker("Year", selection: $selection) {
-                Text("Any Year").tag(Decade?.none)
-                ForEach(Decade.allCases, id: \.self) { decade in
-                    Text(decade.rawValue).tag(Decade?.some(decade))
-                }
-            }
-        } label: {
-            Label(selection?.rawValue ?? "Year", systemImage: "calendar")
-                .font(.subheadline)
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.bordered)
-        .tint(selection != nil ? .accentColor : .secondary)
-        .buttonBorderShape(.capsule)
-    }
-}
-
-private struct RatingChip: View {
-    @Binding var minRating: Double?
-
-    private var label: String {
-        minRating.map { "\(Int($0))+ ★" } ?? "Rating"
-    }
-
-    var body: some View {
-        Menu {
-            Picker("Min Rating", selection: $minRating) {
-                Text("Any Rating").tag(Double?.none)
-                Text("6+ ★").tag(Double?.some(6))
-                Text("7+ ★").tag(Double?.some(7))
-                Text("8+ ★").tag(Double?.some(8))
-                Text("9+ ★").tag(Double?.some(9))
-            }
-        } label: {
-            Label(label, systemImage: minRating != nil ? "star.fill" : "star")
-                .font(.subheadline)
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.bordered)
-        .tint(minRating != nil ? .yellow : .secondary)
         .buttonBorderShape(.capsule)
     }
 }
