@@ -49,9 +49,7 @@ struct PlaylistDetailView: View {
             }
         }
         .navigationTitle(playlist.name)
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
         .task {
             await loadTracks()
         }

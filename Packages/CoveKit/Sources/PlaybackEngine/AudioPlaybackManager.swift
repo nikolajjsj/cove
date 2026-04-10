@@ -226,7 +226,7 @@ public final class AudioPlaybackManager {
     // MARK: - Audio Session
 
     private func setupAudioSession() {
-        #if os(iOS)
+        #if !os(macOS)
             do {
                 let session = AVAudioSession.sharedInstance()
                 try session.setCategory(.playback, mode: .default)
@@ -241,7 +241,7 @@ public final class AudioPlaybackManager {
     /// Observes `AVAudioSession.interruptionNotification` to pause on interruption
     /// begin (e.g. phone call) and resume when the interruption ends.
     private func setupInterruptionObserver() {
-        #if os(iOS)
+        #if !os(macOS)
             interruptionTask = Task { [weak self] in
                 let notifications = NotificationCenter.default.notifications(
                     named: AVAudioSession.interruptionNotification

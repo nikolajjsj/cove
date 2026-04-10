@@ -25,9 +25,7 @@ struct GenreDetailView: View {
             mainContent
         }
         .navigationTitle(genreItem.title)
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.large)
-        #endif
+        .largeNavigationTitle()
         .task(id: genreItem.id) { await loadFirstPage() }
     }
 

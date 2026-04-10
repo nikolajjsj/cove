@@ -37,9 +37,7 @@ struct ArtistDetailView: View {
             }
         }
         .navigationTitle(artistItem.title)
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
         .task {
             await loader.load {
                 try await authManager.provider.albums(artist: artistItem.id)

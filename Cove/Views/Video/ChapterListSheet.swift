@@ -1,6 +1,6 @@
+import JellyfinProvider
 import Models
 import SwiftUI
-import JellyfinProvider
 
 /// A sheet presenting the list of chapters for the current video.
 ///
@@ -31,7 +31,7 @@ struct ChapterListSheet: View {
             }
             .listStyle(.plain)
             .navigationTitle("Chapters")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }

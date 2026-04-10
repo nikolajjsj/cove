@@ -3,22 +3,32 @@ import Models
 import PlaybackEngine
 import SwiftUI
 
+/// The main app shell that adapts its navigation paradigm to the current platform.
+///
+/// - iPhone (compact): Bottom `TabView`
+/// - iPad / Mac (regular): `NavigationSplitView` with sidebar
+/// - tvOS: Top `TabView` with focus-driven navigation
 struct AppShellView: View {
     @Environment(AppState.self) private var appState
-    @Environment(AuthManager.self) private var authManager
-    @Environment(DownloadCoordinator.self) private var downloadCoordinator
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.platformCapabilities) private var capabilities
+
+    #if !os(tvOS)
+        @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
+
     @State private var showFullPlayer = false
 
     var body: some View {
-        @Bindable var appState = appState
-
         Group {
-            if sizeClass == .compact {
-                compactLayout
-            } else {
-                regularLayout
-            }
+            #if os(tvOS)
+                TVTabShell()
+            #else
+                if sizeClass == .compact {
+                    CompactTabShell(showFullPlayer: $showFullPlayer)
+                } else {
+                    SidebarShell(showFullPlayer: $showFullPlayer)
+                }
+            #endif
         }
         .overlay(alignment: .top) {
             if appState.isOffline {
@@ -28,18 +38,27 @@ struct AppShellView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: appState.isOffline)
-        .sheet(isPresented: $showFullPlayer) {
-            AudioPlayerView()
-        }
+        #if !os(tvOS)
+            .sheet(isPresented: $showFullPlayer) {
+                AudioPlayerView()
+            }
+        #endif
     }
+}
 
-    // MARK: - iPhone (compact) — TabView
+// MARK: - iPhone (compact) — Bottom Tab Bar
 
-    private var compactLayout: some View {
+/// The bottom tab bar layout used on iPhone.
+private struct CompactTabShell: View {
+    @Environment(AppState.self) private var appState
+    @Environment(DownloadCoordinator.self) private var downloadCoordinator
+    @Binding var showFullPlayer: Bool
+
+    var body: some View {
         @Bindable var appState = appState
 
-        return TabView(selection: $appState.selectedTab) {
-            ForEach(availableTabs, id: \.self) { tab in
+        TabView(selection: $appState.selectedTab) {
+            ForEach(AppTab.availableTabs(for: appState, layout: .compact), id: \.self) { tab in
                 Tab(tab.title, systemImage: tab.icon, value: tab) {
                     NavigationStack(path: navigationPathBinding(for: tab)) {
                         tab.destination(
@@ -58,14 +77,33 @@ struct AppShellView: View {
         }
     }
 
-    // MARK: - iPad / Mac (regular) — Sidebar
+    private func navigationPathBinding(for tab: AppTab) -> Binding<NavigationPath> {
+        @Bindable var appState = appState
+        return Binding(
+            get: { appState.navigationPaths[tab] ?? NavigationPath() },
+            set: { appState.navigationPaths[tab] = $0 }
+        )
+    }
+}
 
-    private var regularLayout: some View {
+// MARK: - iPad / Mac (regular) — Sidebar
+
+/// The sidebar layout used on iPad and Mac.
+private struct SidebarShell: View {
+    @Environment(AppState.self) private var appState
+    @Environment(DownloadCoordinator.self) private var downloadCoordinator
+    @Binding var showFullPlayer: Bool
+
+    var body: some View {
         @Bindable var appState = appState
 
-        return NavigationSplitView {
+        NavigationSplitView {
             #if !os(iOS)
-                List(availableTabs, id: \.self, selection: $appState.selectedTab) { tab in
+                List(
+                    AppTab.availableTabs(for: appState, layout: .regular),
+                    id: \.self,
+                    selection: $appState.selectedTab
+                ) { tab in
                     Label(tab.title, systemImage: tab.icon)
                 }
                 .navigationTitle("Cove")
@@ -97,38 +135,6 @@ struct AppShellView: View {
         }
     }
 
-    // MARK: - Dynamic Tabs
-
-    private var availableTabs: [AppTab] {
-        var tabs: [AppTab] = [.home]
-
-        let types = Set(appState.libraries.compactMap(\.collectionType))
-
-        if sizeClass == .compact {
-            // iPhone: 5 tabs max — Home, [dynamic media tab], Search, Downloads, Settings
-            if types.contains(.music) {
-                tabs.append(.music)
-            } else if types.contains(.movies) {
-                tabs.append(.movies)
-            } else if types.contains(.tvshows) {
-                tabs.append(.tvShows)
-            }
-        } else {
-            // iPad/Mac: show all media tabs in sidebar
-            if types.contains(.music) { tabs.append(.music) }
-            if types.contains(.movies) { tabs.append(.movies) }
-            if types.contains(.tvshows) { tabs.append(.tvShows) }
-        }
-
-        tabs.append(.search)
-        tabs.append(.downloads)
-        tabs.append(.settings)
-        return tabs
-    }
-
-    // MARK: - Navigation Path Binding
-
-    /// Creates a `Binding<NavigationPath>` for a given tab, backed by `appState.navigationPaths`.
     private func navigationPathBinding(for tab: AppTab) -> Binding<NavigationPath> {
         @Bindable var appState = appState
         return Binding(
@@ -137,3 +143,39 @@ struct AppShellView: View {
         )
     }
 }
+
+// MARK: - tvOS — Top Tab Bar
+
+/// The top tab bar layout used on Apple TV, with focus-driven navigation.
+#if os(tvOS)
+    private struct TVTabShell: View {
+        @Environment(AppState.self) private var appState
+        @Environment(DownloadCoordinator.self) private var downloadCoordinator
+
+        var body: some View {
+            @Bindable var appState = appState
+
+            TabView(selection: $appState.selectedTab) {
+                ForEach(AppTab.availableTabs(for: appState, layout: .tv), id: \.self) { tab in
+                    Tab(tab.title, systemImage: tab.icon, value: tab) {
+                        NavigationStack(path: navigationPathBinding(for: tab)) {
+                            tab.destination(
+                                appState: appState, downloadCoordinator: downloadCoordinator
+                            )
+                            .navigationTitle(tab.title)
+                            .withNavigationDestinations()
+                        }
+                    }
+                }
+            }
+        }
+
+        private func navigationPathBinding(for tab: AppTab) -> Binding<NavigationPath> {
+            @Bindable var appState = appState
+            return Binding(
+                get: { appState.navigationPaths[tab] ?? NavigationPath() },
+                set: { appState.navigationPaths[tab] = $0 }
+            )
+        }
+    }
+#endif

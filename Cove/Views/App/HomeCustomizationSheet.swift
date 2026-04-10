@@ -30,7 +30,7 @@ struct HomeCustomizationSheet: View {
             }
             .environment(\.editMode, .constant(.active))
             .navigationTitle("Customize Home")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {

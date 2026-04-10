@@ -63,7 +63,7 @@ struct SearchSeeAllView: View {
             }
         }
         .navigationTitle("\(title) — \"\(query)\"")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
         .task { await loadFirstPage() }
     }
 

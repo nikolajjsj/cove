@@ -55,7 +55,7 @@ public struct MetadataPillsView: View {
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(Color(.secondarySystemFill))
+                .fill(.secondary.opacity(0.15))
         )
     }
 }

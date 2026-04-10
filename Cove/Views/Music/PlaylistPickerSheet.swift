@@ -93,7 +93,7 @@ struct PlaylistPickerSheet: View {
                 }
             }
             .navigationTitle("Add to Playlist")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

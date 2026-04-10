@@ -652,7 +652,7 @@ struct SeriesDetailView: View {
                 }
             }
             .navigationTitle("Download \(item.title)")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { showDownloadSheet = false }

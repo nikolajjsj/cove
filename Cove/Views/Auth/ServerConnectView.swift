@@ -39,8 +39,8 @@ struct ServerConnectView: View {
                     )
                     .textContentType(.URL)
                     .autocorrectionDisabled()
+                    .disableAutocapitalization()
                     #if os(iOS)
-                        .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                     #endif
                 }
@@ -49,9 +49,7 @@ struct ServerConnectView: View {
                     TextField("Username", text: $username)
                         .textContentType(.username)
                         .autocorrectionDisabled()
-                        #if os(iOS)
-                            .textInputAutocapitalization(.never)
-                        #endif
+                        .disableAutocapitalization()
                     SecureField("Password", text: $password)
                         .textContentType(.password)
                 }

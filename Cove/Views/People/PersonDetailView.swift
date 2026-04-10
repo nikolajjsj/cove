@@ -38,9 +38,7 @@ struct PersonDetailView: View {
             }
         }
         .navigationTitle(person.name)
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
         .task {
             await loader.load {
                 try await authManager.provider.personItems(personId: person.id)

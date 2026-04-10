@@ -65,4 +65,54 @@ enum AppTab: Hashable {
             SettingsView()
         }
     }
+
+    // MARK: - Shell Layout
+
+    /// Describes the navigation layout context for tab selection.
+    enum ShellLayout {
+        /// iPhone bottom tab bar — limited tab count.
+        case compact
+        /// iPad sidebar or Mac sidebar — all tabs shown.
+        case regular
+        /// tvOS top tab bar — no downloads, all media tabs.
+        case tv
+    }
+
+    /// Returns the appropriate tabs for the given app state and layout.
+    ///
+    /// Tabs are dynamic — driven by the libraries available on the connected server.
+    /// If the server has no music library, the Music tab doesn't appear.
+    static func availableTabs(for appState: AppState, layout: ShellLayout) -> [AppTab] {
+        var tabs: [AppTab] = [.home]
+
+        let types = Set(appState.libraries.compactMap(\.collectionType))
+
+        switch layout {
+        case .compact:
+            // iPhone: limited tabs — Home, one dynamic media tab, Search, Downloads, Settings
+            if types.contains(.music) {
+                tabs.append(.music)
+            } else if types.contains(.movies) {
+                tabs.append(.movies)
+            } else if types.contains(.tvshows) {
+                tabs.append(.tvShows)
+            }
+
+        case .regular, .tv:
+            // iPad/Mac sidebar & tvOS: show all available media tabs
+            if types.contains(.music) { tabs.append(.music) }
+            if types.contains(.movies) { tabs.append(.movies) }
+            if types.contains(.tvshows) { tabs.append(.tvShows) }
+        }
+
+        tabs.append(.search)
+
+        // Downloads only on platforms that support them
+        if layout != .tv {
+            tabs.append(.downloads)
+        }
+
+        tabs.append(.settings)
+        return tabs
+    }
 }

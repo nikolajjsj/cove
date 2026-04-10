@@ -8,7 +8,9 @@ public enum JellyfinAuthHeader {
     /// The device name (current device).
     public static var deviceName: String {
         #if os(iOS)
-            "iPhone"  // Will be replaced with UIDevice.current.name in UI layer
+            "iPhone"
+        #elseif os(tvOS)
+            "Apple TV"
         #elseif os(macOS)
             Host.current().localizedName ?? "Mac"
         #else

@@ -47,9 +47,7 @@ struct CollectionDetailView: View {
         .ignoresSafeArea(edges: .top)
         .navigationTitle(item.title)
         .toolbarBackground(.hidden, for: .navigationBar)
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
         .task {
             await loader.load {
                 try await authManager.provider.collectionItems(collectionId: item.id)

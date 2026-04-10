@@ -78,9 +78,7 @@ struct AlbumDetailView: View {
             }
         }
         .navigationTitle(albumItem.title)
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
         .toolbar {
             ToolbarItem {
                 if isOffline {

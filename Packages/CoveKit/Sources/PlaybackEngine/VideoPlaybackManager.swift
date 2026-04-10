@@ -5,9 +5,9 @@ import MediaPlayer
 import Models
 import os
 
-#if os(iOS)
+#if canImport(UIKit)
     import UIKit
-#elseif os(macOS)
+#elseif canImport(AppKit)
     import AppKit
 #endif
 
@@ -438,7 +438,7 @@ public final class VideoPlaybackManager {
     // MARK: - Audio Session
 
     private func setupAudioSession() {
-        #if os(iOS)
+        #if !os(macOS)
             do {
                 let session = AVAudioSession.sharedInstance()
                 try session.setCategory(.playback, mode: .moviePlayback)
@@ -872,20 +872,18 @@ public final class VideoPlaybackManager {
             guard let (data, _) = try? await URLSession.shared.data(from: url) else { return }
             guard let self, self.nowPlayingArtworkItemId == itemId else { return }
 
-            #if os(iOS)
+            #if canImport(UIKit)
                 guard let image = UIImage(data: data) else { return }
-                let artwork = MPMediaItemArtwork(image: image)
-                guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
-                info[MPMediaItemPropertyArtwork] = artwork
-                MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-            #elseif os(macOS)
+                let size = image.size
+            #elseif canImport(AppKit)
                 guard let image = NSImage(data: data) else { return }
                 let size = image.size
-                let artwork = MPMediaItemArtwork(boundsSize: size) { _ in image }
-                guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
-                info[MPMediaItemPropertyArtwork] = artwork
-                MPNowPlayingInfoCenter.default().nowPlayingInfo = info
             #endif
+
+            let artwork = MPMediaItemArtwork(boundsSize: size) { _ in image }
+            guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
+            info[MPMediaItemPropertyArtwork] = artwork
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         }
     }
 

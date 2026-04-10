@@ -14,6 +14,7 @@ struct SettingsView: View {
     @Default(.maxStreamingQuality) var maxStreamingQuality
 
     @Environment(AppState.self) private var appState
+    @Environment(\.platformCapabilities) private var capabilities
     @Environment(AuthManager.self) private var authManager
     @Environment(DownloadCoordinator.self) private var downloadCoordinator
     @State private var showStorageManagement = false
@@ -127,11 +128,11 @@ struct SettingsView: View {
                     "Auto-play next episode", systemImage: "play.circle", isOn: $autoPlayNextEpisode
                 )
 
-                #if os(iOS)
+                if capabilities.supportsOrientationLock {
                     Toggle(
                         "Force landscape", systemImage: "rectangle.landscape.rotate",
                         isOn: $forceLandscapeVideo)
-                #endif
+                }
 
                 Picker(selection: $videoPlaybackSpeed) {
                     ForEach(playbackSpeedOptions, id: \.self) { speed in

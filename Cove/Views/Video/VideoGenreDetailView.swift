@@ -57,9 +57,7 @@ struct VideoGenreDetailView: View {
             mainContent
         }
         .navigationTitle(genreName)
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.large)
-        #endif
+        .largeNavigationTitle()
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 sortMenu

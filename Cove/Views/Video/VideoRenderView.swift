@@ -1,7 +1,7 @@
 import AVFoundation
 import SwiftUI
 
-#if os(iOS)
+#if os(iOS) || os(tvOS)
     import UIKit
 
     struct VideoRenderView: UIViewRepresentable {

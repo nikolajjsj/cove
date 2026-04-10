@@ -23,9 +23,7 @@ struct VideoGenreListView: View {
             }
         }
         .navigationTitle("Genres")
-        #if os(iOS)
-            .navigationBarTitleDisplayMode(.large)
-        #endif
+        .largeNavigationTitle()
         .searchable(text: $searchText, prompt: "Filter genres…")
         .task(id: library?.id) { await loadGenres() }
     }

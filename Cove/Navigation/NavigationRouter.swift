@@ -67,21 +67,15 @@ enum NavigationRouter {
         case .allArtists:
             ArtistListView(library: library)
                 .navigationTitle("Artists")
-                #if os(iOS)
-                    .navigationBarTitleDisplayMode(.large)
-                #endif
+                .largeNavigationTitle()
         case .allAlbums:
             AlbumListView(library: library)
                 .navigationTitle("Albums")
-                #if os(iOS)
-                    .navigationBarTitleDisplayMode(.large)
-                #endif
+                .largeNavigationTitle()
         case .allPlaylists:
             PlaylistListView()
                 .navigationTitle("Playlists")
-                #if os(iOS)
-                    .navigationBarTitleDisplayMode(.large)
-                #endif
+                .largeNavigationTitle()
         }
     }
 
