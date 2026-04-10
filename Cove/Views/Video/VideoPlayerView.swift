@@ -398,7 +398,7 @@ struct VideoPlayerView: View {
             }
             .buttonStyle(.plain)
 
-            if videoManager.nextEpisode != nil {
+            if videoManager.nextEpisode != nil && !videoManager.showNextEpisodeCountdown {
                 Button("Next Episode", systemImage: "forward.end.fill") {
                     videoManager.playNextEpisode()
                     resetControlsTimer()
@@ -739,30 +739,20 @@ struct VideoPlayerView: View {
 
     @ViewBuilder
     private var skipSegmentButton: some View {
-        if let segment = activeSkippableSegment {
-            let isCreditsNearEnd =
-                (segment.type == .credits || segment.type == .outro)
-                && videoManager.duration > 0
-                && (videoManager.duration - segment.endTime) < 30
-                && videoManager.nextEpisode != nil
-
+        if let segment = activeSkippableSegment,
+            !videoManager.showNextEpisodeCountdown
+        {
             VStack {
                 Spacer()
                 HStack {
                     Spacer()
                     Button {
-                        if isCreditsNearEnd {
-                            videoManager.playNextEpisode()
-                        } else {
-                            videoManager.seek(to: segment.endTime)
-                        }
+                        videoManager.seek(to: segment.endTime)
                     } label: {
                         HStack(spacing: 8) {
-                            Image(
-                                systemName: isCreditsNearEnd ? "forward.end.fill" : "forward.fill"
-                            )
-                            .font(.subheadline)
-                            Text(isCreditsNearEnd ? "Next Episode" : segment.skipButtonLabel)
+                            Image(systemName: "forward.fill")
+                                .font(.subheadline)
+                            Text(segment.skipButtonLabel)
                                 .font(.subheadline.weight(.semibold))
                         }
                         .foregroundStyle(.black)
