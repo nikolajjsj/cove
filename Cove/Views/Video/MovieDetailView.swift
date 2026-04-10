@@ -106,10 +106,7 @@ struct MovieDetailView: View {
 
         // Use premiere date if available, otherwise fall back to production year
         if let premiereDate = displayItem.premiereDate {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .none
-            parts.append(formatter.string(from: premiereDate))
+            parts.append(premiereDate.formatted(date: .abbreviated, time: .omitted))
         } else if let year = item.productionYear {
             parts.append(String(year))
         }

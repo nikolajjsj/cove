@@ -15,7 +15,6 @@ import SwiftUI
 /// ```
 struct PlaylistPickerSheet: View {
     let trackIds: [ItemID]
-    @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
     @State private var playlists: [Playlist] = []
@@ -137,7 +136,7 @@ struct PlaylistPickerSheet: View {
             )
             dismiss()
             let trackWord = trackIds.count == 1 ? "track" : "tracks"
-            appState.showToast(
+            ToastManager.shared.show(
                 "Added \(trackIds.count) \(trackWord) to \(playlist.name)",
                 icon: "checkmark.circle.fill"
             )
@@ -156,7 +155,7 @@ struct PlaylistPickerSheet: View {
                 name: name, trackIds: trackIds
             )
             dismiss()
-            appState.showToast("Added to \(name)", icon: "checkmark.circle.fill")
+            ToastManager.shared.show("Added to \(name)", icon: "checkmark.circle.fill")
         } catch {
             isAdding = false
         }
@@ -173,6 +172,5 @@ struct PlaylistPickerSheet: View {
 #Preview {
     let state = AppState.preview
     PlaylistPickerSheet(trackIds: [])
-        .environment(state)
         .environment(state.authManager)
 }

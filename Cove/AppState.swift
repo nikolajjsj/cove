@@ -43,11 +43,6 @@ final class AppState {
         .settings: NavigationPath(),
     ]
 
-    // MARK: - Toast
-
-    /// The currently displayed toast message, if any.
-    var currentToast: ToastMessage?
-
     // MARK: - Services
 
     let authManager: AuthManager
@@ -180,18 +175,6 @@ final class AppState {
         }
     }
 
-    // MARK: - Toast
-
-    /// Show a brief toast/snackbar message.
-    func showToast(_ message: String, icon: String = "checkmark.circle.fill") {
-        currentToast = ToastMessage(message: message, icon: icon)
-    }
-
-    /// Dismiss the current toast.
-    func dismissToast() {
-        currentToast = nil
-    }
-
     // MARK: - Navigation Helpers
 
     /// Navigate to a specific destination by switching tabs and appending to the navigation path.
@@ -215,12 +198,13 @@ final class AppState {
                     current: UserData(isFavorite: isFavorite)
                 )
             else { return }
-            showToast(
+            ToastManager.shared.show(
                 newValue ? "Added to Favorites" : "Removed from Favorites",
                 icon: newValue ? "heart.fill" : "heart"
             )
         } catch {
-            showToast("Couldn't update favorite", icon: "exclamationmark.triangle")
+            ToastManager.shared.show(
+                "Couldn't update favorite", icon: "exclamationmark.triangle", style: .error)
         }
     }
 
@@ -237,12 +221,13 @@ final class AppState {
                     current: UserData(isPlayed: isPlayed)
                 )
             else { return }
-            showToast(
+            ToastManager.shared.show(
                 newValue ? "Marked as Watched" : "Marked as Unwatched",
                 icon: newValue ? "eye.fill" : "eye.slash"
             )
         } catch {
-            showToast("Couldn't update watched status", icon: "exclamationmark.triangle")
+            ToastManager.shared.show(
+                "Couldn't update watched status", icon: "exclamationmark.triangle", style: .error)
         }
     }
 
@@ -252,9 +237,10 @@ final class AppState {
             let tracks = try await authManager.provider.instantMix(for: itemId, limit: 50)
             guard !tracks.isEmpty else { return }
             audioPlayer.play(tracks: tracks, startingAt: 0)
-            showToast("Radio started", icon: "dot.radiowaves.left.and.right")
+            ToastManager.shared.show("Radio started", icon: "dot.radiowaves.left.and.right")
         } catch {
-            showToast("Couldn't start radio", icon: "exclamationmark.triangle")
+            ToastManager.shared.show(
+                "Couldn't start radio", icon: "exclamationmark.triangle", style: .error)
         }
     }
 
@@ -273,7 +259,7 @@ final class AppState {
             next
             ? "text.line.first.and.arrowtriangle.forward"
             : "text.line.last.and.arrowtriangle.forward"
-        showToast(message, icon: icon)
+        ToastManager.shared.show(message, icon: icon)
     }
 }
 
@@ -298,16 +284,4 @@ extension AppState {
 
     /// The `AuthManager` used by this state — exposed for preview environment injection.
     static var previewAuthManager: AuthManager { preview.authManager }
-}
-
-// MARK: - Toast Message
-
-struct ToastMessage: Equatable, Identifiable {
-    let id = UUID()
-    let message: String
-    let icon: String
-
-    static func == (lhs: ToastMessage, rhs: ToastMessage) -> Bool {
-        lhs.id == rhs.id
-    }
 }

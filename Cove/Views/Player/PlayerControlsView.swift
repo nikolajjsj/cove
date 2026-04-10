@@ -69,7 +69,7 @@ struct PlayerControlsView: View {
             Menu {
                 Button {
                     appState.audioPlayer.queue.addNext(track)
-                    appState.showToast(
+                    ToastManager.shared.show(
                         "Playing Next", icon: "text.line.first.and.arrowtriangle.forward")
                 } label: {
                     Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
@@ -77,7 +77,7 @@ struct PlayerControlsView: View {
 
                 Button {
                     appState.audioPlayer.queue.addToEnd(track)
-                    appState.showToast(
+                    ToastManager.shared.show(
                         "Added to Up Next", icon: "text.line.last.and.arrowtriangle.forward")
                 } label: {
                     Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward")
@@ -277,7 +277,6 @@ private struct PlaybackControlsRow: View {
 /// Uses ``UserDataStore`` for optimistic updates and cross-view sync.
 private struct FavoriteButton: View {
     let track: Track
-    @Environment(AppState.self) private var appState
     @Environment(UserDataStore.self) private var store
 
     var body: some View {
@@ -301,7 +300,7 @@ private struct FavoriteButton: View {
                 let newValue = try await store.toggleFavorite(
                     itemId: track.id, current: track.userData
                 )
-                appState.showToast(
+                ToastManager.shared.show(
                     newValue ? "Added to Favorites" : "Removed from Favorites",
                     icon: newValue ? "heart.fill" : "heart"
                 )
@@ -327,7 +326,7 @@ private struct SleepTimerButton: View {
             if player.sleepTimerMode != nil {
                 Button(role: .destructive) {
                     player.cancelSleepTimer()
-                    appState.showToast("Sleep timer cancelled", icon: "moon.zzz")
+                    ToastManager.shared.show("Sleep timer cancelled", icon: "moon.zzz")
                 } label: {
                     Label("Cancel Timer", systemImage: "xmark.circle")
                 }

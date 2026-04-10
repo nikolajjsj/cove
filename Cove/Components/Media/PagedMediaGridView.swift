@@ -87,7 +87,7 @@ struct PagedMediaGridView<Card: View>: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .failed(let message):
             ContentUnavailableView(
-                emptyTitle.replacingOccurrences(of: "No ", with: "Unable to Load "),
+                emptyTitle.replacing("No ", with: "Unable to Load "),
                 systemImage: "exclamationmark.triangle",
                 description: Text(message)
             )

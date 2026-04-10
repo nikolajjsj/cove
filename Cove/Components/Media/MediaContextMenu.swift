@@ -175,7 +175,7 @@ struct MediaContextMenuModifier: ViewModifier {
     private var trackMenu: some View {
         Button {
             appState.audioPlayer.queue.addNext(item.asTrack)
-            appState.showToast(
+            ToastManager.shared.show(
                 "Playing Next", icon: "text.line.first.and.arrowtriangle.forward")
         } label: {
             Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
@@ -183,7 +183,7 @@ struct MediaContextMenuModifier: ViewModifier {
 
         Button {
             appState.audioPlayer.queue.addToEnd(item.asTrack)
-            appState.showToast(
+            ToastManager.shared.show(
                 "Added to Up Next", icon: "text.line.last.and.arrowtriangle.forward")
         } label: {
             Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward")

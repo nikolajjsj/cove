@@ -88,6 +88,7 @@ struct RootView: View {
         .task {
             await appState.restoreSession()
         }
+        .toastOverlay()
     }
 
     // MARK: - Main Content (Launch / App / Sign-In)

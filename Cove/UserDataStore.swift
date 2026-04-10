@@ -1,5 +1,5 @@
 import Foundation
-import JellyfinProvider
+import MediaServerKit
 import Models
 
 // MARK: - UserDataStore

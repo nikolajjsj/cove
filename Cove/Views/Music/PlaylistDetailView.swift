@@ -160,7 +160,7 @@ struct PlaylistDetailView: View {
 
     private var trackList: some View {
         LazyVStack(spacing: 0) {
-            ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+            ForEach(tracks.enumerated(), id: \.element.id) { index, track in
                 TrackRow(
                     title: track.title,
                     subtitle: track.artistName,
@@ -215,19 +215,21 @@ struct PlaylistDetailView: View {
         guard !newName.isEmpty else { return }
         do {
             try await authManager.provider.renamePlaylist(playlist: playlist.id, name: newName)
-            appState.showToast("Playlist renamed", icon: "pencil")
+            ToastManager.shared.show("Playlist renamed", icon: "pencil")
         } catch {
-            appState.showToast("Failed to rename playlist", icon: "exclamationmark.triangle")
+            ToastManager.shared.show(
+                "Failed to rename playlist", icon: "exclamationmark.triangle", style: .error)
         }
     }
 
     private func deletePlaylist() async {
         do {
             try await authManager.provider.deletePlaylist(playlist: playlist.id)
-            appState.showToast("Playlist deleted", icon: "trash")
+            ToastManager.shared.show("Playlist deleted", icon: "trash")
             dismiss()
         } catch {
-            appState.showToast("Failed to delete playlist", icon: "exclamationmark.triangle")
+            ToastManager.shared.show(
+                "Failed to delete playlist", icon: "exclamationmark.triangle", style: .error)
         }
     }
 
@@ -239,9 +241,10 @@ struct PlaylistDetailView: View {
                 playlist: playlist.id, entryIds: ["\(track.id)"]
             )
             tracks.remove(at: index)
-            appState.showToast("Track removed", icon: "minus.circle")
+            ToastManager.shared.show("Track removed", icon: "minus.circle")
         } catch {
-            appState.showToast("Failed to remove track", icon: "exclamationmark.triangle")
+            ToastManager.shared.show(
+                "Failed to remove track", icon: "exclamationmark.triangle", style: .error)
         }
     }
 
@@ -267,7 +270,7 @@ struct PlaylistDetailView: View {
             try? await downloadCoordinator.downloadPlaylist(
                 playlist: playlist, tracks: tracks)
             isDownloading = false
-            appState.showToast("Downloading playlist", icon: "arrow.down.circle")
+            ToastManager.shared.show("Downloading playlist", icon: "arrow.down.circle")
         }
     }
 

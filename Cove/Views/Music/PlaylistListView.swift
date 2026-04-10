@@ -9,7 +9,6 @@ struct PlaylistListView: View {
     var sortOrder: Models.SortOrder = .ascending
     var isFavoriteFilter: Bool = false
 
-    @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
     @State private var loader = CollectionLoader<Playlist>()
     @State private var showNewPlaylistAlert = false
@@ -129,10 +128,11 @@ struct PlaylistListView: View {
         guard !name.isEmpty else { return }
         do {
             let _ = try await authManager.provider.createPlaylist(name: name, trackIds: [])
-            appState.showToast("Playlist created", icon: "checkmark.circle")
+            ToastManager.shared.show("Playlist created", icon: "checkmark.circle")
             await loader.load { try await authManager.provider.playlists() }
         } catch {
-            appState.showToast("Failed to create playlist", icon: "exclamationmark.triangle")
+            ToastManager.shared.show(
+                "Failed to create playlist", icon: "exclamationmark.triangle", style: .error)
         }
     }
 

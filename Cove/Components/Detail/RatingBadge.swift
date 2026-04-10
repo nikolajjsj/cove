@@ -22,7 +22,7 @@ struct RatingBadge: View {
                 Image(systemName: "star.fill")
                     .font(.caption2)
                     .foregroundStyle(.yellow)
-                Text(String(format: "%.1f", rating))
+                Text(rating, format: .number.precision(.fractionLength(1)))
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundStyle(.secondary)

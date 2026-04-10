@@ -17,8 +17,8 @@ public enum WebVTTParser {
         // Normalize line endings
         let normalized =
             content
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
+            .replacing("\r\n", with: "\n")
+            .replacing("\r", with: "\n")
 
         // Split into blocks separated by blank lines
         let blocks = normalized.components(separatedBy: "\n\n")
@@ -70,7 +70,7 @@ public enum WebVTTParser {
     /// Parse a timestamp string like "00:01:23.456" or "01:23.456" or "00:01:23,456" (SRT).
     private static func parseTimestamp(_ string: String) -> TimeInterval? {
         // Normalize SRT comma separator to dot
-        let normalized = string.replacingOccurrences(of: ",", with: ".")
+        let normalized = string.replacing(",", with: ".")
         let components = normalized.components(separatedBy: ":")
 
         switch components.count {
@@ -96,10 +96,6 @@ public enum WebVTTParser {
 
     /// Strip HTML-style tags from subtitle text (e.g. <b>, <i>, </b>).
     private static func stripHTMLTags(_ string: String) -> String {
-        string.replacingOccurrences(
-            of: "<[^>]+>",
-            with: "",
-            options: .regularExpression
-        )
+        string.replacing(/<[^>]+>/, with: "")
     }
 }

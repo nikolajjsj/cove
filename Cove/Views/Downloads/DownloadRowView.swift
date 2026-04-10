@@ -11,34 +11,36 @@ struct DownloadRowView: View {
     let onAction: (DownloadAction, DownloadItem) -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            mediaTypeIcon
-                .frame(width: 36, height: 36)
-                .background(.quaternary)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.title)
-                    .font(.body)
-                    .lineLimit(1)
-
-                subtitleText
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-
-            stateIndicator
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture {
+        Button {
             if item.state == .completed {
                 onAction(.play, item)
             }
+        } label: {
+            HStack(spacing: 12) {
+                mediaTypeIcon
+                    .frame(width: 36, height: 36)
+                    .background(.quaternary)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.title)
+                        .font(.body)
+                        .lineLimit(1)
+
+                    subtitleText
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                stateIndicator
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 onAction(.delete, item)

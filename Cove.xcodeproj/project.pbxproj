@@ -14,6 +14,7 @@
 		B51553F12F87EE3C005CC1D3 /* AppGroup in Frameworks */ = {isa = PBXBuildFile; productRef = B51553F02F87EE3C005CC1D3 /* AppGroup */; };
 		B51553F32F87EE43005CC1D3 /* AppGroup in Frameworks */ = {isa = PBXBuildFile; productRef = B51553F22F87EE43005CC1D3 /* AppGroup */; };
 		B51553F52F87EE7C005CC1D3 /* JellyfinAPI in Frameworks */ = {isa = PBXBuildFile; productRef = B51553F42F87EE7C005CC1D3 /* JellyfinAPI */; };
+		B56230832F88C06C00335A25 /* DataLoading in Frameworks */ = {isa = PBXBuildFile; productRef = B56230822F88C06C00335A25 /* DataLoading */; };
 		B5FDE3BF2F83808F00F54FAA /* Defaults in Frameworks */ = {isa = PBXBuildFile; productRef = B5FDE3BE2F83808F00F54FAA /* Defaults */; };
 		B5FDE3C12F83808F00F54FAA /* DefaultsMacros in Frameworks */ = {isa = PBXBuildFile; productRef = B5FDE3C02F83808F00F54FAA /* DefaultsMacros */; };
 		C0000001AAAAAAAAAAAA0001 /* Models in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0001 /* Models */; };
@@ -121,6 +122,7 @@
 				B5FDE3C12F83808F00F54FAA /* DefaultsMacros in Frameworks */,
 				C0000001AAAAAAAAAAAA0004 /* JellyfinProvider in Frameworks */,
 				C0000001AAAAAAAAAAAA0005 /* PlaybackEngine in Frameworks */,
+				B56230832F88C06C00335A25 /* DataLoading in Frameworks */,
 				B5FDE3BF2F83808F00F54FAA /* Defaults in Frameworks */,
 				C0000001AAAAAAAAAAAA0006 /* DownloadManager in Frameworks */,
 				C0000001AAAAAAAAAAAA0007 /* Persistence in Frameworks */,
@@ -230,6 +232,7 @@
 				B5FDE3BE2F83808F00F54FAA /* Defaults */,
 				B5FDE3C02F83808F00F54FAA /* DefaultsMacros */,
 				B51553F22F87EE43005CC1D3 /* AppGroup */,
+				B56230822F88C06C00335A25 /* DataLoading */,
 			);
 			productName = Cove;
 			productReference = B53D7B9F2F823DC20023368C /* Cove.app */;
@@ -687,6 +690,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C0000004AAAAAAAAAAAA0001 /* XCLocalSwiftPackageReference "Packages/CoveKit" */;
 			productName = JellyfinAPI;
+		};
+		B56230822F88C06C00335A25 /* DataLoading */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0000004AAAAAAAAAAAA0001 /* XCLocalSwiftPackageReference "Packages/CoveKit" */;
+			productName = DataLoading;
 		};
 		B5FDE3BE2F83808F00F54FAA /* Defaults */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -28,7 +28,6 @@ struct AppShellView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: appState.isOffline)
-        .toastOverlay(toast: $appState.currentToast)
         .sheet(isPresented: $showFullPlayer) {
             AudioPlayerView()
         }

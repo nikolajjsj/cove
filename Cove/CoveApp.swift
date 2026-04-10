@@ -131,9 +131,10 @@ struct CoveApp: App {
                     break
                 }
             } catch {
-                appState.showToast(
+                ToastManager.shared.show(
                     "Couldn't open item",
-                    icon: "exclamationmark.triangle"
+                    icon: "exclamationmark.triangle",
+                    style: .error
                 )
             }
         }

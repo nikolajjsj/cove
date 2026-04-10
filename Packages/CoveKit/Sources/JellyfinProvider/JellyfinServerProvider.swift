@@ -11,7 +11,7 @@ import os
 /// This is the only module that knows about Jellyfin specifics.
 public final class JellyfinServerProvider: MediaServerProvider,
     MusicProvider, VideoProvider, TranscodingProvider,
-    PlaybackReportingProvider, DownloadableProvider
+    PlaybackReportingProvider, DownloadableProvider, UserDataMutationProvider
 {
     private let logger = Logger(
         subsystem: AppConstants.bundleIdentifier, category: "JellyfinProvider")

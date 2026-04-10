@@ -212,14 +212,14 @@ struct AlbumDetailView: View {
 
     private var trackList: some View {
         LazyVStack(spacing: 0) {
-            ForEach(Array(groupedByDisc.keys.sorted()), id: \.self) { discNumber in
+            ForEach(groupedByDisc.keys.sorted(), id: \.self) { discNumber in
                 if let discTracks = groupedByDisc[discNumber] {
                     // Show disc header only if there are multiple discs
                     if groupedByDisc.count > 1 {
                         discHeader(discNumber)
                     }
 
-                    ForEach(Array(discTracks.enumerated()), id: \.element.id) { localIndex, track in
+                    ForEach(discTracks.enumerated(), id: \.element.id) { localIndex, track in
                         let globalIndex = globalTrackIndex(for: track)
                         let row = AlbumTrackRow(
                             track: track,

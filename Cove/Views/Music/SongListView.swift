@@ -52,7 +52,7 @@ struct SongListView: View {
 
     private var scrollContent: some View {
         List {
-            ForEach(Array(loader.items.enumerated()), id: \.element.id) { index, item in
+            ForEach(loader.items.enumerated(), id: \.element.id) { index, item in
                 TrackRow(
                     title: item.title,
                     subtitle: item.genres?.first,

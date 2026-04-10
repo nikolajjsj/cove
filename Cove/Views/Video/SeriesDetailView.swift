@@ -329,7 +329,7 @@ struct SeriesDetailView: View {
             .padding(.vertical, 32)
         } else {
             LazyVStack(spacing: 5) {
-                ForEach(Array(episodes.enumerated()), id: \.element.id) { index, episode in
+                ForEach(episodes.enumerated(), id: \.element.id) { index, episode in
                     let row = EpisodeRow(
                         episode: episode,
                         thumbnailURL: episodeThumbnailURL(for: episode),

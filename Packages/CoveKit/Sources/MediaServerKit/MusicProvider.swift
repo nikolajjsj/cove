@@ -16,9 +16,6 @@ public protocol MusicProvider: MediaServerProvider {
     func renamePlaylist(playlist: PlaylistID, name: String) async throws
     func deletePlaylist(playlist: PlaylistID) async throws
 
-    // Favorites
-    func setFavorite(itemId: ItemID, isFavorite: Bool) async throws
-
     // Instant Mix (Radio)
     func instantMix(for itemId: ItemID, limit: Int) async throws -> [Track]
 }

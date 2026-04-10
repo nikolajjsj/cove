@@ -183,7 +183,7 @@ struct QueueView: View {
             .padding(.bottom, 4)
 
             // Track rows
-            ForEach(Array(tracks.enumerated()), id: \.element.id) { offset, track in
+            ForEach(tracks.enumerated(), id: \.element.id) { offset, track in
                 upNextRow(track: track, offset: offset, queue: queue)
             }
         }
@@ -304,7 +304,7 @@ struct QueueView: View {
                 queue.remove(at: removeIndex)
             }
         }
-        appState.showToast("Queue cleared", icon: "checkmark.circle.fill")
+        ToastManager.shared.show("Queue cleared", icon: "checkmark.circle.fill")
     }
 
     // MARK: - Helpers

@@ -88,12 +88,12 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
 
                 // Genres
                 if let genres = displayItem.genres ?? item.genres, !genres.isEmpty {
-                    GenreTagsSection(genres: genres)
+                    ChipFlowSection(title: "Genres", items: genres)
                 }
 
                 // Studios
                 if let studios = displayItem.studios, !studios.isEmpty {
-                    StudiosSection(studios: studios)
+                    ChipFlowSection(title: "Studios", items: studios)
                 }
             }
             .padding(.horizontal)

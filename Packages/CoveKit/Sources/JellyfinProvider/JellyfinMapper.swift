@@ -444,28 +444,39 @@ enum JellyfinMapper {
 
     // MARK: - Helpers
 
-    private static let dateFormatters: [DateFormatter] = {
-        let formats = [
-            "yyyy-MM-dd'T'HH:mm:ss.SSSSSSS'Z'",
-            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
-            "yyyy-MM-dd'T'HH:mm:ss'Z'",
-            "yyyy-MM-dd'T'HH:mm:ss.SSSSSSSZZZZZ",
-            "yyyy-MM-dd'T'HH:mm:ssZZZZZ",
-        ]
-        return formats.map { format in
-            let f = DateFormatter()
-            f.dateFormat = format
-            f.locale = Locale(identifier: "en_US_POSIX")
-            f.timeZone = TimeZone(identifier: "UTC")
-            return f
-        }
-    }()
-
     static func parseDate(_ string: String) -> Date? {
-        for formatter in dateFormatters {
-            if let date = formatter.date(from: string) {
-                return date
-            }
+        // Try ISO 8601 with fractional seconds first
+        if let date = try? Date(
+            string,
+            strategy: .iso8601.dateTimeSeparator(.standard).timeSeparator(.colon).timeZone(
+                separator: .omitted
+            ).time(includingFractionalSeconds: true))
+        {
+            return date
+        }
+        // Fall back to ISO 8601 without fractional seconds
+        if let date = try? Date(
+            string,
+            strategy: .iso8601.dateTimeSeparator(.standard).timeSeparator(.colon).timeZone(
+                separator: .omitted))
+        {
+            return date
+        }
+        // Try with timezone separator (e.g. +00:00)
+        if let date = try? Date(
+            string,
+            strategy: .iso8601.dateTimeSeparator(.standard).timeSeparator(.colon).timeZone(
+                separator: .colon
+            ).time(includingFractionalSeconds: true))
+        {
+            return date
+        }
+        if let date = try? Date(
+            string,
+            strategy: .iso8601.dateTimeSeparator(.standard).timeSeparator(.colon).timeZone(
+                separator: .colon))
+        {
+            return date
         }
         return nil
     }

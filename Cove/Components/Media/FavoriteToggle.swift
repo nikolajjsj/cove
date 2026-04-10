@@ -20,7 +20,6 @@ struct FavoriteToggle: View {
     let userData: UserData?
 
     @Environment(UserDataStore.self) private var store
-    @Environment(AppState.self) private var appState
 
     var body: some View {
         let isFav = store.isFavorite(itemId, fallback: userData)
@@ -41,14 +40,15 @@ struct FavoriteToggle: View {
                 let newValue = try await store.toggleFavorite(
                     itemId: itemId, current: userData
                 )
-                appState.showToast(
+                ToastManager.shared.show(
                     newValue ? "Added to Favorites" : "Removed from Favorites",
                     icon: newValue ? "heart.fill" : "heart"
                 )
             } catch {
-                appState.showToast(
+                ToastManager.shared.show(
                     "Couldn't update favorite",
-                    icon: "exclamationmark.triangle"
+                    icon: "exclamationmark.triangle",
+                    style: .error
                 )
             }
         }

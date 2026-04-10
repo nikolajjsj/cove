@@ -1,84 +1,63 @@
 import SwiftUI
 
-/// A brief confirmation toast that slides up from the bottom of the screen.
+/// Renders the current toast from ``ToastManager`` as a floating capsule
+/// at the bottom of the screen.
 ///
-/// Place this as an overlay in the app shell. It auto-dismisses after 2 seconds.
-struct ToastView: View {
-    let toast: ToastMessage
-    let onDismiss: () -> Void
-
-    @State private var isVisible = false
+/// Apply this once near the root of the view hierarchy:
+/// ```swift
+/// RootView()
+///     .toastOverlay()
+/// ```
+struct ToastOverlayView: View {
+    @State private var toastManager = ToastManager.shared
 
     var body: some View {
-        if isVisible {
-            Button {
-                dismiss()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: toast.icon)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.primary)
-
-                    Text(toast.message)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+        Group {
+            if let toast = toastManager.currentToast {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        toastManager.dismiss()
+                    }
+                } label: {
+                    toastCapsule(toast)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.regularMaterial, in: Capsule())
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
-            }
-            .buttonStyle(.plain)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
-        }
-    }
-
-    private func dismiss() {
-        withAnimation(.easeInOut(duration: 0.25)) {
-            isVisible = false
-        }
-        // Give animation time to complete before removing
-        Task {
-            try? await Task.sleep(for: .seconds(0.25))
-            onDismiss()
-        }
-    }
-
-    private func appear() {
-        withAnimation(.spring(duration: 0.35, bounce: 0.2)) {
-            isVisible = true
-        }
-
-        #if os(iOS)
-            let generator = UINotificationFeedbackGenerator()
-            generator.notificationOccurred(.success)
-        #endif
-
-        // Auto-dismiss after 2 seconds
-        Task {
-            try? await Task.sleep(for: .seconds(2.0))
-            if isVisible {
-                dismiss()
+                .buttonStyle(.plain)
+                .id(toast.id)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(.spring(duration: 0.4, bounce: 0.2), value: toastManager.currentToast?.id)
+    }
+
+    private func toastCapsule(_ toast: Toast) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: toast.icon)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(toast.style.tint)
+
+            Text(toast.message)
+                .font(.subheadline.weight(.medium))
+                .lineLimit(2)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial, in: Capsule())
+        .shadow(color: .black.opacity(0.15), radius: 10, y: 5)
+        .sensoryFeedback(.success, trigger: toast.id)
     }
 }
 
-// MARK: - View Modifier for Easy Overlay
+// MARK: - View Modifier
 
 extension View {
-    /// Overlays a toast notification at the bottom of the view.
-    func toastOverlay(toast: Binding<ToastMessage?>) -> some View {
+    /// Overlays toast notifications at the bottom of the view.
+    ///
+    /// Apply once near the root (e.g. on `RootView`). Toasts are shown
+    /// by calling ``ToastManager/shared``.
+    func toastOverlay() -> some View {
         self.overlay(alignment: .bottom) {
-            if let currentToast = toast.wrappedValue {
-                ToastView(toast: currentToast) {
-                    toast.wrappedValue = nil
-                }
-                .padding(.bottom, 80)  // Above the Now Playing bar / tab bar
-                .id(currentToast.id)
-            }
+            ToastOverlayView()
+                .padding(.bottom, 100)
         }
-        .animation(.spring(duration: 0.35, bounce: 0.2), value: toast.wrappedValue?.id)
     }
 }

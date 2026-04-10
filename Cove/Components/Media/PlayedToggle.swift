@@ -20,7 +20,6 @@ struct PlayedToggle: View {
     let userData: UserData?
 
     @Environment(UserDataStore.self) private var store
-    @Environment(AppState.self) private var appState
 
     var body: some View {
         let isPlayed = store.isPlayed(itemId, fallback: userData)
@@ -41,14 +40,15 @@ struct PlayedToggle: View {
                 let newValue = try await store.togglePlayed(
                     itemId: itemId, current: userData
                 )
-                appState.showToast(
+                ToastManager.shared.show(
                     newValue ? "Marked as Watched" : "Marked as Unwatched",
                     icon: newValue ? "eye.fill" : "eye.slash"
                 )
             } catch {
-                appState.showToast(
+                ToastManager.shared.show(
                     "Couldn't update watched status",
-                    icon: "exclamationmark.triangle"
+                    icon: "exclamationmark.triangle",
+                    style: .error
                 )
             }
         }

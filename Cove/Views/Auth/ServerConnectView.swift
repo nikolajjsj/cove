@@ -8,7 +8,7 @@ struct ServerConnectView: View {
     @State private var password = ""
     @State private var isConnecting = false
     @State private var errorMessage: String?
-    
+
     var canConnect: Bool {
         !self.serverURL.isEmpty && !self.username.isEmpty
     }
@@ -23,7 +23,7 @@ struct ServerConnectView: View {
                             .foregroundStyle(.tint)
                         Text("Cove")
                             .font(.largeTitle)
-                            .fontWeight(.bold)
+                            .bold()
                         Text("Connect to your Jellyfin server")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)

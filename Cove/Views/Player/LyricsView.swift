@@ -65,7 +65,7 @@ struct LyricsView: View {
                     Spacer()
                         .frame(height: 80)
 
-                    ForEach(Array(lyrics.lines.enumerated()), id: \.offset) { index, line in
+                    ForEach(lyrics.lines.enumerated(), id: \.offset) { index, line in
                         let isCurrentLine = currentLineIndex == index
 
                         Button {

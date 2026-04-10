@@ -107,20 +107,22 @@ struct PlaylistContextMenuModifier: ViewModifier {
         guard !name.isEmpty else { return }
         do {
             try await authManager.provider.renamePlaylist(playlist: playlist.id, name: name)
-            appState.showToast("Playlist renamed", icon: "checkmark.circle.fill")
+            ToastManager.shared.show("Playlist renamed", icon: "checkmark.circle.fill")
             onRenamed?()
         } catch {
-            // Silently fail
+            ToastManager.shared.show(
+                "Failed to rename playlist", icon: "exclamationmark.triangle", style: .error)
         }
     }
 
     private func deletePlaylist() async {
         do {
             try await authManager.provider.deletePlaylist(playlist: playlist.id)
-            appState.showToast("Playlist deleted", icon: "checkmark.circle.fill")
+            ToastManager.shared.show("Playlist deleted", icon: "checkmark.circle.fill")
             onDeleted?()
         } catch {
-            // Silently fail
+            ToastManager.shared.show(
+                "Failed to delete playlist", icon: "exclamationmark.triangle", style: .error)
         }
     }
 }

@@ -80,7 +80,7 @@ private struct RecentlyPlayedSongsSection: View {
                 } else {
                     ScrollView(.horizontal) {
                         LazyHStack(spacing: 12) {
-                            ForEach(Array(loader.items.enumerated()), id: \.element.id) {
+                            ForEach(loader.items.enumerated(), id: \.element.id) {
                                 index,
                                 song in
                                 SongCard(

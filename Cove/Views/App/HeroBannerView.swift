@@ -44,13 +44,13 @@ struct HeroBannerView: View {
 
     private var bannerCarousel: some View {
         TabView(selection: $currentIndex) {
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+            ForEach(items.enumerated(), id: \.element.id) { index, item in
                 BannerPageView(item: item)
                     .tag(index)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .always))
-        .aspectRatio(16/9, contentMode: .fill)
+        .aspectRatio(16 / 9, contentMode: .fill)
         .clipShape(RoundedRectangle(cornerRadius: CORNER_RADIUS))
         .onChange(of: currentIndex) { _, _ in
             lastInteractionDate = Date()
@@ -158,7 +158,7 @@ private struct BannerPageView: View {
                                     Image(systemName: "star.fill")
                                         .font(.caption2)
                                         .foregroundStyle(.yellow)
-                                    Text(String(format: "%.1f", rating))
+                                    Text(rating, format: .number.precision(.fractionLength(1)))
                                         .font(.subheadline.weight(.medium))
                                         .foregroundStyle(.white.opacity(0.9))
                                 }

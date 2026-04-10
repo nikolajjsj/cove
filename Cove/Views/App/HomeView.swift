@@ -156,7 +156,7 @@ private struct LibrarySection: View {
                     HStack {
                         Text(library.name)
                             .font(.title2)
-                            .fontWeight(.bold)
+                            .bold()
                         Image(systemName: "chevron.right")
                             .font(.subheadline)
                             .fontWeight(.semibold)

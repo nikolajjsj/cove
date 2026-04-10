@@ -15,7 +15,7 @@ struct DotSeparatedText: View {
     var body: some View {
         if !parts.isEmpty {
             HStack(spacing: 6) {
-                ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
+                ForEach(parts.enumerated(), id: \.offset) { index, part in
                     if index > 0 {
                         Text("·")
                             .foregroundStyle(foregroundStyle)

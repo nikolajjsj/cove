@@ -8,6 +8,7 @@ import SwiftUI
 /// Manages the download lifecycle (enqueue, pause, resume, retry, delete)
 /// and keeps the UI in sync with the current `DownloadItem` state.
 @Observable
+@MainActor
 final class DownloadButtonModel {
     let item: MediaItem
     let serverId: String

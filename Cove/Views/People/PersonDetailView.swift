@@ -104,7 +104,7 @@ struct PersonDetailView: View {
             HStack(spacing: 8) {
                 Text(section.category.displayTitle)
                     .font(.title2)
-                    .fontWeight(.bold)
+                    .bold()
 
                 Text("\(section.items.count)")
                     .font(.subheadline)
@@ -118,7 +118,7 @@ struct PersonDetailView: View {
 
             // Items list
             LazyVStack(spacing: 0) {
-                ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in
+                ForEach(section.items.enumerated(), id: \.element.id) { index, item in
                     NavigationLink(value: item) {
                         filmographyRow(item: item)
                     }
