@@ -149,7 +149,9 @@ public final class JellyfinServerProvider: MediaServerProvider,
             searchTerm: filter.searchTerm,
             isFavorite: filter.isFavorite,
             isPlayed: filter.isPlayed,
-            genres: filter.genres
+            genres: filter.genres,
+            years: filter.years,
+            minCommunityRating: filter.minCommunityRating
         )
         let items = (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
         return PagedResult(

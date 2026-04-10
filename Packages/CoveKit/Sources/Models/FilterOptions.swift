@@ -11,6 +11,7 @@ public struct FilterOptions: Sendable {
     public let startIndex: Int?
     public let searchTerm: String?
     public let includeItemTypes: [String]?
+    public let minCommunityRating: Double?
 
     public init(
         mediaTypes: [MediaType]? = nil,
@@ -22,7 +23,8 @@ public struct FilterOptions: Sendable {
         limit: Int? = nil,
         startIndex: Int? = nil,
         searchTerm: String? = nil,
-        includeItemTypes: [String]? = nil
+        includeItemTypes: [String]? = nil,
+        minCommunityRating: Double? = nil
     ) {
         self.mediaTypes = mediaTypes
         self.genres = genres
@@ -34,5 +36,6 @@ public struct FilterOptions: Sendable {
         self.startIndex = startIndex
         self.searchTerm = searchTerm
         self.includeItemTypes = includeItemTypes
+        self.minCommunityRating = minCommunityRating
     }
 }
