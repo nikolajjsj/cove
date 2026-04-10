@@ -84,6 +84,13 @@ enum NavigationRouter {
                 #endif
         }
     }
+
+    /// Returns the detail view for a video genre route.
+    @ViewBuilder
+    static func destination(for route: VideoGenreRoute, appState: AppState) -> some View {
+        let library = appState.libraries.first { $0.id == route.libraryId }
+        VideoGenreDetailView(genreName: route.genre, library: library)
+    }
 }
 
 // MARK: - Navigation Destinations Modifier
@@ -109,6 +116,9 @@ private struct NavigationDestinations: ViewModifier {
                 NavigationRouter.destination(for: person)
             }
             .navigationDestination(for: MusicBrowseRoute.self) { route in
+                NavigationRouter.destination(for: route, appState: appState)
+            }
+            .navigationDestination(for: VideoGenreRoute.self) { route in
                 NavigationRouter.destination(for: route, appState: appState)
             }
             .navigationDestination(for: SearchSeeAllRoute.self) { route in

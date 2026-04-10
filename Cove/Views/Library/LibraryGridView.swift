@@ -88,6 +88,13 @@ struct LibraryGridView: View {
         .searchable(text: $searchText, prompt: "Search this library…")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                if isVideoLibrary {
+                    NavigationLink {
+                        VideoGenreListView(library: library)
+                    } label: {
+                        Label("Genres", systemImage: "tag")
+                    }
+                }
                 sortMenu
             }
         }
@@ -105,6 +112,16 @@ struct LibraryGridView: View {
         }
         .onChange(of: watchedFilter) { _, _ in
             reloadAfterFilterChange()
+        }
+    }
+
+    /// Whether this library supports genre browsing (movies or TV shows).
+    private var isVideoLibrary: Bool {
+        switch library?.collectionType {
+        case .movies, .tvshows:
+            true
+        default:
+            false
         }
     }
 

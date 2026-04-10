@@ -28,6 +28,7 @@ struct EpisodeDetailView: View {
                 backdropURL: heroImageURL,
                 heroSubtitleParts: heroSubtitleParts,
                 metadataPills: buildMetadataPills(),
+                libraryId: tvShowsLibraryId,
                 header: {
                     EpisodePlayButton(
                         item: item,
@@ -102,6 +103,11 @@ struct EpisodeDetailView: View {
 
     private var displayItem: MediaItem {
         detailLoader.displayItem(fallback: item)
+    }
+
+    /// The ID of the first TV shows library, used for genre chip navigation.
+    private var tvShowsLibraryId: ItemID? {
+        appState.libraries.first { $0.collectionType == .tvshows }?.id
     }
 
     // MARK: - Hero Image

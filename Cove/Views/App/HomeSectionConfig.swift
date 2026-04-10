@@ -12,6 +12,7 @@ enum HomeSection: String, CaseIterable, Codable, Sendable, Defaults.Serializable
     case movies = "movies"
     case tvShows = "tvShows"
     case collections = "collections"
+    case genres = "genres"
     case becauseYouWatched = "becauseYouWatched"
     case recentlyAdded = "recentlyAdded"
 
@@ -24,6 +25,7 @@ enum HomeSection: String, CaseIterable, Codable, Sendable, Defaults.Serializable
         case .movies: "Movies"
         case .tvShows: "TV Shows"
         case .collections: "Collections"
+        case .genres: "Genres"
         case .becauseYouWatched: "Because You Watched"
         case .recentlyAdded: "Recently Added"
         }
@@ -38,6 +40,7 @@ enum HomeSection: String, CaseIterable, Codable, Sendable, Defaults.Serializable
         case .movies: "film"
         case .tvShows: "tv"
         case .collections: "rectangle.stack"
+        case .genres: "tag"
         case .becauseYouWatched: "heart.text.clipboard"
         case .recentlyAdded: "clock"
         }
@@ -61,6 +64,7 @@ struct HomeSectionConfig: Codable, Equatable, Sendable, Defaults.Serializable {
         HomeSectionConfig(section: .heroBanner, isVisible: true),
         HomeSectionConfig(section: .continueWatching, isVisible: true),
         HomeSectionConfig(section: .upNext, isVisible: true),
+        HomeSectionConfig(section: .genres, isVisible: true),
         HomeSectionConfig(section: .movies, isVisible: true),
         HomeSectionConfig(section: .tvShows, isVisible: true),
         HomeSectionConfig(section: .collections, isVisible: true),

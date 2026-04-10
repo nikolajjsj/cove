@@ -10,6 +10,7 @@ struct HomeView: View {
     @Default(.homeSections) private var sections
     @State private var refreshID = UUID()
     @State private var showCustomization = false
+    @State private var hasMigratedSections = false
 
     var body: some View {
         ScrollView {
@@ -20,17 +21,23 @@ struct HomeView: View {
                         systemImage: "folder",
                         description: Text("No libraries found on this server.")
                     )
+                    .padding(.horizontal)
                 } else {
                     ForEach(visibleSections, id: \.section) { config in
                         sectionView(for: config.section)
                     }
                 }
             }
-            .padding()
+            .padding(.vertical)
             .id(refreshID)
         }
         .refreshable {
             refreshID = UUID()
+        }
+        .onAppear {
+            guard !hasMigratedSections else { return }
+            hasMigratedSections = true
+            migrateHomeSections()
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -50,11 +57,50 @@ struct HomeView: View {
         sections.filter(\.isVisible)
     }
 
+    /// Appends any sections introduced since the user last launched the app.
+    ///
+    /// The `homeSections` preference is persisted, so `defaultSections` only
+    /// applies on a completely fresh install. When a new section is added to
+    /// `defaultSections`, existing users never see it because their stored
+    /// array doesn't contain it. This migration inserts missing sections at
+    /// the position they occupy in `defaultSections`, preserving the user's
+    /// existing order and visibility settings for everything else.
+    private func migrateHomeSections() {
+        let existing = sections.map(\.section)
+        let missing = HomeSectionConfig.defaultSections.filter { !existing.contains($0.section) }
+        guard !missing.isEmpty else { return }
+
+        for config in missing {
+            // Find where this section lives in the default order and insert
+            // it at the equivalent relative position in the user's array.
+            guard
+                let defaultIndex = HomeSectionConfig.defaultSections.firstIndex(
+                    where: { $0.section == config.section })
+            else {
+                sections.append(config)
+                continue
+            }
+
+            // Find the latest section before this one (in default order) that
+            // the user already has, and insert after it.
+            let precedingDefaults = HomeSectionConfig.defaultSections[..<defaultIndex]
+                .map(\.section)
+            if let insertAfter = sections.lastIndex(where: {
+                precedingDefaults.contains($0.section)
+            }) {
+                sections.insert(config, at: sections.index(after: insertAfter))
+            } else {
+                sections.insert(config, at: sections.startIndex)
+            }
+        }
+    }
+
     @ViewBuilder
     private func sectionView(for section: HomeSection) -> some View {
         switch section {
         case .heroBanner:
             HeroBannerView()
+                .padding(.horizontal)
 
         case .continueWatching:
             ContinueWatchingSection()
@@ -77,6 +123,9 @@ struct HomeView: View {
             {
                 LibrarySection(library: collections)
             }
+
+        case .genres:
+            GenresSection()
 
         case .becauseYouWatched:
             BecauseYouWatchedSection()

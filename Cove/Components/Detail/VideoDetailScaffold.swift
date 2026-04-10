@@ -2,6 +2,8 @@ import CoveUI
 import Models
 import SwiftUI
 
+// MARK: - Video Detail Scaffold
+
 /// A reusable scaffold for video detail views (movies, series, etc.).
 ///
 /// Renders the standard hero → metadata pills → overview → links → genres →
@@ -17,6 +19,7 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
     let overviewLineLimit: Int
     let overviewFont: Font
     let overviewExpandThreshold: Int?
+    let libraryId: ItemID?
     @ViewBuilder let header: Header
     @ViewBuilder let footer: Footer
 
@@ -30,6 +33,7 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
         overviewLineLimit: Int = 4,
         overviewFont: Font = .body,
         overviewExpandThreshold: Int? = nil,
+        libraryId: ItemID? = nil,
         @ViewBuilder header: () -> Header,
         @ViewBuilder footer: () -> Footer
     ) {
@@ -42,6 +46,7 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
         self.overviewLineLimit = overviewLineLimit
         self.overviewFont = overviewFont
         self.overviewExpandThreshold = overviewExpandThreshold
+        self.libraryId = libraryId
         self.header = header()
         self.footer = footer()
     }
@@ -88,7 +93,11 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
 
                 // Genres
                 if let genres = displayItem.genres ?? item.genres, !genres.isEmpty {
-                    ChipFlowSection(title: "Genres", items: genres)
+                    TappableChipFlowSection(
+                        title: "Genres",
+                        items: genres,
+                        libraryId: libraryId
+                    )
                 }
 
                 // Studios

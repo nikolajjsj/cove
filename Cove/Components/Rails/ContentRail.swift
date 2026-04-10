@@ -82,6 +82,7 @@ struct ContentRail<Card: View, Skeleton: View, Header: View>: View {
     private var loadingContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
+                .padding(.horizontal)
 
             ScrollView(.horizontal) {
                 LazyHStack(spacing: spacing) {
@@ -89,7 +90,9 @@ struct ContentRail<Card: View, Skeleton: View, Header: View>: View {
                         skeleton
                     }
                 }
+                .scrollTargetLayout()
             }
+            .contentMargins(.horizontal, 16, for: .scrollContent)
             .scrollIndicators(.hidden)
         }
     }
@@ -99,6 +102,7 @@ struct ContentRail<Card: View, Skeleton: View, Header: View>: View {
     private func loadedContent(_ items: [MediaItem]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             header
+                .padding(.horizontal)
 
             ScrollView(.horizontal) {
                 LazyHStack(spacing: spacing) {
@@ -114,7 +118,9 @@ struct ContentRail<Card: View, Skeleton: View, Header: View>: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .scrollTargetLayout()
             }
+            .contentMargins(.horizontal, 16, for: .scrollContent)
             .scrollIndicators(.hidden)
         }
     }

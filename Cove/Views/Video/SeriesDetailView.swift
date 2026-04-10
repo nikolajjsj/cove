@@ -58,6 +58,11 @@ struct SeriesDetailView: View {
         detailLoader.displayItem(fallback: item)
     }
 
+    /// The ID of the first TV shows library, used for genre chip navigation.
+    private var tvShowsLibraryId: ItemID? {
+        appState.libraries.first { $0.collectionType == .tvshows }?.id
+    }
+
     private var coordinator: VideoPlayerCoordinator {
         appState.videoPlayerCoordinator
     }
@@ -74,6 +79,7 @@ struct SeriesDetailView: View {
                 overviewLineLimit: 3,
                 overviewFont: .subheadline,
                 overviewExpandThreshold: 150,
+                libraryId: tvShowsLibraryId,
                 header: {
                     EmptyView()
                 },

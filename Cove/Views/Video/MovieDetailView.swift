@@ -29,6 +29,7 @@ struct MovieDetailView: View {
                 backdropURL: backdropURL,
                 heroSubtitleParts: heroSubtitleParts,
                 metadataPills: buildMetadataPills(),
+                libraryId: moviesLibraryId,
                 header: {
                     playButton
                 },
@@ -97,6 +98,11 @@ struct MovieDetailView: View {
     /// The fully-fetched item (with people & remote trailers), falling back to the navigation item.
     private var displayItem: MediaItem {
         detailLoader.displayItem(fallback: item)
+    }
+
+    /// The ID of the first movies library, used for genre chip navigation.
+    private var moviesLibraryId: ItemID? {
+        appState.libraries.first { $0.collectionType == .movies }?.id
     }
 
     // MARK: - Hero Subtitle Parts
