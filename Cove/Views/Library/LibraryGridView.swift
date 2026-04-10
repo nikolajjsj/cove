@@ -227,31 +227,9 @@ struct LibraryGridView: View {
 
     @ViewBuilder
     private var mainContent: some View {
-        switch loader.phase {
-        case .loading:
-            ProgressView("Loading…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .failed(let message):
-            ContentUnavailableView(
-                "Unable to Load",
-                systemImage: "exclamationmark.triangle",
-                description: Text(message)
-            )
-        case .empty:
-            ContentUnavailableView(
-                "No Items",
-                systemImage: "tray",
-                description: Text("This library is empty.")
-            )
-        case .loaded:
-            scrollContent
-        }
-    }
-
-    // MARK: - Scroll Content
-
-    private var scrollContent: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            // Chip bar is always visible regardless of phase so the user can
+            // always see which filters are active and toggle them off.
             FilterChipBar(
                 watchedFilter: $watchedFilter,
                 favoriteOnly: $favoriteOnly,
@@ -261,9 +239,71 @@ struct LibraryGridView: View {
                 isVideoLibrary: isVideoLibrary,
                 availableGenres: availableGenres
             )
-            .padding(.bottom, 8)
             .padding(.horizontal)
+            .padding(.vertical, 8)
 
+            Divider()
+
+            switch loader.phase {
+            case .loading:
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .failed(let message):
+                ContentUnavailableView(
+                    "Unable to Load",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(message)
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .empty:
+                emptyStateView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .loaded:
+                scrollContent
+            }
+        }
+    }
+
+    // MARK: - Context-Aware Empty State
+
+    private var hasActiveFilters: Bool {
+        watchedFilter != .all
+            || favoriteOnly
+            || !selectedGenres.isEmpty
+            || selectedDecade != nil
+            || minRating != nil
+    }
+
+    @ViewBuilder
+    private var emptyStateView: some View {
+        if favoriteOnly {
+            ContentUnavailableView(
+                "No Favorites",
+                systemImage: "heart",
+                description: Text(
+                    "You haven't marked any items as favorites yet. Tap the heart on any movie or show to add it here."
+                )
+            )
+        } else if hasActiveFilters {
+            ContentUnavailableView(
+                "No Results",
+                systemImage: "line.3.horizontal.decrease.circle",
+                description: Text(
+                    "No items match the current filters. Try adjusting or removing some filters.")
+            )
+        } else {
+            ContentUnavailableView(
+                "No Items",
+                systemImage: "tray",
+                description: Text("This library is empty.")
+            )
+        }
+    }
+
+    // MARK: - Scroll Content
+
+    private var scrollContent: some View {
+        ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(loader.items) { item in
                     NavigationLink(value: item) {
@@ -516,18 +556,28 @@ private struct FilterChipBar: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            // Row 1: always shown
             HStack(spacing: 8) {
                 WatchedFilterChip(selection: $watchedFilter)
                     .frame(maxWidth: .infinity)
                 FavoriteChip(isOn: $favoriteOnly)
                     .frame(maxWidth: .infinity)
             }
+
             if isVideoLibrary {
+                // Row 2: content filters
                 HStack(spacing: 8) {
                     if !availableGenres.isEmpty {
-                        GenreChip(selectedGenres: $selectedGenres, availableGenres: availableGenres)
-                            .frame(maxWidth: .infinity)
+                        GenreChip(
+                            selectedGenres: $selectedGenres,
+                            availableGenres: availableGenres
+                        )
+                        .frame(maxWidth: .infinity)
                     }
+                }
+
+                // Row 3: quality filters
+                HStack(spacing: 8) {
                     DecadeChip(selection: $selectedDecade)
                         .frame(maxWidth: .infinity)
                     RatingChip(minRating: $minRating)
