@@ -9,7 +9,7 @@ import Foundation
 /// Images are pre-fetched by the timeline provider and stored as raw `Data`
 /// because `AsyncImage` does not work reliably in WidgetKit — widgets are
 /// rendered as static snapshots with no live view lifecycle.
-struct WidgetMediaItem: Identifiable {
+struct WidgetMediaItem: Identifiable, Sendable {
     let id: String
     let title: String
     let seriesName: String?
