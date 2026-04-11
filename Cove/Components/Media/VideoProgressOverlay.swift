@@ -46,7 +46,7 @@ struct VideoProgressOverlay: View {
                 .frame(width: 240)
             VideoProgressOverlay(progress: 0.5)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(.rect(cornerRadius: 8))
         .padding()
     }
 
@@ -58,7 +58,7 @@ struct VideoProgressOverlay: View {
                 .frame(width: 240)
             VideoProgressOverlay(progress: 0.8, trackHeight: 4)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(.rect(cornerRadius: 8))
         .padding()
     }
 #endif

@@ -4,7 +4,7 @@ import MediaServerKit
 import Models
 import SwiftUI
 
-let CORNER_RADIUS = CGFloat(16)
+private let heroBannerCornerRadius: CGFloat = 16
 
 // MARK: - Hero Banner Carousel
 
@@ -15,9 +15,6 @@ struct HeroBannerView: View {
     @State private var isLoading = true
     @State private var lastInteractionDate = Date()
     @State private var lastAdvanceDate = Date()
-
-    /// Auto-advance ticker — fires every second so we can check elapsed time.
-    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     /// Seconds between auto-advances.
     private let advanceInterval: TimeInterval = 8
@@ -51,23 +48,24 @@ struct HeroBannerView: View {
         }
         .tabViewStyle(.page(indexDisplayMode: .always))
         .aspectRatio(16 / 9, contentMode: .fill)
-        .clipShape(RoundedRectangle(cornerRadius: CORNER_RADIUS))
+        .clipShape(.rect(cornerRadius: heroBannerCornerRadius))
         .onChange(of: currentIndex) { _, _ in
             lastInteractionDate = Date()
             lastAdvanceDate = Date()
         }
-        .onReceive(ticker) { now in
-            guard items.count > 1 else { return }
-            let sinceInteraction = now.timeIntervalSince(lastInteractionDate)
-            let sinceAdvance = now.timeIntervalSince(lastAdvanceDate)
-
-            // Don't auto-advance if the user recently interacted.
-            guard sinceInteraction >= resumeDelay else { return }
-            // Only advance once per interval.
-            guard sinceAdvance >= advanceInterval else { return }
-
-            withAnimation(.easeInOut(duration: 0.6)) {
-                currentIndex = (currentIndex + 1) % items.count
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard items.count > 1 else { continue }
+                let now = Date()
+                let sinceInteraction = now.timeIntervalSince(lastInteractionDate)
+                let sinceAdvance = now.timeIntervalSince(lastAdvanceDate)
+                guard sinceInteraction >= resumeDelay else { continue }
+                guard sinceAdvance >= advanceInterval else { continue }
+                withAnimation(.easeInOut(duration: 0.6)) {
+                    currentIndex = (currentIndex + 1) % items.count
+                }
+                lastAdvanceDate = now
             }
             lastAdvanceDate = now
         }
@@ -206,7 +204,7 @@ private struct BannerPageView: View {
             url: backdropURL ?? primaryURL,
             aspectRatio: nil,
             placeholderIcon: "film",
-            cornerRadius: CORNER_RADIUS,
+            cornerRadius: heroBannerCornerRadius,
             showsLoadingIndicator: false
         )
     }

@@ -22,7 +22,7 @@ struct ContinueWatchingCard: View {
                 if let progress = watchProgress {
                     VideoProgressOverlay(progress: progress, trackHeight: 4)
                         .frame(width: 240)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .clipShape(.rect(cornerRadius: 8))
                 }
 
                 // Play button overlay

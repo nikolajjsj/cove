@@ -76,7 +76,7 @@ struct MediaImage: View {
                     }
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        .clipShape(.rect(cornerRadius: cornerRadius))
     }
 
     // MARK: - Private

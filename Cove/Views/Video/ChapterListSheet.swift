@@ -46,7 +46,7 @@ struct ChapterListSheet: View {
             // Chapter thumbnail
             chapterThumbnail(chapter)
                 .frame(width: 100, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(.rect(cornerRadius: 6))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(chapter.name)

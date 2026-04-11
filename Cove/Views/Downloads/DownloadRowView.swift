@@ -20,7 +20,7 @@ struct DownloadRowView: View {
                 mediaTypeIcon
                     .frame(width: 36, height: 36)
                     .background(.quaternary)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(.rect(cornerRadius: 8))
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
