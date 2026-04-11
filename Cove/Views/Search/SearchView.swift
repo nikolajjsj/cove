@@ -315,7 +315,7 @@ private struct SearchHero: View {
                     .frame(width: 96, height: 96)
 
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 40, weight: .light))
+                    .font(.system(.largeTitle, weight: .light))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [.accentColor, .purple],

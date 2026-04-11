@@ -95,7 +95,7 @@ struct DownloadRowView: View {
 
     private var mediaTypeIcon: some View {
         Image(systemName: item.mediaType.placeholderIcon)
-            .font(.system(size: 16))
+            .font(.body)
             .foregroundStyle(.secondary)
     }
 
@@ -162,7 +162,7 @@ struct DownloadRowView: View {
                     .stroke(.tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 Image(systemName: item.isResumable ? "pause.fill" : "stop.fill")
-                    .font(.system(size: 8))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             .frame(width: 28, height: 28)

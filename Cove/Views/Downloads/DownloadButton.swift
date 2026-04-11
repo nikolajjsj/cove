@@ -110,7 +110,7 @@ struct DownloadButton: View {
                     .rotationEffect(.degrees(-90))
 
                 Image(systemName: "stop.fill")
-                    .font(.system(size: 9))
+                    .font(.caption2)
                     .foregroundStyle(.tint)
             }
             .frame(width: 26, height: 26)

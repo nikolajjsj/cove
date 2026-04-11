@@ -1,4 +1,3 @@
-internal import Combine
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -67,7 +66,6 @@ struct HeroBannerView: View {
                 }
                 lastAdvanceDate = now
             }
-            lastAdvanceDate = now
         }
     }
 

@@ -74,7 +74,7 @@ private struct OutlinedSubtitleText: View {
     var body: some View {
         ZStack {
             // Black stroke: render the same text offset in 8 directions
-            ForEach(offsets, id: \.debugDescription) { offset in
+            ForEach(offsets.enumerated(), id: \.offset) { _, offset in
                 Text(text)
                     .font(font)
                     .foregroundStyle(.black)

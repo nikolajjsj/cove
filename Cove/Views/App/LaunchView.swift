@@ -1,4 +1,3 @@
-internal import Combine
 import SwiftUI
 
 /// A polished launch screen shown while the app restores the user's session.
@@ -11,8 +10,6 @@ struct LaunchView: View {
     @State private var titleOpacity: Double = 0.0
     @State private var shimmerOffset: CGFloat = -1.0
     @State private var dotCount: Int = 0
-
-    private let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
@@ -34,13 +31,15 @@ struct LaunchView: View {
                 // MARK: - App Title
 
                 Text("Cove")
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .font(.largeTitle.bold())
+                    .fontDesign(.rounded)
                     .foregroundStyle(.primary)
                     .padding(.top, 20)
                     .opacity(titleOpacity)
 
                 Text("for Jellyfin")
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .font(.subheadline.weight(.medium))
+                    .fontDesign(.rounded)
                     .foregroundStyle(.secondary)
                     .padding(.top, 4)
                     .opacity(titleOpacity)
@@ -78,8 +77,11 @@ struct LaunchView: View {
                 titleOpacity = 1.0
             }
         }
-        .onReceive(timer) { _ in
-            dotCount += 1
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                dotCount += 1
+            }
         }
     }
 }
