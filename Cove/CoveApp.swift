@@ -108,7 +108,7 @@ struct CoveApp: App {
     /// - `cove://play/{itemId}` — resolves the item and starts playback immediately.
     private func handleDeepLink(_ url: URL) {
         guard url.scheme == "cove",
-            let host = url.host,
+            let host = url.host(percentEncoded: false),
             let itemIdString = url.pathComponents.dropFirst().first
         else { return }
 
