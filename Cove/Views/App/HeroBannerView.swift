@@ -77,7 +77,7 @@ struct HeroBannerView: View {
 
     private var bannerSkeleton: some View {
         RoundedRectangle(cornerRadius: 16)
-            .fill(Color(.secondarySystemBackground))
+            .fill(.quaternary)
             .frame(height: bannerHeight)
             .overlay {
                 ProgressView()

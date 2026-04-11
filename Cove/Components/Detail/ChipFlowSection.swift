@@ -29,7 +29,7 @@ struct ChipFlowSection: View {
                             .padding(.vertical, 6)
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color(.tertiarySystemFill))
+                                    .fill(.quaternary)
                             )
                     }
                 }

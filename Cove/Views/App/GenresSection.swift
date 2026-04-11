@@ -162,10 +162,13 @@ private struct GenreCardSkeleton: View {
             .fill(
                 LinearGradient(
                     colors: shimmer
-                        ? [Color(.systemFill), Color(.secondarySystemFill), Color(.systemFill)]
+                        ? [
+                            Color.primary.opacity(0.08), Color.primary.opacity(0.05),
+                            Color.primary.opacity(0.08),
+                        ]
                         : [
-                            Color(.secondarySystemFill), Color(.systemFill),
-                            Color(.secondarySystemFill),
+                            Color.primary.opacity(0.05), Color.primary.opacity(0.08),
+                            Color.primary.opacity(0.05),
                         ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -234,11 +237,11 @@ struct GenreCard: View {
 
                 HStack(spacing: 5) {
                     Image(systemName: GenreIconMap.icon(for: name))
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.caption2.bold())
                         .foregroundStyle(.white.opacity(0.85))
 
                     Text(name)
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.subheadline.bold())
                         .foregroundStyle(.white)
                         .lineLimit(1)
                 }
@@ -396,7 +399,7 @@ extension String {
             }
             .padding()
         }
-        .background(Color(.systemBackground))
+        .background(.background)
     }
 
     #Preview("Section – Loading") {
@@ -404,6 +407,6 @@ extension String {
             GenresSectionSkeleton()
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(.background)
     }
 #endif

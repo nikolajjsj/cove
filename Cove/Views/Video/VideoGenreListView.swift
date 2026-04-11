@@ -115,7 +115,7 @@ private struct GenreCapsuleCard: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.tertiarySystemFill))
+                    .fill(.quaternary)
             )
             .clipShape(.rect(cornerRadius: 12))
     }

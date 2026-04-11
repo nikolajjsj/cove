@@ -52,7 +52,7 @@ private struct GenreChip: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(.tertiarySystemFill))
+                    .fill(.quaternary)
             )
             .contentShape(.rect(cornerRadius: 8))
             .hoverEffect(.highlight)

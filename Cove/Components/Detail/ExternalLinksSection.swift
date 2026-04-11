@@ -27,7 +27,7 @@ struct ExternalLinksSection: View {
                                 .padding(.vertical, 8)
                                 .background(
                                     RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color(.tertiarySystemFill))
+                                        .fill(.quaternary)
                                 )
                         }
                         .buttonStyle(.plain)

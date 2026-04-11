@@ -293,7 +293,7 @@ struct SeriesDetailView: View {
                                     .fill(
                                         selectedSeason?.id == season.id
                                             ? Color.accentColor
-                                            : Color(.secondarySystemFill)
+                                            : .quaternary
                                     )
                             )
                             .foregroundStyle(
