@@ -29,7 +29,7 @@ struct PlaylistPickerSheet: View {
             return playlists
         }
         return playlists.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText)
+            $0.name.localizedStandardContains(searchText)
         }
     }
 
