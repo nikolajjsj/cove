@@ -12,6 +12,7 @@ struct LyricsView: View {
     @State private var isLoading = true
     @State private var isUserScrolling = false
     @State private var scrollPauseTask: Task<Void, Never>?
+    @State private var scrollPosition = ScrollPosition()
 
     /// Whether the lyrics have sync timing data.
     private var isSynced: Bool {
@@ -58,48 +59,47 @@ struct LyricsView: View {
     // MARK: - Synced Lyrics
 
     private func syncedLyricsView(lyrics: Lyrics) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 16) {
-                    // Top spacer for centering
-                    Spacer()
-                        .frame(height: 80)
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                // Top spacer for centering
+                Spacer()
+                    .frame(height: 80)
 
-                    ForEach(lyrics.lines.enumerated(), id: \.offset) { index, line in
-                        let isCurrentLine = currentLineIndex == index
+                ForEach(lyrics.lines.enumerated(), id: \.offset) { index, line in
+                    let isCurrentLine = currentLineIndex == index
 
-                        Button {
-                            if let startTime = line.startTime {
-                                appState.audioPlayer.seek(to: startTime)
-                            }
-                        } label: {
-                            Text(line.text)
-                                .font(.title3.weight(isCurrentLine ? .bold : .regular))
-                                .opacity(isCurrentLine ? 1.0 : 0.4)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 24)
-                                .animation(.easeInOut(duration: 0.3), value: isCurrentLine)
+                    Button {
+                        if let startTime = line.startTime {
+                            appState.audioPlayer.seek(to: startTime)
                         }
-                        .buttonStyle(.plain)
-                        .id(index)
+                    } label: {
+                        Text(line.text)
+                            .font(.title3.weight(isCurrentLine ? .bold : .regular))
+                            .opacity(isCurrentLine ? 1.0 : 0.4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 24)
+                            .animation(.easeInOut(duration: 0.3), value: isCurrentLine)
                     }
+                    .buttonStyle(.plain)
+                    .id(index)
+                }
 
-                    // Bottom spacer
-                    Spacer()
-                        .frame(height: 80)
-                }
+                // Bottom spacer
+                Spacer()
+                    .frame(height: 80)
             }
-            .scrollIndicators(.hidden)
-            .onScrollPhaseChange { _, newPhase in
-                if newPhase == .interacting {
-                    pauseAutoScroll()
-                }
+        }
+        .scrollPosition($scrollPosition)
+        .scrollIndicators(.hidden)
+        .onScrollPhaseChange { _, newPhase in
+            if newPhase == .interacting {
+                pauseAutoScroll()
             }
-            .onChange(of: currentLineIndex) { _, newIndex in
-                guard let newIndex, !isUserScrolling else { return }
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    proxy.scrollTo(newIndex, anchor: .center)
-                }
+        }
+        .onChange(of: currentLineIndex) { _, newIndex in
+            guard let newIndex, !isUserScrolling else { return }
+            withAnimation(.easeInOut(duration: 0.4)) {
+                scrollPosition.scrollTo(id: newIndex, anchor: .center)
             }
         }
     }
