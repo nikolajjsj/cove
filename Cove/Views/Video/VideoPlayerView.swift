@@ -139,14 +139,24 @@ struct VideoPlayerView: View {
 
             // Skip segment button (intro, credits, recap)
             // Placed above controls so it's always visible and tappable
-            skipSegmentButton
-                .zIndex(3.5)
+            SkipSegmentButton(
+                segment: activeSkippableSegment,
+                isHidden: videoManager.showNextEpisodeCountdown,
+                onSkip: { endTime in videoManager.seek(to: endTime) }
+            )
+            .zIndex(3.5)
 
             // Next episode countdown
             if videoManager.showNextEpisodeCountdown, let next = videoManager.nextEpisode {
-                nextEpisodeCountdownView(next: next)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-                    .zIndex(4)
+                NextEpisodeCountdownView(
+                    next: next,
+                    countdown: videoManager.nextEpisodeCountdown,
+                    thumbnailURL: thumbnailURL(for: next),
+                    onDismiss: { videoManager.dismissNextEpisodeCountdown() },
+                    onPlayNow: { videoManager.playNextEpisode() }
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+                .zIndex(4)
             }
         }
         #if !os(tvOS)
@@ -735,45 +745,6 @@ struct VideoPlayerView: View {
         }
     #endif
 
-    // MARK: - Skip Segment Button
-
-    @ViewBuilder
-    private var skipSegmentButton: some View {
-        if let segment = activeSkippableSegment,
-            !videoManager.showNextEpisodeCountdown
-        {
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Button {
-                        videoManager.seek(to: segment.endTime)
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "forward.fill")
-                                .font(.subheadline)
-                            Text(segment.skipButtonLabel)
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(.white, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .transition(
-                        .asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .opacity
-                        ))
-                }
-                .padding(.trailing, 24)
-                .padding(.bottom, 100)
-            }
-            .animation(.spring(duration: 0.4), value: activeSkippableSegment?.id)
-        }
-    }
-
     /// Whether the video is in a loading state — either actively buffering
     /// or still waiting for the player item to report its duration.
     private var isLoadingVideo: Bool {
@@ -784,75 +755,6 @@ struct VideoPlayerView: View {
     /// The currently active skippable segment based on playback position.
     private var activeSkippableSegment: MediaSegment? {
         mediaSegments.first { $0.contains(time: videoManager.currentTime) }
-    }
-
-    @ViewBuilder
-    private func nextEpisodeCountdownView(next: MediaItem) -> some View {
-        VStack {
-            Spacer()
-            HStack {
-                Spacer()
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Up Next")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.7))
-                            .textCase(.uppercase)
-
-                        Spacer()
-
-                        Button {
-                            videoManager.dismissNextEpisodeCountdown()
-                        } label: {
-                            Label("Dismiss", systemImage: "xmark")
-                                .labelStyle(.iconOnly)
-                                .font(.caption.bold())
-                                .foregroundStyle(.white.opacity(0.7))
-                                .frame(width: 28, height: 28)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    HStack(spacing: 12) {
-                        // Next episode thumbnail
-                        MediaImage.videoThumbnail(url: thumbnailURL(for: next), cornerRadius: 6)
-                            .frame(width: 100)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(next.title)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .lineLimit(2)
-
-                            Text("Starting in \(videoManager.nextEpisodeCountdown)s")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.7))
-                                .monospacedDigit()
-                        }
-                    }
-
-                    Button {
-                        videoManager.playNextEpisode()
-                    } label: {
-                        Text("Play Now")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(.white, in: RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(16)
-                .frame(width: 280)
-                .background(
-                    .ultraThinMaterial.opacity(0.8), in: RoundedRectangle(cornerRadius: 14)
-                )
-                .environment(\.colorScheme, .dark)
-            }
-            .padding(24)
-        }
     }
 
     // MARK: - Setup
@@ -1060,5 +962,128 @@ struct VideoPlayerView: View {
             type: .primary,
             maxSize: CGSize(width: 320, height: 180)
         )
+    }
+}
+
+// MARK: - Skip Segment Button
+
+/// A floating "Skip Intro" / "Skip Credits" button that appears when playback
+/// enters a skippable media segment.
+private struct SkipSegmentButton: View {
+    let segment: MediaSegment?
+    let isHidden: Bool
+    let onSkip: (TimeInterval) -> Void
+
+    var body: some View {
+        if let segment, !isHidden {
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button {
+                        onSkip(segment.endTime)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "forward.fill")
+                                .font(.subheadline)
+                            Text(segment.skipButtonLabel)
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(.white, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                }
+                .padding(.trailing, 24)
+                .padding(.bottom, 100)
+            }
+            .animation(.spring(duration: 0.4), value: segment.id)
+        }
+    }
+}
+
+// MARK: - Next Episode Countdown
+
+/// A floating card shown near the end of an episode, counting down to
+/// auto-play of the next episode. Provides dismiss and "Play Now" actions.
+private struct NextEpisodeCountdownView: View {
+    let next: MediaItem
+    let countdown: Int
+    let thumbnailURL: URL?
+    let onDismiss: () -> Void
+    let onPlayNow: () -> Void
+
+    var body: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Up Next")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .textCase(.uppercase)
+
+                        Spacer()
+
+                        Button {
+                            onDismiss()
+                        } label: {
+                            Label("Dismiss", systemImage: "xmark")
+                                .labelStyle(.iconOnly)
+                                .font(.caption.bold())
+                                .foregroundStyle(.white.opacity(0.7))
+                                .frame(width: 28, height: 28)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    HStack(spacing: 12) {
+                        MediaImage.videoThumbnail(url: thumbnailURL, cornerRadius: 6)
+                            .frame(width: 100)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(next.title)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .lineLimit(2)
+
+                            Text("Starting in \(countdown)s")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.7))
+                                .monospacedDigit()
+                        }
+                    }
+
+                    Button {
+                        onPlayNow()
+                    } label: {
+                        Text("Play Now")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(.white, in: RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(16)
+                .frame(width: 280)
+                .background(
+                    .ultraThinMaterial.opacity(0.8), in: RoundedRectangle(cornerRadius: 14)
+                )
+                .environment(\.colorScheme, .dark)
+            }
+            .padding(24)
+        }
     }
 }
