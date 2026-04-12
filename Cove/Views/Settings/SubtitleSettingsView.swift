@@ -75,7 +75,7 @@ struct SubtitleSettingsView: View {
                 Text("OpenSubtitles")
             } footer: {
                 Text(
-                    "Optional. Subtitle search works without an API key but is limited to 5 downloads per day. Add your own key for higher limits."
+                    "Required to search for subtitles. Get a free API key at opensubtitles.com/consumers, then paste it here."
                 )
             }
         }

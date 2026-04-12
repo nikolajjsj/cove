@@ -8,6 +8,7 @@ import SwiftUI
 struct SubtitleSearchSheet: View {
     @Bindable var viewModel: SubtitleSearchViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var hasSearched = false
 
     var body: some View {
         NavigationStack {
@@ -15,18 +16,25 @@ struct SubtitleSearchSheet: View {
                 if viewModel.isSearching {
                     ProgressView("Searching…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let error = viewModel.error, viewModel.results.isEmpty {
+                } else if let error = viewModel.error {
                     SubtitleSearchErrorView(
                         error: error,
                         onRetry: {
                             Task { await viewModel.search() }
                         })
-                } else if viewModel.results.isEmpty && !viewModel.isSearching {
-                    ContentUnavailableView(
-                        "Search for Subtitles",
-                        systemImage: "captions.bubble",
-                        description: Text("Select a language to search for subtitles.")
-                    )
+                } else if viewModel.results.isEmpty {
+                    if hasSearched {
+                        ContentUnavailableView(
+                            "No Subtitles Found",
+                            systemImage: "text.badge.xmark",
+                            description: Text(
+                                "No subtitles were found for this item in the selected language. Try a different language."
+                            )
+                        )
+                    } else {
+                        ProgressView("Searching…")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 } else {
                     SubtitleResultsList(
                         results: viewModel.results,
@@ -59,6 +67,12 @@ struct SubtitleSearchSheet: View {
             }
             .task {
                 await viewModel.search()
+                hasSearched = true
+            }
+            .onChange(of: viewModel.isSearching) { wasSearching, isSearching in
+                if wasSearching && !isSearching {
+                    hasSearched = true
+                }
             }
         }
     }
@@ -227,6 +241,7 @@ private struct SubtitleResultRow: View {
 private struct SubtitleSearchErrorView: View {
     let error: SubtitleSearchError
     let onRetry: () -> Void
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ContentUnavailableView {
@@ -234,9 +249,16 @@ private struct SubtitleSearchErrorView: View {
         } description: {
             Text(error.message)
         } actions: {
-            if case .noResults = error {
+            switch error {
+            case .noResults:
                 // No retry for "no results" — user should change language
-            } else {
+                EmptyView()
+            case .apiKeyRequired, .unauthorized:
+                Button("Close") {
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+            default:
                 Button("Try Again", action: onRetry)
                     .buttonStyle(.borderedProminent)
             }

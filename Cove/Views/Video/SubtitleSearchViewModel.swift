@@ -116,7 +116,11 @@ final class SubtitleSearchViewModel {
         results = []
         defer { isSearching = false }
 
-        let apiKey = keychain.token(forServerID: Self.apiKeyAccount)
+        guard let apiKey = keychain.token(forServerID: Self.apiKeyAccount), !apiKey.isEmpty else {
+            error = .apiKeyRequired
+            return
+        }
+
         let client = OpenSubtitlesClient(apiKey: apiKey)
 
         do {
@@ -130,11 +134,12 @@ final class SubtitleSearchViewModel {
             )
 
             results = response.data
-            if results.isEmpty {
-                error = .noResults
-            }
         } catch let osError as OpenSubtitlesError {
             error = mapError(osError)
+        } catch is DecodingError {
+            logger.error("Failed to decode OpenSubtitles response")
+            self.error = .networkError(
+                description: "Unexpected response format from OpenSubtitles.")
         } catch {
             self.error = .networkError(description: error.localizedDescription)
         }
@@ -156,7 +161,11 @@ final class SubtitleSearchViewModel {
         downloadSuccess = false
         defer { isDownloading = false }
 
-        let apiKey = keychain.token(forServerID: Self.apiKeyAccount)
+        guard let apiKey = keychain.token(forServerID: Self.apiKeyAccount), !apiKey.isEmpty else {
+            error = .apiKeyRequired
+            return
+        }
+
         let client = OpenSubtitlesClient(apiKey: apiKey)
 
         do {
@@ -409,6 +418,7 @@ final class SubtitleSearchViewModel {
 /// Errors displayed in the subtitle search sheet UI.
 enum SubtitleSearchError: Equatable {
     case noResults
+    case apiKeyRequired
     case rateLimited(resetTime: String?, hasApiKey: Bool)
     case unauthorized
     case networkError(description: String)
@@ -417,6 +427,7 @@ enum SubtitleSearchError: Equatable {
     var title: String {
         switch self {
         case .noResults: "No Subtitles Found"
+        case .apiKeyRequired: "API Key Required"
         case .rateLimited: "Rate Limited"
         case .unauthorized: "Invalid API Key"
         case .networkError: "Connection Error"
@@ -428,14 +439,16 @@ enum SubtitleSearchError: Equatable {
         switch self {
         case .noResults:
             "No subtitles were found for this item in the selected language. Try a different language."
+        case .apiKeyRequired:
+            "An OpenSubtitles API key is required to search for subtitles. You can get a free key at opensubtitles.com and add it in Settings → Subtitles."
         case .rateLimited(_, let hasApiKey):
             if hasApiKey {
                 "Too many requests. Please try again later."
             } else {
-                "You've reached the daily limit for subtitle downloads. Add an OpenSubtitles API key in Settings for a higher quota."
+                "You've reached the daily limit for subtitle downloads. Check your API key quota at opensubtitles.com."
             }
         case .unauthorized:
-            "Your OpenSubtitles API key is invalid. Please check it in Settings."
+            "Your OpenSubtitles API key is invalid or expired. Please check it in Settings → Subtitles."
         case .networkError(let description):
             "Could not connect to OpenSubtitles: \(description)"
         case .downloadFailed:
@@ -446,6 +459,7 @@ enum SubtitleSearchError: Equatable {
     var systemImage: String {
         switch self {
         case .noResults: "text.badge.xmark"
+        case .apiKeyRequired: "key.fill"
         case .rateLimited: "clock.badge.exclamationmark"
         case .unauthorized: "key.slash"
         case .networkError: "wifi.exclamationmark"

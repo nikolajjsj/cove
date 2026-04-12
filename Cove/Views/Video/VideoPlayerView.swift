@@ -67,10 +67,9 @@ struct VideoPlayerView: View {
                 )
                 .zIndex(3)
             #else
-                // Gesture layer — always active underneath controls (touch platforms)
-                VideoGestureLayer(
-                    currentTime: videoManager.currentTime,
-                    duration: videoManager.duration,
+                // Gesture layer — reads currentTime in its own tracking scope
+                GestureLayerContainer(
+                    videoManager: videoManager,
                     skipForwardInterval: Defaults[.skipForwardInterval],
                     skipBackwardInterval: Defaults[.skipBackwardInterval],
                     onToggleControls: {
@@ -122,28 +121,19 @@ struct VideoPlayerView: View {
                     .zIndex(2)
             }
 
-            // External subtitle text overlay
-            if let subtitleText = videoManager.currentSubtitleText {
-                VStack {
-                    Spacer()
-                    SubtitleTextView(
-                        text: subtitleText,
-                        size: subtitleSize,
-                        color: subtitleColor,
-                        background: subtitleBackground
-                    )
-                    .padding(.bottom, 12)
-                }
-                .allowsHitTesting(false)
-                .zIndex(2.5)
-            }
+            // External subtitle text overlay — reads currentSubtitleText in its own scope
+            SubtitleOverlay(
+                videoManager: videoManager,
+                subtitleSize: subtitleSize,
+                subtitleColor: subtitleColor,
+                subtitleBackground: subtitleBackground
+            )
+            .zIndex(2.5)
 
-            // Skip segment button (intro, credits, recap)
-            // Placed above controls so it's always visible and tappable
-            SkipSegmentButton(
-                segment: activeSkippableSegment,
-                isHidden: videoManager.showNextEpisodeCountdown,
-                onSkip: { endTime in videoManager.seek(to: endTime) }
+            // Skip segment button — reads currentTime in its own scope
+            SkipSegmentOverlay(
+                mediaSegments: mediaSegments,
+                videoManager: videoManager
             )
             .zIndex(3.5)
 
@@ -164,7 +154,6 @@ struct VideoPlayerView: View {
             .animation(.easeOut(duration: 0.15), value: showControls)
         #endif
         .animation(.easeInOut(duration: 0.3), value: videoManager.showNextEpisodeCountdown)
-        .animation(.spring(duration: 0.4), value: activeSkippableSegment?.id)
         .background(Color.black)
         #if os(iOS)
             .statusBarHidden(true)
@@ -290,9 +279,11 @@ struct VideoPlayerView: View {
                 }
             }
         }
+    #endif
 
-        // MARK: - Top Bar
+    // MARK: - Top Bar
 
+    #if !os(tvOS)
         private var topBar: some View {
             HStack(alignment: .center, spacing: 12) {
                 Button {
@@ -478,287 +469,43 @@ struct VideoPlayerView: View {
 
     #if !os(tvOS)
 
+        /// The bottom bar composes time-dependent children (slider, labels) and
+        /// time-independent children (menus) as separate `View` structs so that
+        /// rapid `currentTime` ticks don't cause menu re-renders.
         private var bottomBar: some View {
             VStack(spacing: 8) {
-                seekSlider
+                PlayerSeekSlider(
+                    videoManager: videoManager,
+                    isSeeking: $isSeeking,
+                    seekTime: $seekTime,
+                    isGestureSeeking: isGestureSeeking,
+                    gestureSeekTime: gestureSeekTime
+                )
 
                 HStack(spacing: 12) {
-                    // Time labels
-                    Text(TimeFormatting.playbackPosition(displayTime))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.8))
-
-                    Text("/")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.5))
-
-                    Text(TimeFormatting.playbackPosition(videoManager.duration))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.8))
+                    PlayerTimeLabels(
+                        videoManager: videoManager,
+                        isSeeking: isSeeking,
+                        seekTime: seekTime,
+                        isGestureSeeking: isGestureSeeking,
+                        gestureSeekTime: gestureSeekTime
+                    )
 
                     Spacer()
 
-                    // Quality picker
-                    if coordinator.availableQualities.count > 1 {
-                        qualityMenu
-                    }
-
-                    // Speed picker — inline Menu instead of a full sheet
-                    speedMenu
-
-                    // Audio track picker — inline Menu (context-menu style)
-                    if videoManager.audioTracks.count > 1 {
-                        audioTrackMenu
-                    }
-
-                    // Subtitle picker — inline Menu (context-menu style)
-                    subtitleMenu
-
-                    // AirPlay
-                    #if os(iOS)
-                        AirPlayButton()
-                            .frame(width: 44, height: 44)
-                            .tint(.white)
-                    #endif
-                }
-            }
-        }
-
-    #endif
-
-    // MARK: - Quality Menu
-
-    #if !os(tvOS)
-        private var qualityMenu: some View {
-            Menu {
-                Picker(
-                    "Quality",
-                    selection: Binding(
-                        get: { coordinator.activeQuality },
-                        set: { newQuality in
-                            coordinator.switchQuality(
-                                to: newQuality,
-                                currentTime: videoManager.currentTime
-                            )
-                            resetControlsTimer()
-                        }
+                    PlayerMenuBar(
+                        item: item,
+                        streamInfo: streamInfo,
+                        videoManager: videoManager,
+                        coordinator: coordinator,
+                        authManager: authManager,
+                        showSubtitleSearch: $showSubtitleSearch,
+                        onControlsInteraction: StableAction(resetControlsTimer)
                     )
-                ) {
-                    ForEach(coordinator.availableQualities, id: \.self) { quality in
-                        Text(qualityLabel(for: quality)).tag(quality)
-                    }
                 }
-            } label: {
-                Image(systemName: coordinator.activeQuality == .auto ? "dial.low" : "dial.high")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(
-                        coordinator.activeQuality == .auto ? .white : Color.accentColor
-                    )
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
             }
         }
 
-        private func qualityLabel(for quality: StreamingQuality) -> String {
-            if quality == .auto, let height = coordinator.sourceVideoHeight {
-                let resolution = height >= 2160 ? "4K" : "\(height)p"
-                if let bitrate = coordinator.sourceVideoBitrate {
-                    let mbps = (Double(bitrate) / 1_000_000).formatted(
-                        .number.precision(.fractionLength(0)))
-                    return "Auto (\(resolution) · \(mbps) Mbps)"
-                }
-                return "Auto (\(resolution))"
-            }
-            return quality.label
-        }
-
-        // MARK: - Speed Menu
-
-        /// Inline speed picker presented as a compact Menu (context-menu style).
-        private var speedMenu: some View {
-            Menu {
-                Picker(
-                    "Playback Speed",
-                    selection: Binding(
-                        get: { videoManager.playbackSpeed },
-                        set: { newSpeed in
-                            videoManager.setSpeed(newSpeed)
-                            Defaults[.videoPlaybackSpeed] = newSpeed
-                            resetControlsTimer()
-                        }
-                    )
-                ) {
-                    ForEach(VideoPlaybackManager.speedOptions, id: \.self) { speed in
-                        Text(speedDisplayText(speed) + (speed == 1.0 ? " (Normal)" : ""))
-                            .tag(speed)
-                    }
-                }
-            } label: {
-                Text(speedLabel)
-                    .font(.caption.weight(.bold).monospacedDigit())
-                    .foregroundStyle(
-                        videoManager.playbackSpeed != 1.0 ? Color.accentColor : .white
-                    )
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-        }
-
-        /// Speed label: "1×" for normal, "1.5×" etc for other speeds.
-        private var speedLabel: String {
-            let speed = videoManager.playbackSpeed
-            if speed == Float(Int(speed)) {
-                return "\(Int(speed))×"
-            }
-            return "\(speed.formatted(.number.precision(.fractionLength(1))))×"
-        }
-
-        private func speedDisplayText(_ speed: Float) -> String {
-            if speed == Float(Int(speed)) {
-                return "\(Int(speed))×"
-            }
-            return "\(speed.formatted(.number.precision(.significantDigits(2))))×"
-        }
-
-        // MARK: - Seek Slider
-
-        /// The time to display — prioritizes gesture seeking, then slider seeking, then actual time.
-        private var displayTime: TimeInterval {
-            if isGestureSeeking { return gestureSeekTime }
-            if isSeeking { return seekTime }
-            return videoManager.currentTime
-        }
-
-        private var seekSlider: some View {
-            Slider(
-                value: Binding(
-                    get: { displayTime },
-                    set: { newValue in
-                        if !isSeeking {
-                            isSeeking = true
-                        }
-                        seekTime = newValue
-                        resetControlsTimer()
-                    }
-                ),
-                in: 0...max(videoManager.duration, 1),
-                onEditingChanged: { editing in
-                    if !editing {
-                        videoManager.seek(to: seekTime)
-                        isSeeking = false
-                    }
-                }
-            )
-            .tint(.white)
-        }
-    #endif
-
-    // MARK: - Subtitle Menu
-
-    #if !os(tvOS)
-
-        /// Inline subtitle picker presented as a compact Menu (context-menu style).
-        /// Uses -1 as a sentinel for "Off" since Picker needs a hashable, non-optional tag.
-        private var subtitleMenu: some View {
-            Menu {
-                Picker(
-                    "Subtitles",
-                    selection: Binding(
-                        get: { videoManager.selectedSubtitleIndex ?? -1 },
-                        set: { newIndex in
-                            let index = newIndex == -1 ? nil : newIndex
-                            let url: URL? = {
-                                guard let idx = index,
-                                    let sourceId = streamInfo.mediaSourceId
-                                else { return nil }
-                                return authManager.provider.subtitleURL(
-                                    itemId: item.id,
-                                    mediaSourceId: sourceId,
-                                    subtitleIndex: idx
-                                )
-                            }()
-                            videoManager.selectSubtitle(at: index, externalURL: url)
-                            resetControlsTimer()
-                        }
-                    )
-                ) {
-                    Text("Off").tag(-1)
-
-                    ForEach(videoManager.subtitleTracks) { track in
-                        subtitleTrackLabel(for: track)
-                            .tag(track.id)
-                    }
-                }
-
-                Divider()
-
-                Button("Search Online…", systemImage: "magnifyingglass") {
-                    showSubtitleSearch = true
-                }
-            } label: {
-                Image(
-                    systemName: videoManager.selectedSubtitleIndex != nil
-                        ? "captions.bubble.fill" : "captions.bubble"
-                )
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-            }
-        }
-
-        /// Label for a single subtitle track option inside the picker.
-        @ViewBuilder
-        private func subtitleTrackLabel(for track: SubtitleTrack) -> some View {
-            if let language = track.language,
-                let localized = Locale.current.localizedString(forLanguageCode: language)
-            {
-                Text("\(track.title) — \(localized)")
-            } else {
-                Text(track.title)
-            }
-        }
-
-        // MARK: - Audio Track Menu
-
-        /// Inline audio track picker presented as a compact Menu (context-menu style).
-        private var audioTrackMenu: some View {
-            Menu {
-                Picker(
-                    "Audio Track",
-                    selection: Binding(
-                        get: { videoManager.selectedAudioTrackIndex ?? 0 },
-                        set: { newIndex in
-                            videoManager.selectAudioTrack(at: newIndex)
-                            resetControlsTimer()
-                        }
-                    )
-                ) {
-                    ForEach(videoManager.audioTracks) { track in
-                        audioTrackLabel(for: track)
-                            .tag(track.id)
-                    }
-                }
-            } label: {
-                Image(systemName: "waveform.circle")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-        }
-
-        /// Label for a single audio track option inside the picker.
-        @ViewBuilder
-        private func audioTrackLabel(for track: AudioTrack) -> some View {
-            if let language = track.language,
-                let localized = Locale.current.localizedString(forLanguageCode: language)
-            {
-                Text("\(track.title) — \(localized)" + (track.isDefault ? " (Default)" : ""))
-            } else {
-                Text(track.title + (track.isDefault ? " (Default)" : ""))
-            }
-        }
     #endif
 
     /// Whether the video is in a loading state — either actively buffering
@@ -766,11 +513,6 @@ struct VideoPlayerView: View {
     private var isLoadingVideo: Bool {
         videoManager.isBuffering
             || (videoManager.currentItem != nil && videoManager.duration <= 0)
-    }
-
-    /// The currently active skippable segment based on playback position.
-    private var activeSkippableSegment: MediaSegment? {
-        mediaSegments.first { $0.contains(time: videoManager.currentTime) }
     }
 
     // MARK: - Setup
@@ -980,6 +722,434 @@ struct VideoPlayerView: View {
         )
     }
 }
+
+// MARK: - Stable Action Wrapper
+
+/// A callback wrapper that prevents closures from causing SwiftUI view invalidation.
+///
+/// Closures can't be compared for equality, so passing them directly as view
+/// parameters causes SwiftUI to re-render the child view on every parent evaluation.
+/// This wrapper always compares as equal, telling SwiftUI the callback hasn't changed.
+private struct StableAction: Equatable {
+    private let perform: () -> Void
+
+    init(_ perform: @escaping () -> Void) {
+        self.perform = perform
+    }
+
+    func callAsFunction() {
+        perform()
+    }
+
+    static func == (lhs: StableAction, rhs: StableAction) -> Bool {
+        true  // Closures can't be compared; treat as always equal to prevent re-renders
+    }
+}
+
+// MARK: - Gesture Layer Container
+
+/// Wraps `VideoGestureLayer` so that reads of `videoManager.currentTime` and
+/// `videoManager.duration` happen in this child view's `@Observable` tracking
+/// scope rather than in `VideoPlayerView.body`.
+#if !os(tvOS)
+    private struct GestureLayerContainer: View {
+        let videoManager: VideoPlaybackManager
+        let skipForwardInterval: TimeInterval
+        let skipBackwardInterval: TimeInterval
+        let onToggleControls: () -> Void
+        let onSkipForward: () -> Void
+        let onSkipBackward: () -> Void
+        let onSeekStarted: () -> Void
+        let onSeekChanged: (TimeInterval) -> Void
+        let onSeekCommitted: (TimeInterval) -> Void
+        let onAspectRatioCycle: () -> Void
+
+        var body: some View {
+            VideoGestureLayer(
+                currentTime: videoManager.currentTime,
+                duration: videoManager.duration,
+                skipForwardInterval: skipForwardInterval,
+                skipBackwardInterval: skipBackwardInterval,
+                onToggleControls: onToggleControls,
+                onSkipForward: onSkipForward,
+                onSkipBackward: onSkipBackward,
+                onSeekStarted: onSeekStarted,
+                onSeekChanged: onSeekChanged,
+                onSeekCommitted: onSeekCommitted,
+                onAspectRatioCycle: onAspectRatioCycle
+            )
+        }
+    }
+#endif
+
+// MARK: - Subtitle Overlay
+
+/// Reads `videoManager.currentSubtitleText` in its own `@Observable` tracking
+/// scope so that subtitle text changes don't invalidate `VideoPlayerView.body`.
+private struct SubtitleOverlay: View {
+    let videoManager: VideoPlaybackManager
+    let subtitleSize: SubtitleSize
+    let subtitleColor: SubtitleColor
+    let subtitleBackground: SubtitleBackground
+
+    var body: some View {
+        if let subtitleText = videoManager.currentSubtitleText {
+            VStack {
+                Spacer()
+                SubtitleTextView(
+                    text: subtitleText,
+                    size: subtitleSize,
+                    color: subtitleColor,
+                    background: subtitleBackground
+                )
+                .padding(.bottom, 12)
+            }
+            .allowsHitTesting(false)
+        }
+    }
+}
+
+// MARK: - Skip Segment Overlay
+
+/// Reads `videoManager.currentTime` in its own tracking scope to compute the
+/// active skippable segment without triggering `VideoPlayerView.body` re-evaluation.
+private struct SkipSegmentOverlay: View {
+    let mediaSegments: [MediaSegment]
+    let videoManager: VideoPlaybackManager
+
+    private var activeSegment: MediaSegment? {
+        mediaSegments.first { $0.contains(time: videoManager.currentTime) }
+    }
+
+    var body: some View {
+        SkipSegmentButton(
+            segment: activeSegment,
+            isHidden: videoManager.showNextEpisodeCountdown,
+            onSkip: { endTime in videoManager.seek(to: endTime) }
+        )
+    }
+}
+
+// MARK: - Player Seek Slider
+
+/// The seek slider, isolated into its own view so that `videoManager.currentTime`
+/// reads happen here instead of in `VideoPlayerView.body`.
+#if !os(tvOS)
+    private struct PlayerSeekSlider: View {
+        let videoManager: VideoPlaybackManager
+        @Binding var isSeeking: Bool
+        @Binding var seekTime: TimeInterval
+        let isGestureSeeking: Bool
+        let gestureSeekTime: TimeInterval
+
+        private var displayTime: TimeInterval {
+            if isGestureSeeking { return gestureSeekTime }
+            if isSeeking { return seekTime }
+            return videoManager.currentTime
+        }
+
+        var body: some View {
+            Slider(
+                value: Binding(
+                    get: { displayTime },
+                    set: { newValue in
+                        if !isSeeking {
+                            isSeeking = true
+                        }
+                        seekTime = newValue
+                    }
+                ),
+                in: 0...max(videoManager.duration, 1),
+                onEditingChanged: { editing in
+                    if !editing {
+                        videoManager.seek(to: seekTime)
+                        isSeeking = false
+                    }
+                }
+            )
+            .tint(.white)
+        }
+    }
+#endif
+
+// MARK: - Player Time Labels
+
+/// Displays elapsed / total time, isolated so `currentTime` reads don't
+/// propagate up to `VideoPlayerView.body`.
+#if !os(tvOS)
+    private struct PlayerTimeLabels: View {
+        let videoManager: VideoPlaybackManager
+        let isSeeking: Bool
+        let seekTime: TimeInterval
+        let isGestureSeeking: Bool
+        let gestureSeekTime: TimeInterval
+
+        private var displayTime: TimeInterval {
+            if isGestureSeeking { return gestureSeekTime }
+            if isSeeking { return seekTime }
+            return videoManager.currentTime
+        }
+
+        var body: some View {
+            HStack(spacing: 12) {
+                Text(TimeFormatting.playbackPosition(displayTime))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.8))
+
+                Text("/")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.5))
+
+                Text(TimeFormatting.playbackPosition(videoManager.duration))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+        }
+    }
+#endif
+
+// MARK: - Player Menu Bar
+
+#if !os(tvOS)
+
+    /// Extracted menu bar for the video player controls.
+    ///
+    /// This is a separate `View` struct (not a computed property on `VideoPlayerView`)
+    /// so that it gets its own `@Observable` tracking scope. This prevents the menus
+    /// from re-rendering every time `videoManager.currentTime` changes (~10×/sec),
+    /// which caused visible flickering/flashing of menu buttons and dismissed open menus.
+    ///
+    /// The `onControlsInteraction` callback uses `StableAction` (always-equal wrapper)
+    /// so that closure identity changes don't cause SwiftUI to treat this view as modified.
+    private struct PlayerMenuBar: View {
+        let item: MediaItem
+        let streamInfo: StreamInfo
+        let videoManager: VideoPlaybackManager
+        let coordinator: VideoPlayerCoordinator
+        let authManager: AuthManager
+        @Binding var showSubtitleSearch: Bool
+        let onControlsInteraction: StableAction
+
+        var body: some View {
+            HStack(spacing: 12) {
+                // Quality picker
+                if coordinator.availableQualities.count > 1 {
+                    qualityMenu
+                }
+
+                // Speed picker
+                speedMenu
+
+                // Audio track picker
+                if videoManager.audioTracks.count > 1 {
+                    audioTrackMenu
+                }
+
+                // Subtitle picker
+                subtitleMenu
+
+                // AirPlay
+                #if os(iOS)
+                    AirPlayButton()
+                        .frame(width: 44, height: 44)
+                        .tint(.white)
+                #endif
+            }
+        }
+
+        // MARK: - Quality Menu
+
+        private var qualityMenu: some View {
+            Menu {
+                Picker(
+                    "Quality",
+                    selection: Binding(
+                        get: { coordinator.activeQuality },
+                        set: { newQuality in
+                            coordinator.switchQuality(
+                                to: newQuality,
+                                currentTime: videoManager.currentTime
+                            )
+                            onControlsInteraction()
+                        }
+                    )
+                ) {
+                    ForEach(coordinator.availableQualities, id: \.self) { quality in
+                        Text(qualityLabel(for: quality)).tag(quality)
+                    }
+                }
+            } label: {
+                Image(systemName: coordinator.activeQuality == .auto ? "dial.low" : "dial.high")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(
+                        coordinator.activeQuality == .auto ? .white : Color.accentColor
+                    )
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+        }
+
+        private func qualityLabel(for quality: StreamingQuality) -> String {
+            if quality == .auto, let height = coordinator.sourceVideoHeight {
+                let resolution = height >= 2160 ? "4K" : "\(height)p"
+                if let bitrate = coordinator.sourceVideoBitrate {
+                    let mbps = (Double(bitrate) / 1_000_000).formatted(
+                        .number.precision(.fractionLength(0)))
+                    return "Auto (\(resolution) · \(mbps) Mbps)"
+                }
+                return "Auto (\(resolution))"
+            }
+            return quality.label
+        }
+
+        // MARK: - Speed Menu
+
+        private var speedMenu: some View {
+            Menu {
+                Picker(
+                    "Playback Speed",
+                    selection: Binding(
+                        get: { videoManager.playbackSpeed },
+                        set: { newSpeed in
+                            videoManager.setSpeed(newSpeed)
+                            Defaults[.videoPlaybackSpeed] = newSpeed
+                            onControlsInteraction()
+                        }
+                    )
+                ) {
+                    ForEach(VideoPlaybackManager.speedOptions, id: \.self) { speed in
+                        Text(speedDisplayText(speed) + (speed == 1.0 ? " (Normal)" : ""))
+                            .tag(speed)
+                    }
+                }
+            } label: {
+                Text(speedLabel)
+                    .font(.caption.weight(.bold).monospacedDigit())
+                    .foregroundStyle(
+                        videoManager.playbackSpeed != 1.0 ? Color.accentColor : .white
+                    )
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+        }
+
+        private var speedLabel: String {
+            let speed = videoManager.playbackSpeed
+            if speed == Float(Int(speed)) {
+                return "\(Int(speed))×"
+            }
+            return "\(speed.formatted(.number.precision(.fractionLength(1))))×"
+        }
+
+        private func speedDisplayText(_ speed: Float) -> String {
+            if speed == Float(Int(speed)) {
+                return "\(Int(speed))×"
+            }
+            return "\(speed.formatted(.number.precision(.significantDigits(2))))×"
+        }
+
+        // MARK: - Subtitle Menu
+
+        private var subtitleMenu: some View {
+            Menu {
+                Picker(
+                    "Subtitles",
+                    selection: Binding(
+                        get: { videoManager.selectedSubtitleIndex ?? -1 },
+                        set: { newIndex in
+                            let index = newIndex == -1 ? nil : newIndex
+                            let url: URL? = {
+                                guard let idx = index,
+                                    let sourceId = streamInfo.mediaSourceId
+                                else { return nil }
+                                return authManager.provider.subtitleURL(
+                                    itemId: item.id,
+                                    mediaSourceId: sourceId,
+                                    subtitleIndex: idx
+                                )
+                            }()
+                            videoManager.selectSubtitle(at: index, externalURL: url)
+                            onControlsInteraction()
+                        }
+                    )
+                ) {
+                    Text("Off").tag(-1)
+
+                    ForEach(videoManager.subtitleTracks) { track in
+                        subtitleTrackLabel(for: track)
+                            .tag(track.id)
+                    }
+                }
+
+                Divider()
+
+                Button("Search Online…", systemImage: "magnifyingglass") {
+                    showSubtitleSearch = true
+                }
+            } label: {
+                Image(
+                    systemName: videoManager.selectedSubtitleIndex != nil
+                        ? "captions.bubble.fill" : "captions.bubble"
+                )
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+            }
+        }
+
+        @ViewBuilder
+        private func subtitleTrackLabel(for track: SubtitleTrack) -> some View {
+            if let language = track.language,
+                let localized = Locale.current.localizedString(forLanguageCode: language)
+            {
+                Text("\(track.title) — \(localized)")
+            } else {
+                Text(track.title)
+            }
+        }
+
+        // MARK: - Audio Track Menu
+
+        private var audioTrackMenu: some View {
+            Menu {
+                Picker(
+                    "Audio Track",
+                    selection: Binding(
+                        get: { videoManager.selectedAudioTrackIndex ?? 0 },
+                        set: { newIndex in
+                            videoManager.selectAudioTrack(at: newIndex)
+                            onControlsInteraction()
+                        }
+                    )
+                ) {
+                    ForEach(videoManager.audioTracks) { track in
+                        audioTrackLabel(for: track)
+                            .tag(track.id)
+                    }
+                }
+            } label: {
+                Image(systemName: "waveform.circle")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+        }
+
+        @ViewBuilder
+        private func audioTrackLabel(for track: AudioTrack) -> some View {
+            if let language = track.language,
+                let localized = Locale.current.localizedString(forLanguageCode: language)
+            {
+                Text("\(track.title) — \(localized)" + (track.isDefault ? " (Default)" : ""))
+            } else {
+                Text(track.title + (track.isDefault ? " (Default)" : ""))
+            }
+        }
+    }
+
+#endif
 
 // MARK: - Skip Segment Button
 
