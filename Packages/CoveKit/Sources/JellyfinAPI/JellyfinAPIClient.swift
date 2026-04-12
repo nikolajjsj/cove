@@ -530,6 +530,48 @@ public final class JellyfinAPIClient: Sendable {
         return urlComponents?.url
     }
 
+    /// Upload an external subtitle file to the server.
+    /// `POST /Videos/{itemId}/Subtitles`
+    ///
+    /// - Parameters:
+    ///   - itemId: The item to attach the subtitle to.
+    ///   - language: The subtitle language (ISO 639-2/3 code, e.g. "eng").
+    ///   - format: The subtitle format (e.g. "srt", "vtt").
+    ///   - isForced: Whether this is a forced subtitle track.
+    ///   - data: The raw subtitle file content (will be base64 encoded).
+    public func uploadSubtitle(
+        itemId: String,
+        language: String,
+        format: String,
+        isForced: Bool = false,
+        data: Data
+    ) async throws {
+        guard
+            let url = URL(
+                string: "Videos/\(itemId)/Subtitles",
+                relativeTo: baseURL.appendingPathComponent("/"))
+        else {
+            throw AppError.serverError(statusCode: 0, message: "Invalid URL")
+        }
+
+        let base64Data = data.base64EncodedString()
+        let body = UploadSubtitleRequest(
+            language: language,
+            format: format,
+            isForced: isForced,
+            data: base64Data
+        )
+
+        let bodyData = try Self.pascalCaseEncoder.encode(body)
+
+        try await httpClient.request(
+            url: url.absoluteURL,
+            method: .post,
+            headers: authHeaders,
+            rawBody: bodyData
+        )
+    }
+
     /// Build a download URL for a media item. Synchronous.
     /// For audio: uses the audio stream endpoint
     /// For video: uses the video stream endpoint with `static=true`
@@ -1119,5 +1161,19 @@ struct UpdateItemRequest: Encodable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case name = "name"
+    }
+}
+
+struct UploadSubtitleRequest: Encodable, Sendable {
+    let language: String
+    let format: String
+    let isForced: Bool
+    let data: String
+
+    enum CodingKeys: String, CodingKey {
+        case language = "Language"
+        case format = "Format"
+        case isForced = "IsForced"
+        case data = "Data"
     }
 }

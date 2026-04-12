@@ -869,6 +869,33 @@ public final class JellyfinServerProvider: MediaServerProvider,
         )
     }
 
+    /// Upload an external subtitle to the Jellyfin server for a video item.
+    ///
+    /// - Parameters:
+    ///   - itemId: The item ID to attach the subtitle to.
+    ///   - language: ISO 639-2/3 language code (e.g. "eng", "dan").
+    ///   - format: Subtitle format (e.g. "srt").
+    ///   - isForced: Whether the subtitle is forced.
+    ///   - data: Raw subtitle file content.
+    public func uploadSubtitle(
+        itemId: ItemID,
+        language: String,
+        format: String,
+        isForced: Bool = false,
+        data: Data
+    ) async throws {
+        guard let client = state.client else {
+            throw AppError.serverError(statusCode: 0, message: "Not connected")
+        }
+        try await client.uploadSubtitle(
+            itemId: itemId.rawValue,
+            language: language,
+            format: format,
+            isForced: isForced,
+            data: data
+        )
+    }
+
     // MARK: - PlaybackReportingProvider (Phase 4/5)
 
     public func reportPlaybackStart(item: MediaItem, position: TimeInterval) async throws {

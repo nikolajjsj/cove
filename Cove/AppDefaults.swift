@@ -45,6 +45,14 @@ extension Defaults.Keys {
     /// The background style applied to subtitle text during video playback.
     static let subtitleBackground = Key<SubtitleBackground>("subtitleBackground", default: .outline)
 
+    // MARK: - OpenSubtitles
+
+    /// Ordered list of recently-used subtitle language codes (ISO 639-1).
+    /// Most recently used language is first. Used to pin preferred languages
+    /// at the top of the language picker in the subtitle search sheet.
+    static let openSubtitlesRecentLanguages = Key<[String]>(
+        "openSubtitlesRecentLanguages", default: [])
+
     // MARK: - Home Screen
 
     /// Ordered list of home screen sections with visibility toggles.

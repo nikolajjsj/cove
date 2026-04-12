@@ -43,6 +43,7 @@ struct VideoPlayerView: View {
     @State private var forwardSkipTrigger: Int = 0
     @State private var backwardSkipTrigger: Int = 0
     @State private var showChapterList = false
+    @State private var showSubtitleSearch = false
 
     // Landscape orientation
     #if os(iOS)
@@ -221,6 +222,17 @@ struct VideoPlayerView: View {
                 .presentationDetents([.medium, .large])
             }
         #endif
+        .sheet(isPresented: $showSubtitleSearch) {
+            SubtitleSearchSheet(
+                viewModel: SubtitleSearchViewModel(
+                    item: item,
+                    streamInfo: streamInfo,
+                    provider: authManager.provider,
+                    videoManager: videoManager
+                )
+            )
+            .presentationDetents([.medium, .large])
+        }
     }
 
     // MARK: - Controls Overlay (iOS / macOS)
@@ -500,9 +512,7 @@ struct VideoPlayerView: View {
                     }
 
                     // Subtitle picker — inline Menu (context-menu style)
-                    if !videoManager.subtitleTracks.isEmpty {
-                        subtitleMenu
-                    }
+                    subtitleMenu
 
                     // AirPlay
                     #if os(iOS)
@@ -678,6 +688,12 @@ struct VideoPlayerView: View {
                         subtitleTrackLabel(for: track)
                             .tag(track.id)
                     }
+                }
+
+                Divider()
+
+                Button("Search Online…", systemImage: "magnifyingglass") {
+                    showSubtitleSearch = true
                 }
             } label: {
                 Image(

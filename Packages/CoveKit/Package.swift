@@ -23,6 +23,7 @@ let package = Package(
         .library(name: "DataLoading", targets: ["DataLoading"]),
         .library(name: "CoveUI", targets: ["CoveUI"]),
         .library(name: "AppGroup", targets: ["AppGroup"]),
+        .library(name: "OpenSubtitlesAPI", targets: ["OpenSubtitlesAPI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
@@ -103,6 +104,10 @@ let package = Package(
                 .product(name: "NukeUI", package: "Nuke"),
             ],
             path: "Sources/ImageService"
+        ),
+        .target(
+            name: "OpenSubtitlesAPI",
+            path: "Sources/OpenSubtitlesAPI"
         ),
 
         // MARK: - Test Targets

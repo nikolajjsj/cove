@@ -103,6 +103,22 @@ public final class HTTPClient: Sendable {
             queryItems: queryItems, cachePolicy: cachePolicy)
     }
 
+    /// Execute a request with a pre-encoded JSON body and discard the response.
+    ///
+    /// Use this when the request body requires a specific encoding strategy
+    /// (e.g. PascalCase keys) and the server returns no content (HTTP 204).
+    public func request(
+        url: URL,
+        method: HTTPMethod = .get,
+        headers: [String: String] = [:],
+        rawBody: Data,
+        queryItems: [URLQueryItem]? = nil
+    ) async throws {
+        _ = try await execute(
+            url: url, method: method, headers: headers,
+            rawBody: rawBody, queryItems: queryItems, cachePolicy: .networkOnly)
+    }
+
     /// Execute a request and return raw Data.
     public func requestData(
         url: URL,

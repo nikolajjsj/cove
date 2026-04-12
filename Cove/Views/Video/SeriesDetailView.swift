@@ -292,8 +292,8 @@ struct SeriesDetailView: View {
                                 Capsule()
                                     .fill(
                                         selectedSeason?.id == season.id
-                                            ? Color.accentColor
-                                            : .quaternary
+                                            ? AnyShapeStyle(Color.accentColor)
+                                            : AnyShapeStyle(.quaternary)
                                     )
                             )
                             .foregroundStyle(

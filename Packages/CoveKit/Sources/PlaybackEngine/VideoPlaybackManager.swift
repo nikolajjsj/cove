@@ -338,6 +338,14 @@ public final class VideoPlaybackManager {
         }
     }
 
+    /// Append a new subtitle track to the available tracks list.
+    ///
+    /// Used when an external subtitle is downloaded (e.g. from OpenSubtitles)
+    /// and needs to appear in the subtitle picker without re-resolving the stream.
+    public func appendSubtitleTrack(_ track: SubtitleTrack) {
+        subtitleTracks.append(track)
+    }
+
     /// Select an audio track by index, or nil for default.
     public func selectAudioTrack(at index: Int?) {
         selectedAudioTrackIndex = index
@@ -880,7 +888,7 @@ public final class VideoPlaybackManager {
                 let size = image.size
             #endif
 
-            let artwork = MPMediaItemArtwork(boundsSize: size) { _ in image }
+            let artwork = MPMediaItemArtwork(image: image)
             guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
             info[MPMediaItemPropertyArtwork] = artwork
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info

@@ -10,6 +10,8 @@ struct SubtitleSettingsView: View {
     @Default(.subtitleColor) private var subtitleColor
     @Default(.subtitleBackground) private var subtitleBackground
 
+    @State private var apiKey: String = ""
+
     var body: some View {
         List {
             Section {
@@ -60,8 +62,27 @@ struct SubtitleSettingsView: View {
                 }
                 .pickerStyle(.menu)
             }
+
+            Section {
+                SecureField("API Key", text: $apiKey)
+                    .textContentType(.password)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .onChange(of: apiKey) { _, newValue in
+                        SubtitleSearchViewModel.setApiKey(newValue.isEmpty ? nil : newValue)
+                    }
+            } header: {
+                Text("OpenSubtitles")
+            } footer: {
+                Text(
+                    "Optional. Subtitle search works without an API key but is limited to 5 downloads per day. Add your own key for higher limits."
+                )
+            }
         }
         .navigationTitle("Subtitles")
+        .onAppear {
+            apiKey = SubtitleSearchViewModel.getApiKey() ?? ""
+        }
     }
 }
 
