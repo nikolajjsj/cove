@@ -163,9 +163,7 @@ final class AppState {
         Task { [weak self] in
             for await connected in NetworkMonitor.shared.connectivityUpdates {
                 guard let self else { break }
-                await MainActor.run {
-                    self.isOffline = !connected
-                }
+                self.isOffline = !connected
 
                 // When coming back online, sync pending reports
                 if connected {
