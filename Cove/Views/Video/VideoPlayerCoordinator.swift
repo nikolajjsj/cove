@@ -124,6 +124,53 @@ final class VideoPlayerCoordinator {
         }
     }
 
+    // MARK: - Stream Resolution Helpers
+
+    /// Resolve stream info and media segments for an item.
+    private func resolveStream(
+        for item: MediaItem,
+        using provider: JellyfinServerProvider
+    ) async throws -> (StreamInfo, [MediaSegment]) {
+        let quality = Defaults[.maxStreamingQuality]
+        let profile = profileForQuality(quality)
+
+        async let infoTask = provider.streamURL(for: item, profile: profile)
+        async let segmentsTask = provider.mediaSegments(for: item.id)
+
+        return (try await infoTask, try await segmentsTask)
+    }
+
+    /// Resolve stream info and present the player for the given item.
+    private func resolveAndPresent(
+        item: MediaItem,
+        using provider: JellyfinServerProvider
+    ) async throws {
+        let quality = Defaults[.maxStreamingQuality]
+        let (info, segments) = try await resolveStream(for: item, using: provider)
+
+        // Extract source video resolution for the quality picker
+        let videoStream = info.mediaStreams.first { $0.type == .video }
+        sourceVideoHeight = videoStream?.height
+        sourceVideoBitrate = videoStream?.bitrate
+        activeQuality = quality
+        activeProvider = provider
+
+        currentItem = item
+        streamInfo = info
+        mediaSegments = segments
+
+        let position = item.userData?.playbackPosition ?? 0
+        if position > 30 {
+            // Meaningful progress — ask the user
+            savedPosition = position
+            showResumePrompt = true
+        } else {
+            // No meaningful progress — start from the beginning
+            startPosition = 0
+            isPresented = true
+        }
+    }
+
     // MARK: - Play
 
     /// Resolve the stream for `item` and present the video player.
@@ -143,36 +190,7 @@ final class VideoPlayerCoordinator {
             }
 
             do {
-                let quality = Defaults[.maxStreamingQuality]
-                let profile = profileForQuality(quality)
-
-                async let infoTask = provider.streamURL(for: item, profile: profile)
-                async let segmentsTask = provider.mediaSegments(for: item.id)
-
-                let info = try await infoTask
-                let segments = try await segmentsTask
-
-                // Extract source video resolution for the quality picker
-                let videoStream = info.mediaStreams.first { $0.type == .video }
-                sourceVideoHeight = videoStream?.height
-                sourceVideoBitrate = videoStream?.bitrate
-                activeQuality = quality
-                activeProvider = provider
-
-                currentItem = item
-                streamInfo = info
-                mediaSegments = segments
-
-                let position = item.userData?.playbackPosition ?? 0
-                if position > 30 {
-                    // Meaningful progress — ask the user
-                    savedPosition = position
-                    showResumePrompt = true
-                } else {
-                    // No meaningful progress — start from the beginning
-                    startPosition = 0
-                    isPresented = true
-                }
+                try await resolveAndPresent(item: item, using: provider)
             } catch {
                 self.error = PlaybackError(
                     itemTitle: item.title,
@@ -208,35 +226,7 @@ final class VideoPlayerCoordinator {
 
             do {
                 let episodeItem = try await provider.item(id: episodeId)
-
-                let quality = Defaults[.maxStreamingQuality]
-                let profile = profileForQuality(quality)
-
-                async let infoTask = provider.streamURL(for: episodeItem, profile: profile)
-                async let segmentsTask = provider.mediaSegments(for: episodeId)
-
-                let info = try await infoTask
-                let segments = try await segmentsTask
-
-                // Extract source video resolution for the quality picker
-                let videoStream = info.mediaStreams.first { $0.type == .video }
-                sourceVideoHeight = videoStream?.height
-                sourceVideoBitrate = videoStream?.bitrate
-                activeQuality = quality
-                activeProvider = provider
-
-                currentItem = episodeItem
-                streamInfo = info
-                mediaSegments = segments
-
-                let position = episodeItem.userData?.playbackPosition ?? 0
-                if position > 30 {
-                    savedPosition = position
-                    showResumePrompt = true
-                } else {
-                    startPosition = 0
-                    isPresented = true
-                }
+                try await resolveAndPresent(item: episodeItem, using: provider)
             } catch {
                 self.error = PlaybackError(
                     itemTitle: episodeTitle,
@@ -317,13 +307,7 @@ final class VideoPlayerCoordinator {
     ) async {
         do {
             let quality = Defaults[.maxStreamingQuality]
-            let profile = profileForQuality(quality)
-
-            async let infoTask = provider.streamURL(for: nextItem, profile: profile)
-            async let segmentsTask = provider.mediaSegments(for: nextItem.id)
-
-            let info = try await infoTask
-            let segments = try await segmentsTask
+            let (info, segments) = try await resolveStream(for: nextItem, using: provider)
 
             // Update coordinator state for the new item
             let videoStream = info.mediaStreams.first { $0.type == .video }
