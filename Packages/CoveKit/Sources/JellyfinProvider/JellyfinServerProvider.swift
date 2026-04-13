@@ -907,13 +907,15 @@ public final class JellyfinServerProvider: MediaServerProvider,
         )
     }
 
-    public func reportPlaybackProgress(item: MediaItem, position: TimeInterval) async throws {
+    public func reportPlaybackProgress(item: MediaItem, position: TimeInterval, isPaused: Bool)
+        async throws
+    {
         let client = try client()
         let positionTicks = JellyfinTicks.fromSeconds(position)
         try await client.reportPlaybackProgress(
             itemId: item.id.rawValue,
             positionTicks: positionTicks,
-            isPaused: false
+            isPaused: isPaused
         )
     }
 

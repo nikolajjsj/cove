@@ -5,6 +5,7 @@ import Models
 import PlaybackEngine
 import SwiftUI
 import os
+import MediaServerKit
 
 struct VideoPlayerView: View {
     let item: MediaItem

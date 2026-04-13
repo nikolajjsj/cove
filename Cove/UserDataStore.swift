@@ -113,6 +113,33 @@ final class UserDataStore {
         }
     }
 
+    /// Mark an item as played (one-way). No-op if already played.
+    ///
+    /// Used by the audio player when 95% of a track has been listened to.
+    /// Unlike ``togglePlayed(itemId:current:)``, this never un-marks an item.
+    func markPlayed(itemId: ItemID) async throws {
+        let base = userData(for: itemId, fallback: nil)
+        guard !base.isPlayed else { return }
+
+        // Optimistic update
+        var updated = base
+        updated.isPlayed = true
+        overrides[itemId] = updated
+        markInflight(itemId, .played)
+
+        do {
+            try await mutationProvider.setPlayed(itemId: itemId, isPlayed: true)
+            unmarkInflight(itemId, .played)
+        } catch {
+            unmarkInflight(itemId, .played)
+            if var current = overrides[itemId] {
+                current.isPlayed = false
+                overrides[itemId] = current
+            }
+            throw error
+        }
+    }
+
     /// Toggle played/watched: apply optimistic update → call server → rollback on failure.
     ///
     /// - Returns: The new played state after the server confirms.

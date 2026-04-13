@@ -1,6 +1,7 @@
 import Defaults
 import DownloadManager
 import Foundation
+import JellyfinAPI
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -103,11 +104,15 @@ final class AppState {
 
     // MARK: - Player Wiring
 
-    /// Configure the audio player's URL resolvers to use the current server provider.
+    /// Configure the audio player's URL resolvers and playback reporting callbacks
+    /// to use the current server provider.
     /// Called after a successful connection or session restore.
     func wireUpPlayer() {
         let provider = authManager.provider
         let connection = authManager.activeConnection
+        let coordinator = downloadCoordinator
+        let networkMonitor = self.networkMonitor
+        let userDataStore = self.userDataStore
 
         audioPlayer.streamURLResolver = { track in
             // Try local file first (sync check via DownloadStorage)
@@ -155,6 +160,60 @@ final class AppState {
                 maxSize: CGSize(width: 600, height: 600)
             )
         }
+
+        // MARK: Playback Reporting
+
+        audioPlayer.onPlaybackStart = { track, position in
+            let item = Self.mediaItem(from: track)
+            if networkMonitor.isConnected {
+                try? await provider.reportPlaybackStart(item: item, position: position)
+            } else {
+                let ticks = JellyfinTicks.fromSeconds(position)
+                await coordinator.queueOfflinePlaybackReport(
+                    itemId: item.id, positionTicks: ticks, eventType: .start)
+            }
+        }
+
+        audioPlayer.onPlaybackProgress = { track, position, isPaused in
+            let item = Self.mediaItem(from: track)
+            if networkMonitor.isConnected {
+                try? await provider.reportPlaybackProgress(
+                    item: item, position: position, isPaused: isPaused)
+            } else {
+                let ticks = JellyfinTicks.fromSeconds(position)
+                await coordinator.queueOfflinePlaybackReport(
+                    itemId: item.id, positionTicks: ticks, eventType: .progress)
+            }
+        }
+
+        audioPlayer.onPlaybackStopped = { track, position in
+            let item = Self.mediaItem(from: track)
+            if networkMonitor.isConnected {
+                try? await provider.reportPlaybackStopped(item: item, position: position)
+            } else {
+                let ticks = JellyfinTicks.fromSeconds(position)
+                await coordinator.queueOfflinePlaybackReport(
+                    itemId: item.id, positionTicks: ticks, eventType: .stopped)
+            }
+        }
+
+        audioPlayer.onTrackListened = { track in
+            let itemId = ItemID(track.id.rawValue)
+            try? await userDataStore?.markPlayed(itemId: itemId)
+        }
+    }
+
+    /// Convert a `Track` to a `MediaItem` for playback reporting.
+    private static func mediaItem(from track: Track) -> MediaItem {
+        MediaItem(
+            id: ItemID(track.id.rawValue),
+            title: track.title,
+            mediaType: .track,
+            userData: track.userData,
+            artistName: track.artistName,
+            albumName: track.albumName,
+            albumId: track.albumId.map { ItemID($0.rawValue) }
+        )
     }
 
     // MARK: - Network Observation

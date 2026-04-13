@@ -31,6 +31,22 @@ public final class AudioPlaybackManager {
     /// Closure that provides artwork URL for a track. Set by the app layer.
     public var artworkURLResolver: (@Sendable (Track) -> URL?)?
 
+    // MARK: - Playback Reporting Callbacks
+
+    /// Called when a track starts playing. The app layer uses this for server reporting.
+    public var onPlaybackStart: (@MainActor (Track, TimeInterval) async -> Void)?
+
+    /// Called periodically (~every 10 seconds) during playback, and on pause/seek.
+    /// The `Bool` parameter indicates whether playback is paused.
+    public var onPlaybackProgress: (@MainActor (Track, TimeInterval, Bool) async -> Void)?
+
+    /// Called when a track stops playing (natural end, skip, or manual stop).
+    public var onPlaybackStopped: (@MainActor (Track, TimeInterval) async -> Void)?
+
+    /// Called once per track when the user has listened to at least 95% of it.
+    /// The app layer can use this to mark the item as played.
+    public var onTrackListened: (@MainActor (Track) async -> Void)?
+
     // MARK: - Internal
 
     private let playerBackend: any AudioPlayerBackend
@@ -48,6 +64,13 @@ public final class AudioPlaybackManager {
 
     /// Task listening for audio session interruption notifications.
     @ObservationIgnored private nonisolated(unsafe) var interruptionTask: Task<Void, Never>?
+
+    /// Task that periodically reports playback progress to the server.
+    @ObservationIgnored private var progressReportTask: Task<Void, Never>?
+
+    /// Set of track IDs for which the 95% "listened" callback has already fired
+    /// during the current playback session, to avoid duplicate calls.
+    @ObservationIgnored private var listenedTrackIds: Set<TrackID> = []
 
     // MARK: - Init
 
@@ -68,13 +91,19 @@ public final class AudioPlaybackManager {
 
     /// Start playing a list of tracks from a specific index.
     public func play(tracks: [Track], startingAt index: Int = 0) {
+        // Report stopped for the previous track if one was playing.
+        reportStoppedForCurrentTrack()
+
         queue.load(tracks: tracks, startingAt: index)
+        listenedTrackIds.removeAll()
         rebuildPlayerQueue()
         playerBackend.play()
         isPlaying = true
         currentTime = 0
         updateDuration()
         updateNowPlaying()
+        startProgressReporting()
+        reportPlaybackStart()
         logger.info("Playing \(tracks.count) tracks, starting at index \(index)")
     }
 
@@ -84,6 +113,8 @@ public final class AudioPlaybackManager {
         playerBackend.play()
         isPlaying = true
         updateNowPlaying()
+        startProgressReporting()
+        reportProgress(isPaused: false)
         logger.debug("Resumed playback")
     }
 
@@ -92,6 +123,8 @@ public final class AudioPlaybackManager {
         playerBackend.pause()
         isPlaying = false
         updateNowPlaying()
+        stopProgressReporting()
+        reportProgress(isPaused: true)
         logger.debug("Paused playback")
     }
 
@@ -106,27 +139,40 @@ public final class AudioPlaybackManager {
 
     /// Skip to the next track.
     public func next() {
+        let previousTrack = queue.currentTrack
+        let previousTime = currentTime
+
         guard queue.forceAdvance() != nil else {
             logger.info("No next track available")
             stop()
             return
         }
 
+        // Report stopped for the track we're leaving.
+        reportStopped(track: previousTrack, position: previousTime)
+
         rebuildPlayerQueue()
         playerBackend.play()
         isPlaying = true
         currentTime = 0
         updateDuration()
         updateNowPlaying()
+        reportPlaybackStart()
         logger.info("Skipped to next track: \(self.queue.currentTrack?.title ?? "unknown")")
     }
 
     /// Jump to a specific index in the queue and start playing.
     public func skipTo(index: Int) {
+        let previousTrack = queue.currentTrack
+        let previousTime = currentTime
+
         guard queue.skipTo(index: index) != nil else {
             logger.info("Cannot skip to index \(index) — out of bounds")
             return
         }
+
+        // Report stopped for the track we're leaving.
+        reportStopped(track: previousTrack, position: previousTime)
 
         rebuildPlayerQueue()
         playerBackend.play()
@@ -134,6 +180,7 @@ public final class AudioPlaybackManager {
         currentTime = 0
         updateDuration()
         updateNowPlaying()
+        reportPlaybackStart()
         logger.info("Skipped to index \(index): \(self.queue.currentTrack?.title ?? "unknown")")
     }
 
@@ -145,10 +192,16 @@ public final class AudioPlaybackManager {
             return
         }
 
+        let previousTrack = queue.currentTrack
+        let previousTime = currentTime
+
         guard queue.forceGoBack() != nil else {
             logger.info("No previous track available")
             return
         }
+
+        // Report stopped for the track we're leaving.
+        reportStopped(track: previousTrack, position: previousTime)
 
         rebuildPlayerQueue()
         playerBackend.play()
@@ -156,6 +209,7 @@ public final class AudioPlaybackManager {
         currentTime = 0
         updateDuration()
         updateNowPlaying()
+        reportPlaybackStart()
         logger.info("Went to previous track: \(self.queue.currentTrack?.title ?? "unknown")")
     }
 
@@ -171,6 +225,9 @@ public final class AudioPlaybackManager {
                     currentTime: self.currentTime,
                     duration: self.duration
                 )
+                // Report progress at the new seek position.
+                self.reportProgress(isPaused: !self.isPlaying)
+                self.checkListenedThreshold()
             }
         }
     }
@@ -212,10 +269,19 @@ public final class AudioPlaybackManager {
 
     /// Stop playback entirely and clear the queue.
     public func stop() {
+        let stoppingTrack = queue.currentTrack
+        let stoppingTime = currentTime
+
         playerBackend.pause()
         playerBackend.clearQueue()
         tokenToTrack.removeAll()
+        stopProgressReporting()
+
+        // Report stopped for the track that was playing.
+        reportStopped(track: stoppingTrack, position: stoppingTime)
+
         queue.clear()
+        listenedTrackIds.removeAll()
         isPlaying = false
         currentTime = 0
         duration = 0
@@ -300,6 +366,7 @@ public final class AudioPlaybackManager {
                 currentTime: self.currentTime,
                 duration: self.duration
             )
+            self.checkListenedThreshold()
         }
 
         playerBackend.onPlayingChanged = { [weak self] playing in
@@ -377,10 +444,18 @@ public final class AudioPlaybackManager {
     /// Handle the end of a track, advancing the queue or repeating as needed.
     private func handleTrackEnd(for token: AnyHashable) {
         // Verify this token belongs to us
-        guard tokenToTrack[token] != nil else { return }
+        let finishedTrack = tokenToTrack[token]
+        guard finishedTrack != nil else { return }
         tokenToTrack.removeValue(forKey: token)
 
         logger.debug("Track ended, handling advancement")
+
+        // Report stopped for the finished track using its full duration
+        // so the server registers it as fully played.
+        if let track = finishedTrack {
+            let trackDuration = track.duration ?? duration
+            reportStopped(track: track, position: trackDuration)
+        }
 
         // Check if sleep timer should stop playback at end of track
         if sleepTimerMode == .endOfTrack {
@@ -388,6 +463,7 @@ public final class AudioPlaybackManager {
             isPlaying = false
             currentTime = 0
             duration = 0
+            stopProgressReporting()
             updateNowPlaying()
             logger.info("Sleep timer: paused at end of track")
             return
@@ -400,6 +476,7 @@ public final class AudioPlaybackManager {
             isPlaying = true
             currentTime = 0
             updateNowPlaying()
+            reportPlaybackStart()
             return
         }
 
@@ -410,6 +487,7 @@ public final class AudioPlaybackManager {
             isPlaying = false
             currentTime = 0
             duration = 0
+            stopProgressReporting()
             updateNowPlaying()
             return
         }
@@ -428,6 +506,7 @@ public final class AudioPlaybackManager {
         currentTime = 0
         updateDuration()
         updateNowPlaying()
+        reportPlaybackStart()
     }
 
     // MARK: - Now Playing
@@ -453,6 +532,76 @@ public final class AudioPlaybackManager {
             duration = trackDuration
         } else {
             duration = 0
+        }
+    }
+
+    // MARK: - Playback Reporting
+
+    /// Start the periodic progress reporting timer (~every 10 seconds).
+    private func startProgressReporting() {
+        stopProgressReporting()
+        progressReportTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(10))
+                guard !Task.isCancelled else { break }
+                guard let self, let track = self.queue.currentTrack, self.isPlaying else {
+                    continue
+                }
+                await self.onPlaybackProgress?(track, self.currentTime, false)
+            }
+        }
+    }
+
+    /// Stop the periodic progress reporting timer.
+    private func stopProgressReporting() {
+        progressReportTask?.cancel()
+        progressReportTask = nil
+    }
+
+    /// Report playback start for the current track.
+    private func reportPlaybackStart() {
+        guard let track = queue.currentTrack else { return }
+        let position = currentTime
+        Task { [weak self] in
+            await self?.onPlaybackStart?(track, position)
+        }
+    }
+
+    /// Report a progress update for the current track.
+    private func reportProgress(isPaused: Bool) {
+        guard let track = queue.currentTrack else { return }
+        let position = currentTime
+        Task { [weak self] in
+            await self?.onPlaybackProgress?(track, position, isPaused)
+        }
+    }
+
+    /// Report playback stopped for a specific track at a given position.
+    private func reportStopped(track: Track?, position: TimeInterval) {
+        guard let track else { return }
+        Task { [weak self] in
+            await self?.onPlaybackStopped?(track, position)
+        }
+    }
+
+    /// Report stopped for whatever track is currently playing (convenience for transitions).
+    private func reportStoppedForCurrentTrack() {
+        reportStopped(track: queue.currentTrack, position: currentTime)
+    }
+
+    /// Check whether the current track has reached the 95% listened threshold
+    /// and fire the `onTrackListened` callback exactly once per track.
+    private func checkListenedThreshold() {
+        guard let track = queue.currentTrack,
+            !listenedTrackIds.contains(track.id),
+            duration > 0,
+            currentTime / duration >= 0.95
+        else { return }
+
+        listenedTrackIds.insert(track.id)
+        logger.info("Track listened (95%%): \(track.title)")
+        Task { [weak self] in
+            await self?.onTrackListened?(track)
         }
     }
 }
