@@ -39,11 +39,11 @@ struct MovieDetailView: View {
                             CastCrewRail(people: displayItem.people)
                         }
 
-                        MediaItemRail(title: "Trailers") { [item] in
+                        MediaItemRail(title: "Trailers", style: .landscape) { [item] in
                             try await authManager.provider.localTrailers(for: item)
                         }
 
-                        MediaItemRail(title: "Special Features") { [item] in
+                        MediaItemRail(title: "Special Features", style: .landscape) { [item] in
                             try await authManager.provider.specialFeatures(for: item)
                         }
 

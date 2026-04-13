@@ -127,7 +127,8 @@ struct SeriesDetailView: View {
                                     CastCrewRail(people: displayItem.people)
                                 }
 
-                                MediaItemRail(title: "Special Features") { [item] in
+                                MediaItemRail(title: "Special Features", style: .landscape) {
+                                    [item] in
                                     try await authManager.provider.specialFeatures(for: item)
                                 }
 

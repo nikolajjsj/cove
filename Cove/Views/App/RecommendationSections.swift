@@ -26,7 +26,7 @@ struct BecauseYouWatchedSection: View {
 
             return try await provider.similarItems(for: source, limit: 20)
         } card: { item in
-            LibraryItemCard(item: item)
+            MediaCard(item: item)
         } header: {
             SectionHeader(title: "Because You Watched \(sourceTitle ?? "…")")
         }
@@ -49,7 +49,7 @@ struct RecentlyAddedSection: View {
         ) {
             try await authManager.provider.recentlyAdded()
         } card: { item in
-            LibraryItemCard(item: item)
+            MediaCard(item: item)
         }
     }
 }

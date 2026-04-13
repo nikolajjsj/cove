@@ -134,7 +134,7 @@ struct CollectionDetailView: View {
                 LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(items) { collectionItem in
                         NavigationLink(value: collectionItem) {
-                            LibraryItemCard(item: collectionItem)
+                            MediaCard(item: collectionItem)
                         }
                         .buttonStyle(.plain)
                     }

@@ -31,6 +31,14 @@ extension MediaType {
         }
     }
 
+    /// Whether this media type represents video content (movies, series, episodes, seasons).
+    var isVideo: Bool {
+        switch self {
+        case .movie, .series, .episode, .season: true
+        default: false
+        }
+    }
+
     /// A user-facing display label for this media type.
     var displayLabel: String {
         switch self {

@@ -144,11 +144,12 @@ private struct ContinueWatchingSection: View {
     var body: some View {
         ContentRail(
             title: "Continue Watching",
+            cardWidth: { _ in 240 },
             skeleton: { SkeletonCard.landscape(width: 240) }
         ) {
             try await authManager.provider.resumeItems()
         } card: { item in
-            ContinueWatchingCard(item: item)
+            MediaCard(item: item, style: .landscape)
         }
     }
 }
@@ -161,11 +162,12 @@ private struct UpNextSection: View {
     var body: some View {
         ContentRail(
             title: "Up Next",
+            cardWidth: { _ in 240 },
             skeleton: { SkeletonCard.landscape(width: 240) }
         ) {
             try await authManager.provider.nextUp()
         } card: { item in
-            UpNextCard(item: item)
+            MediaCard(item: item, style: .landscape)
         }
     }
 }
@@ -198,7 +200,7 @@ private struct LibrarySection: View {
                 )
             },
             card: { item in
-                LibraryItemCard(item: item)
+                MediaCard(item: item)
             },
             header: {
                 NavigationLink(value: library) {

@@ -124,7 +124,7 @@ struct VideoGenreDetailView: View {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(loader.items) { item in
                     NavigationLink(value: item) {
-                        LibraryItemCard(item: item)
+                        MediaCard(item: item)
                     }
                     .buttonStyle(.plain)
                     .onAppear {
