@@ -6,7 +6,8 @@ struct CacheManagementView: View {
     @Environment(AuthManager.self) private var authManager
 
     @State private var isClearing = false
-    @State private var clearAction: ClearAction?
+    @State private var showClearConfirmation = false
+    @State private var pendingAction: ClearAction = .imageOnly
 
     var body: some View {
         List {
@@ -20,12 +21,14 @@ struct CacheManagementView: View {
 
             Section("Actions") {
                 Button("Clear Image Cache", systemImage: "photo.stack", role: .destructive) {
-                    clearAction = .imageOnly
+                    pendingAction = .imageOnly
+                    showClearConfirmation = true
                 }
                 .disabled(isClearing)
 
                 Button("Clear All Caches", systemImage: "trash", role: .destructive) {
-                    clearAction = .all
+                    pendingAction = .all
+                    showClearConfirmation = true
                 }
                 .disabled(isClearing)
             }
@@ -33,66 +36,38 @@ struct CacheManagementView: View {
         .navigationTitle("Cache")
         .confirmationDialog(
             "Clear Cache?",
-            isPresented: showClearConfirmation,
+            isPresented: $showClearConfirmation,
             titleVisibility: .visible
         ) {
-            switch clearAction {
-            case .imageOnly:
-                Button("Clear Image Cache", role: .destructive) {
-                    clearImageCache()
-                }
-            case .all:
-                Button("Clear All Caches", role: .destructive) {
-                    clearAllCaches()
-                }
-            case nil:
-                EmptyView()
+            Button(pendingAction.confirmButtonLabel, role: .destructive) {
+                performClear(pendingAction)
             }
-
-            Button("Cancel", role: .cancel) {
-                clearAction = nil
-            }
+            Button("Cancel", role: .cancel) {}
         } message: {
-            switch clearAction {
-            case .imageOnly:
-                Text("This will remove cached images. They will be re-downloaded as needed.")
-            case .all:
-                Text(
-                    "This will remove cached images and API data. They will be re-downloaded as needed."
-                )
-            case nil:
-                EmptyView()
-            }
+            Text(pendingAction.confirmMessage)
         }
-    }
-
-    // MARK: - Confirmation Binding
-
-    private var showClearConfirmation: Binding<Bool> {
-        Binding(
-            get: { clearAction != nil },
-            set: { if !$0 { clearAction = nil } }
-        )
     }
 
     // MARK: - Actions
 
-    private func clearImageCache() {
+    private func performClear(_ action: ClearAction) {
         isClearing = true
-        ImageService.clearCache()
-        isClearing = false
-        ToastManager.shared.show("Image cache cleared", icon: "checkmark.circle")
-    }
 
-    private func clearAllCaches() {
-        isClearing = true
-        ImageService.clearCache()
-        URLCache.shared.removeAllCachedResponses()
-
-        Task {
-            await authManager.provider.clearCache()
+        switch action {
+        case .imageOnly:
+            ImageService.clearCache()
             isClearing = false
-            ToastManager.shared.show("All caches cleared", icon: "checkmark.circle")
+            ToastManager.shared.show("Image cache cleared", icon: "checkmark.circle")
+
+        case .all:
+            ImageService.clearCache()
+            URLCache.shared.removeAllCachedResponses()
+
+            Task {
+                await authManager.provider.clearCache()
+                isClearing = false
+                ToastManager.shared.show("All caches cleared", icon: "checkmark.circle")
+            }
         }
     }
 }
@@ -101,10 +76,26 @@ struct CacheManagementView: View {
 
 extension CacheManagementView {
     /// The type of cache clear operation the user selected.
-    enum ClearAction: Identifiable {
+    enum ClearAction {
         case imageOnly
         case all
 
-        var id: Self { self }
+        /// The label for the destructive confirmation button.
+        var confirmButtonLabel: String {
+            switch self {
+            case .imageOnly: "Clear Image Cache"
+            case .all: "Clear All Caches"
+            }
+        }
+
+        /// The explanatory message shown in the confirmation dialog.
+        var confirmMessage: String {
+            switch self {
+            case .imageOnly:
+                "This will remove cached images. They will be re-downloaded as needed."
+            case .all:
+                "This will remove cached images and API data. They will be re-downloaded as needed."
+            }
+        }
     }
 }

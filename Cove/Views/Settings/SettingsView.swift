@@ -100,41 +100,43 @@ struct SettingsView: View {
 
             // MARK: - Downloads & Storage
 
-            if downloadCoordinator.downloadManager != nil {
+            if let downloadManager = downloadCoordinator.downloadManager {
                 Section("Downloads & Storage") {
                     Toggle(
                         "Download over Cellular", systemImage: "cellularbars",
                         isOn: $downloadOverCellular)
 
-                    if let downloadManager = downloadCoordinator.downloadManager {
-                        NavigationLink {
-                            StorageManagementView(downloadManager: downloadManager)
-                        } label: {
-                            HStack {
-                                Label("Manage Storage", systemImage: "internaldrive")
-                                Spacer()
-                                if totalDownloadSize > 0 {
-                                    Text(
-                                        ByteCountFormatter.string(
-                                            fromByteCount: totalDownloadSize,
-                                            countStyle: .file
-                                        )
+                    NavigationLink {
+                        StorageManagementView(downloadManager: downloadManager)
+                    } label: {
+                        HStack {
+                            Label("Manage Storage", systemImage: "internaldrive")
+                            Spacer()
+                            if totalDownloadSize > 0 {
+                                Text(
+                                    ByteCountFormatter.string(
+                                        fromByteCount: totalDownloadSize,
+                                        countStyle: .file
                                     )
-                                    .foregroundStyle(.secondary)
-                                }
+                                )
+                                .foregroundStyle(.secondary)
                             }
                         }
                     }
+
+                    NavigationLink {
+                        CacheManagementView()
+                    } label: {
+                        Label("Manage Cache", systemImage: "externaldrive")
+                    }
                 }
-            }
-
-            // MARK: - Storage
-
-            Section("Storage") {
-                NavigationLink {
-                    CacheManagementView()
-                } label: {
-                    Label("Manage Cache", systemImage: "externaldrive")
+            } else {
+                Section("Storage") {
+                    NavigationLink {
+                        CacheManagementView()
+                    } label: {
+                        Label("Manage Cache", systemImage: "externaldrive")
+                    }
                 }
             }
 
