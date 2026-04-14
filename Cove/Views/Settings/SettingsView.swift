@@ -3,6 +3,8 @@ import DownloadManager
 import Models
 import SwiftUI
 
+// MARK: - Settings View
+
 struct SettingsView: View {
     @Default(.downloadOverCellular) var downloadOverCellular
     @Default(.autoPlayNextEpisode) var autoPlayNextEpisode
@@ -12,6 +14,7 @@ struct SettingsView: View {
     @Default(.skipBackwardInterval) var skipBackwardInterval
     @Default(.accentColor) var accentColorName
     @Default(.maxStreamingQuality) var maxStreamingQuality
+    @Default(.gridDensity) var gridDensity
 
     @Environment(AppState.self) private var appState
     @Environment(\.platformCapabilities) private var capabilities
@@ -77,6 +80,16 @@ struct SettingsView: View {
                     }
                 } label: {
                     Label("Accent Color", systemImage: "paintpalette")
+                }
+                .pickerStyle(.menu)
+
+                Picker(selection: $gridDensity) {
+                    ForEach(GridDensity.allCases, id: \.self) { density in
+                        Label(density.label, systemImage: density.icon)
+                            .tag(density)
+                    }
+                } label: {
+                    Label("Grid Density", systemImage: "square.grid.2x2")
                 }
                 .pickerStyle(.menu)
             }

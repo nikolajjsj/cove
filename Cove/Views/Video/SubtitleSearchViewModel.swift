@@ -273,7 +273,7 @@ final class SubtitleSearchViewModel {
         // Use Foundation's Locale to convert
         let locale = Locale(identifier: iso639_1)
         // Try to get the 3-letter code
-        if let languageCode = locale.language.languageCode {
+        if locale.language.languageCode != nil {
             // Locale.Language.LanguageCode doesn't directly give us ISO 639-2,
             // but we can use a known mapping for common languages.
             return Self.languageCodeMap[iso639_1] ?? iso639_1

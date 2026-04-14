@@ -1,4 +1,5 @@
 import DataLoading
+import Defaults
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -7,6 +8,7 @@ import SwiftUI
 struct GenreDetailView: View {
     let genreItem: MediaItem
     let library: MediaLibrary?
+    @Default(.gridDensity) private var gridDensity
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
     @State private var loader = PagedCollectionLoader<MediaItem>()
@@ -57,8 +59,8 @@ struct GenreDetailView: View {
     private var scrollContent: some View {
         ScrollView {
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)],
-                spacing: 20
+                columns: gridDensity.columns,
+                spacing: gridDensity.gridSpacing
             ) {
                 ForEach(loader.items) { album in
                     AlbumCard(

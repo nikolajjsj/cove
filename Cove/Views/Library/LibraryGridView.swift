@@ -1,4 +1,5 @@
 import DataLoading
+import Defaults
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -31,9 +32,13 @@ struct LibraryGridView: View {
     /// Number of items to fetch per page.
     private let pageSize = 40
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16)
-    ]
+    @Default(.gridDensity) private var gridDensity
+    @Default(.videoLibraryLayout) private var videoLayout
+    @Default(.musicLibraryLayout) private var musicLayout
+
+    private var layoutMode: LibraryLayoutMode {
+        isVideoLibrary ? videoLayout : musicLayout
+    }
 
     // MARK: - SearchKey
 
@@ -101,6 +106,12 @@ struct LibraryGridView: View {
         .searchable(text: $searchText, prompt: "Search this library…")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                Button(
+                    layoutMode == .grid ? "List" : "Grid",
+                    systemImage: layoutMode == .grid ? "list.bullet" : "square.grid.2x2"
+                ) {
+                    toggleLayout()
+                }
                 sortMenu
             }
         }
@@ -260,35 +271,65 @@ struct LibraryGridView: View {
 
     // MARK: - Scroll Content
 
+    @ViewBuilder
     private var scrollContent: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 16) {
+        if layoutMode == .list {
+            List {
                 ForEach(loader.items) { item in
                     NavigationLink(value: item) {
-                        MediaCard(item: item)
+                        MediaListRow(item: item)
                     }
-                    .buttonStyle(.plain)
                     .onAppear {
                         loader.onItemAppeared(item)
                     }
                 }
-            }
-            .padding(.horizontal)
 
-            if loader.isLoadingMore {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .padding(.vertical, 16)
-                    Spacer()
+                if loader.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    }
+                }
+
+                if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
+                    Text("\(loader.totalCount) \(itemNoun)")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity)
                 }
             }
+            .listStyle(.plain)
+        } else {
+            ScrollView {
+                LazyVGrid(columns: gridDensity.columns, spacing: gridDensity.gridSpacing) {
+                    ForEach(loader.items) { item in
+                        NavigationLink(value: item) {
+                            MediaCard(item: item)
+                        }
+                        .buttonStyle(.plain)
+                        .onAppear {
+                            loader.onItemAppeared(item)
+                        }
+                    }
+                }
+                .padding(.horizontal)
 
-            if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
-                Text("\(loader.totalCount) \(itemNoun)")
-                    .font(.footnote)
-                    .foregroundStyle(.tertiary)
-                    .padding(.bottom, 24)
+                if loader.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding(.vertical, 16)
+                        Spacer()
+                    }
+                }
+
+                if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
+                    Text("\(loader.totalCount) \(itemNoun)")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                        .padding(.bottom, 24)
+                }
             }
         }
     }
@@ -302,9 +343,34 @@ struct LibraryGridView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if searchResults.isEmpty && !isSearchingLibrary {
             ContentUnavailableView.search(text: searchText)
+        } else if layoutMode == .list {
+            List {
+                ForEach(searchResults) { item in
+                    NavigationLink(value: item) {
+                        MediaListRow(item: item)
+                    }
+                    .onAppear { onSearchItemAppeared(item) }
+                }
+
+                if isSearchLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    }
+                }
+
+                if !searchResults.isEmpty && !searchHasMore && searchTotalCount > 0 {
+                    Text("\(searchTotalCount) \(searchTotalCount == 1 ? "result" : "results")")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .listStyle(.plain)
         } else {
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 16) {
+                LazyVGrid(columns: gridDensity.columns, spacing: gridDensity.gridSpacing) {
                     ForEach(searchResults) { item in
                         NavigationLink(value: item) {
                             MediaCard(item: item)
@@ -335,6 +401,14 @@ struct LibraryGridView: View {
     }
 
     // MARK: - Search Pagination Trigger
+
+    private func toggleLayout() {
+        if isVideoLibrary {
+            videoLayout = videoLayout == .grid ? .list : .grid
+        } else {
+            musicLayout = musicLayout == .grid ? .list : .grid
+        }
+    }
 
     private func onSearchItemAppeared(_ item: MediaItem) {
         guard searchHasMore, !isSearchLoadingMore else { return }

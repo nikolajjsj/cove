@@ -1,4 +1,5 @@
 import DataLoading
+import Defaults
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -23,9 +24,8 @@ struct VideoGenreDetailView: View {
 
     private let pageSize = 40
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16)
-    ]
+    @Default(.gridDensity) private var gridDensity
+    @Default(.videoLibraryLayout) private var layoutMode
 
     /// Resolves the library — uses the explicitly provided one, or falls back
     /// to the first movies or TV shows library found in AppState.
@@ -60,6 +60,12 @@ struct VideoGenreDetailView: View {
         .largeNavigationTitle()
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                Button(
+                    layoutMode == .grid ? "List" : "Grid",
+                    systemImage: layoutMode == .grid ? "list.bullet" : "square.grid.2x2"
+                ) {
+                    layoutMode = layoutMode == .grid ? .list : .grid
+                }
                 sortMenu
             }
         }
@@ -119,35 +125,65 @@ struct VideoGenreDetailView: View {
 
     // MARK: - Scroll Content
 
+    @ViewBuilder
     private var scrollContent: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 16) {
+        if layoutMode == .list {
+            List {
                 ForEach(loader.items) { item in
                     NavigationLink(value: item) {
-                        MediaCard(item: item)
+                        MediaListRow(item: item)
                     }
-                    .buttonStyle(.plain)
                     .onAppear {
                         loader.onItemAppeared(item)
                     }
                 }
-            }
-            .padding()
 
-            if loader.isLoadingMore {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .padding(.vertical, 16)
-                    Spacer()
+                if loader.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    }
+                }
+
+                if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
+                    Text("\(loader.totalCount) \(itemNoun)")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity)
                 }
             }
+            .listStyle(.plain)
+        } else {
+            ScrollView {
+                LazyVGrid(columns: gridDensity.columns, spacing: gridDensity.gridSpacing) {
+                    ForEach(loader.items) { item in
+                        NavigationLink(value: item) {
+                            MediaCard(item: item)
+                        }
+                        .buttonStyle(.plain)
+                        .onAppear {
+                            loader.onItemAppeared(item)
+                        }
+                    }
+                }
+                .padding()
 
-            if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
-                Text("\(loader.totalCount) \(itemNoun)")
-                    .font(.footnote)
-                    .foregroundStyle(.tertiary)
-                    .padding(.bottom, 24)
+                if loader.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding(.vertical, 16)
+                        Spacer()
+                    }
+                }
+
+                if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
+                    Text("\(loader.totalCount) \(itemNoun)")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                        .padding(.bottom, 24)
+                }
             }
         }
     }

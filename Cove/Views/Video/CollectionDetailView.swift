@@ -1,5 +1,6 @@
 import CoveUI
 import DataLoading
+import Defaults
 import ImageService
 import JellyfinProvider
 import Models
@@ -14,9 +15,7 @@ struct CollectionDetailView: View {
 
     @State private var loader = CollectionLoader<MediaItem>()
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16)
-    ]
+    @Default(.gridDensity) private var gridDensity
 
     var body: some View {
         ScrollView {
@@ -131,7 +130,7 @@ struct CollectionDetailView: View {
                 )
                 .padding(.vertical, 16)
             case .loaded(let items):
-                LazyVGrid(columns: columns, spacing: 16) {
+                LazyVGrid(columns: gridDensity.columns, spacing: gridDensity.gridSpacing) {
                     ForEach(items) { collectionItem in
                         NavigationLink(value: collectionItem) {
                             MediaCard(item: collectionItem)

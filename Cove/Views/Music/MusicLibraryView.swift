@@ -1,4 +1,5 @@
 import DataLoading
+import Defaults
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -301,9 +302,7 @@ private struct AlbumsGridSection: View {
     @State private var loader = CollectionLoader<MediaItem>()
 
     private let limit = 20
-    private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
-    ]
+    @Default(.gridDensity) private var gridDensity
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -323,7 +322,7 @@ private struct AlbumsGridSection: View {
             .padding(.horizontal)
 
             if loader.isLoading {
-                LazyVGrid(columns: columns, spacing: 20) {
+                LazyVGrid(columns: gridDensity.columns, spacing: gridDensity.gridSpacing) {
                     ForEach(0..<6, id: \.self) { _ in
                         SkeletonCard.albumGrid
                     }
@@ -336,7 +335,7 @@ private struct AlbumsGridSection: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)
             } else {
-                LazyVGrid(columns: columns, spacing: 20) {
+                LazyVGrid(columns: gridDensity.columns, spacing: gridDensity.gridSpacing) {
                     ForEach(loader.items) { album in
                         AlbumCard(item: album, imageURL: imageURL(for: album))
                     }

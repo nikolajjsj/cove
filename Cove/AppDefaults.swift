@@ -53,6 +53,17 @@ extension Defaults.Keys {
     static let openSubtitlesRecentLanguages = Key<[String]>(
         "openSubtitlesRecentLanguages", default: [])
 
+    // MARK: - Library Display
+
+    /// Controls the density of media item grids (compact, regular, or large).
+    static let gridDensity = Key<GridDensity>("gridDensity", default: .regular)
+
+    /// The preferred layout for video library views (grid or list).
+    static let videoLibraryLayout = Key<LibraryLayoutMode>("videoLibraryLayout", default: .grid)
+
+    /// The preferred layout for music library views (grid or list).
+    static let musicLibraryLayout = Key<LibraryLayoutMode>("musicLibraryLayout", default: .grid)
+
     // MARK: - Home Screen
 
     /// Ordered list of home screen sections with visibility toggles.
@@ -66,3 +77,5 @@ extension Defaults.Keys {
 // MARK: - Defaults Conformance
 
 extension StreamingQuality: Defaults.Serializable {}
+extension GridDensity: Defaults.Serializable {}
+extension LibraryLayoutMode: Defaults.Serializable {}

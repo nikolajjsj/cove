@@ -1,4 +1,5 @@
 import DataLoading
+import Defaults
 import JellyfinProvider
 import MediaServerKit
 import Models
@@ -10,9 +11,7 @@ struct ArtistDetailView: View {
     @Environment(AuthManager.self) private var authManager
     @State private var loader = CollectionLoader<Album>()
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
-    ]
+    @Default(.gridDensity) private var gridDensity
 
     var body: some View {
         Group {
@@ -96,7 +95,7 @@ struct ArtistDetailView: View {
                     .fontWeight(.semibold)
                     .padding(.horizontal)
 
-                LazyVGrid(columns: columns, spacing: 20) {
+                LazyVGrid(columns: gridDensity.columns, spacing: gridDensity.gridSpacing) {
                     ForEach(loader.items) { album in
                         AlbumCard(
                             album: album,
