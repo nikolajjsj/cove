@@ -124,6 +124,16 @@ struct SettingsView: View {
                 }
             }
 
+            // MARK: - Storage
+
+            Section("Storage") {
+                NavigationLink {
+                    CacheManagementView()
+                } label: {
+                    Label("Manage Cache", systemImage: "externaldrive")
+                }
+            }
+
             // MARK: - Video Playback
 
             Section("Video Playback") {

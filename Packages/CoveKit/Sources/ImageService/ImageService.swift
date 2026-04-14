@@ -25,4 +25,9 @@ public enum ImageService {
     public static func configure() {
         ImagePipeline.shared = pipeline
     }
+
+    /// Removes all cached images from both disk and memory.
+    public static func clearCache() {
+        pipeline.cache.removeAll()
+    }
 }

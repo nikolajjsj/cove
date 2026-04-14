@@ -99,6 +99,12 @@ public final class JellyfinServerProvider: MediaServerProvider,
         state.clear()
     }
 
+    /// Clears the HTTP response cache used by the underlying API client.
+    public func clearCache() async {
+        guard let client = state.client else { return }
+        await client.httpClient.clearCache()
+    }
+
     /// Restore a previous connection using a persisted token.
     /// Call this on app launch with a stored `ServerConnection`.
     public func restore(connection: ServerConnection) -> Bool {
