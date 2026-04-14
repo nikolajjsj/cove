@@ -22,6 +22,10 @@ extension Defaults.Keys {
     /// Whether to automatically play the next episode when the current one ends.
     static let autoPlayNextEpisode = Key<Bool>("autoPlayNextEpisode", default: true)
 
+    /// Controls behavior when playing a video with existing progress.
+    static let resumePlaybackBehavior = Key<ResumePlaybackBehavior>(
+        "resumePlaybackBehavior", default: .askEveryTime)
+
     /// Whether to force landscape orientation during video playback (iOS).
     static let forceLandscapeVideo = Key<Bool>("forceLandscapeVideo", default: true)
 
@@ -79,3 +83,4 @@ extension Defaults.Keys {
 extension StreamingQuality: Defaults.Serializable {}
 extension GridDensity: Defaults.Serializable {}
 extension LibraryLayoutMode: Defaults.Serializable {}
+extension ResumePlaybackBehavior: Defaults.Serializable {}

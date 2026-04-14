@@ -14,6 +14,7 @@ struct SettingsView: View {
     @Default(.skipBackwardInterval) var skipBackwardInterval
     @Default(.accentColor) var accentColorName
     @Default(.maxStreamingQuality) var maxStreamingQuality
+    @Default(.resumePlaybackBehavior) var resumePlaybackBehavior
     @Default(.gridDensity) var gridDensity
 
     @Environment(AppState.self) private var appState
@@ -150,6 +151,15 @@ struct SettingsView: View {
                 Toggle(
                     "Auto-play next episode", systemImage: "play.circle", isOn: $autoPlayNextEpisode
                 )
+
+                Picker(selection: $resumePlaybackBehavior) {
+                    ForEach(ResumePlaybackBehavior.allCases, id: \.self) { behavior in
+                        Text(behavior.label).tag(behavior)
+                    }
+                } label: {
+                    Label("Resume Behavior", systemImage: "memories")
+                }
+                .pickerStyle(.menu)
 
                 if capabilities.supportsOrientationLock {
                     Toggle(

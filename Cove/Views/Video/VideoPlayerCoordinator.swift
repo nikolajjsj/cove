@@ -161,9 +161,18 @@ final class VideoPlayerCoordinator {
 
         let position = item.userData?.playbackPosition ?? 0
         if position > 30 {
-            // Meaningful progress — ask the user
-            savedPosition = position
-            showResumePrompt = true
+            let behavior = Defaults[.resumePlaybackBehavior]
+            switch behavior {
+            case .askEveryTime:
+                savedPosition = position
+                showResumePrompt = true
+            case .alwaysResume:
+                startPosition = position
+                isPresented = true
+            case .alwaysStartOver:
+                startPosition = 0
+                isPresented = true
+            }
         } else {
             // No meaningful progress — start from the beginning
             startPosition = 0
