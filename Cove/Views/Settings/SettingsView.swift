@@ -15,7 +15,8 @@ struct SettingsView: View {
     @Default(.autoSkipIntros) var autoSkipIntros
     @Default(.autoSkipCredits) var autoSkipCredits
     @Default(.accentColor) var accentColorName
-    @Default(.maxStreamingQuality) var maxStreamingQuality
+    @Default(.wifiStreamingQuality) var wifiStreamingQuality
+    @Default(.cellularStreamingQuality) var cellularStreamingQuality
     @Default(.resumePlaybackBehavior) var resumePlaybackBehavior
     @Default(.gridDensity) var gridDensity
 
@@ -140,13 +141,21 @@ struct SettingsView: View {
             // MARK: - Video Playback
 
             Section("Video Playback") {
-                // Maximum streaming quality
-                Picker(selection: $maxStreamingQuality) {
+                Picker(selection: $wifiStreamingQuality) {
                     ForEach(StreamingQuality.allCases, id: \.self) { quality in
                         Text(quality.label).tag(quality)
                     }
                 } label: {
-                    Label("Streaming Quality", systemImage: "antenna.radiowaves.left.and.right")
+                    Label("WiFi Quality", systemImage: "wifi")
+                }
+                .pickerStyle(.menu)
+
+                Picker(selection: $cellularStreamingQuality) {
+                    ForEach(StreamingQuality.allCases, id: \.self) { quality in
+                        Text(quality.label).tag(quality)
+                    }
+                } label: {
+                    Label("Cellular Quality", systemImage: "cellularbars")
                 }
                 .pickerStyle(.menu)
 

@@ -1,4 +1,5 @@
 import Defaults
+import DownloadManager
 import Foundation
 import JellyfinProvider
 import Models
@@ -83,6 +84,15 @@ final class VideoPlayerCoordinator {
     /// Whether a quality switch is in progress.
     private(set) var isSwitchingQuality: Bool = false
 
+    /// Returns the appropriate streaming quality based on the current network type.
+    private var effectiveStreamingQuality: StreamingQuality {
+        if NetworkMonitor.shared.isExpensive {
+            return Defaults[.cellularStreamingQuality]
+        } else {
+            return Defaults[.wifiStreamingQuality]
+        }
+    }
+
     /// Build a device profile constrained to the given quality tier.
     private func profileForQuality(_ quality: StreamingQuality) -> DeviceProfile? {
         guard let bitrate = quality.maxBitrate else { return nil }
@@ -131,8 +141,7 @@ final class VideoPlayerCoordinator {
         for item: MediaItem,
         using provider: JellyfinServerProvider
     ) async throws -> (StreamInfo, [MediaSegment]) {
-        let quality = Defaults[.maxStreamingQuality]
-        let profile = profileForQuality(quality)
+        let profile = profileForQuality(effectiveStreamingQuality)
 
         async let infoTask = provider.streamURL(for: item, profile: profile)
         async let segmentsTask = provider.mediaSegments(for: item.id)
@@ -145,7 +154,7 @@ final class VideoPlayerCoordinator {
         item: MediaItem,
         using provider: JellyfinServerProvider
     ) async throws {
-        let quality = Defaults[.maxStreamingQuality]
+        let quality = effectiveStreamingQuality
         let (info, segments) = try await resolveStream(for: item, using: provider)
 
         // Extract source video resolution for the quality picker
@@ -315,7 +324,7 @@ final class VideoPlayerCoordinator {
         using provider: JellyfinServerProvider
     ) async {
         do {
-            let quality = Defaults[.maxStreamingQuality]
+            let quality = effectiveStreamingQuality
             let (info, segments) = try await resolveStream(for: nextItem, using: provider)
 
             // Update coordinator state for the new item

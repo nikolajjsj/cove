@@ -15,9 +15,14 @@ extension Defaults.Keys {
     /// Default playback speed (1.0 = normal). Persisted across sessions.
     static let videoPlaybackSpeed = Key<Float>("videoPlaybackSpeed", default: 1.0)
 
-    /// Maximum streaming quality for video playback.
+    /// Maximum streaming quality on WiFi.
     /// "auto" uses the default device profile (120 Mbps, effectively direct play).
-    static let maxStreamingQuality = Key<StreamingQuality>("maxStreamingQuality", default: .auto)
+    static let wifiStreamingQuality = Key<StreamingQuality>("wifiStreamingQuality", default: .auto)
+
+    /// Maximum streaming quality on cellular networks.
+    /// Defaults to 720p to conserve mobile data.
+    static let cellularStreamingQuality = Key<StreamingQuality>(
+        "cellularStreamingQuality", default: .quality720p)
 
     /// Whether to automatically play the next episode when the current one ends.
     static let autoPlayNextEpisode = Key<Bool>("autoPlayNextEpisode", default: true)

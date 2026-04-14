@@ -38,6 +38,11 @@ struct SeriesDetailView: View {
     @State private var seasonsError: String?
     @State private var episodesError: String?
 
+    // Mark series watched/unwatched
+    @State private var isMarkingSeriesWatched = false
+    @State private var showMarkSeriesWatchedConfirmation = false
+    @State private var markSeriesWatchedValue = true
+
     // Download sheet
     @State private var showDownloadSheet = false
     @State private var downloadingSeasons: Set<SeasonID> = []
@@ -166,6 +171,22 @@ struct SeriesDetailView: View {
                     if !isOffline {
                         FavoriteToggle(itemId: item.id, userData: item.userData)
                         PlayedToggle(itemId: item.id, userData: item.userData)
+
+                        Divider()
+
+                        Button {
+                            markSeriesWatchedValue = true
+                            showMarkSeriesWatchedConfirmation = true
+                        } label: {
+                            Label("Mark Series as Watched", systemImage: "eye.circle")
+                        }
+
+                        Button {
+                            markSeriesWatchedValue = false
+                            showMarkSeriesWatchedConfirmation = true
+                        } label: {
+                            Label("Mark Series as Unwatched", systemImage: "eye.slash.circle")
+                        }
                     }
 
                     if isOffline {
@@ -190,6 +211,21 @@ struct SeriesDetailView: View {
             if let downloadError {
                 Text(downloadError)
             }
+        }
+        .confirmationDialog(
+            markSeriesWatchedValue ? "Mark Series as Watched?" : "Mark Series as Unwatched?",
+            isPresented: $showMarkSeriesWatchedConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(markSeriesWatchedValue ? "Mark as Watched" : "Mark as Unwatched") {
+                Task { await markAllEpisodesPlayed(markSeriesWatchedValue) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                markSeriesWatchedValue
+                    ? "All episodes in \(item.title) will be marked as watched."
+                    : "All episodes in \(item.title) will be marked as unwatched.")
         }
         .confirmationDialog(
             "Remove \(item.title)?",
@@ -698,6 +734,38 @@ struct SeriesDetailView: View {
             userData.playbackPosition > 0
         else { return nil }
         return min(userData.playbackPosition / runtime, 1.0)
+    }
+
+    /// Marks the entire series as watched or unwatched.
+    ///
+    /// Jellyfin's played/unplayed endpoint is recursive — calling it on a
+    /// series ID automatically propagates to all child seasons and episodes.
+    private func markAllEpisodesPlayed(_ isPlayed: Bool) async {
+        isMarkingSeriesWatched = true
+        defer { isMarkingSeriesWatched = false }
+
+        do {
+            // Single API call — Jellyfin marks all children recursively
+            try await authManager.provider.setPlayed(itemId: item.id, isPlayed: isPlayed)
+
+            // Invalidate local overrides so fresh data is picked up
+            appState.userDataStore?.invalidate(item.id)
+            for episode in episodes {
+                appState.userDataStore?.invalidate(episode.id)
+            }
+
+            // Reload the current season's episodes to reflect changes
+            if let selectedSeason {
+                await loadEpisodes(for: selectedSeason)
+            }
+
+            let message = isPlayed ? "Series marked as watched" : "Series marked as unwatched"
+            let icon = isPlayed ? "eye.fill" : "eye.slash"
+            ToastManager.shared.show(message, icon: icon)
+        } catch {
+            ToastManager.shared.show(
+                "Couldn't update series", icon: "exclamationmark.triangle", style: .error)
+        }
     }
 }
 
