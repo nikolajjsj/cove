@@ -12,6 +12,8 @@ struct SettingsView: View {
     @Default(.videoPlaybackSpeed) var videoPlaybackSpeed
     @Default(.skipForwardInterval) var skipForwardInterval
     @Default(.skipBackwardInterval) var skipBackwardInterval
+    @Default(.autoSkipIntros) var autoSkipIntros
+    @Default(.autoSkipCredits) var autoSkipCredits
     @Default(.accentColor) var accentColorName
     @Default(.maxStreamingQuality) var maxStreamingQuality
     @Default(.resumePlaybackBehavior) var resumePlaybackBehavior
@@ -151,6 +153,9 @@ struct SettingsView: View {
                 Toggle(
                     "Auto-play next episode", systemImage: "play.circle", isOn: $autoPlayNextEpisode
                 )
+
+                Toggle("Auto-skip intros", systemImage: "forward.fill", isOn: $autoSkipIntros)
+                Toggle("Auto-skip credits", systemImage: "forward.end.fill", isOn: $autoSkipCredits)
 
                 Picker(selection: $resumePlaybackBehavior) {
                     ForEach(ResumePlaybackBehavior.allCases, id: \.self) { behavior in

@@ -22,6 +22,12 @@ extension Defaults.Keys {
     /// Whether to automatically play the next episode when the current one ends.
     static let autoPlayNextEpisode = Key<Bool>("autoPlayNextEpisode", default: true)
 
+    /// Whether to automatically skip intro segments during video playback.
+    static let autoSkipIntros = Key<Bool>("autoSkipIntros", default: false)
+
+    /// Whether to automatically skip credit/outro segments during video playback.
+    static let autoSkipCredits = Key<Bool>("autoSkipCredits", default: false)
+
     /// Controls behavior when playing a video with existing progress.
     static let resumePlaybackBehavior = Key<ResumePlaybackBehavior>(
         "resumePlaybackBehavior", default: .askEveryTime)
