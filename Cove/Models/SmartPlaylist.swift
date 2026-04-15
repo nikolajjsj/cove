@@ -55,7 +55,7 @@ struct SmartPlaylist: Identifiable, Hashable {
                 Color(red: 0.06, green: 0.72, blue: 0.52),
                 Color(red: 0.04, green: 0.52, blue: 0.62),
             ],
-            sortField: .dateCreated,
+            sortField: .random,
             sortOrder: .descending,
             limit: 50,
             isFavorite: nil,
