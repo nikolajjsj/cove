@@ -10,7 +10,6 @@ struct FavoriteChip: View {
         } label: {
             Label("Favorites", systemImage: isOn ? "heart.fill" : "heart")
                 .font(.subheadline)
-                .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
         .tint(isOn ? .pink : .secondary)

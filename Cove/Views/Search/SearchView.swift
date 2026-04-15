@@ -465,19 +465,11 @@ private struct SearchFilterBar: View {
     @Binding var minRating: Double?
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                WatchedFilterChip(selection: $watchedFilter)
-                    .frame(maxWidth: .infinity)
-                FavoriteChip(isOn: $favoriteOnly)
-                    .frame(maxWidth: .infinity)
-            }
-            HStack(spacing: 8) {
-                DecadeChip(selection: $selectedDecade)
-                    .frame(maxWidth: .infinity)
-                RatingChip(minRating: $minRating)
-                    .frame(maxWidth: .infinity)
-            }
+        FlowLayout(spacing: 8) {
+            WatchedFilterChip(selection: $watchedFilter)
+            FavoriteChip(isOn: $favoriteOnly)
+            DecadeChip(selection: $selectedDecade)
+            RatingChip(minRating: $minRating)
         }
     }
 }

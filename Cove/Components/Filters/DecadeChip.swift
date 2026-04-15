@@ -15,7 +15,6 @@ struct DecadeChip: View {
         } label: {
             Label(selection?.rawValue ?? "Year", systemImage: "calendar")
                 .font(.subheadline)
-                .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
         .tint(selection != nil ? .accentColor : .secondary)

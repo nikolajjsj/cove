@@ -1,3 +1,4 @@
+import CoveUI
 import DataLoading
 import Defaults
 import JellyfinProvider
@@ -587,34 +588,19 @@ private struct FilterChipBar: View {
     let availableGenres: [String]
 
     var body: some View {
-        VStack(spacing: 8) {
-            // Row 1: always shown
-            HStack(spacing: 8) {
-                WatchedFilterChip(selection: $watchedFilter)
-                    .frame(maxWidth: .infinity)
-                FavoriteChip(isOn: $favoriteOnly)
-                    .frame(maxWidth: .infinity)
-            }
+        FlowLayout(spacing: 8) {
+            WatchedFilterChip(selection: $watchedFilter)
+            FavoriteChip(isOn: $favoriteOnly)
 
             if isVideoLibrary {
-                // Row 2: content filters
-                HStack(spacing: 8) {
-                    if !availableGenres.isEmpty {
-                        GenreChip(
-                            selectedGenres: $selectedGenres,
-                            availableGenres: availableGenres
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
+                if !availableGenres.isEmpty {
+                    GenreChip(
+                        selectedGenres: $selectedGenres,
+                        availableGenres: availableGenres
+                    )
                 }
-
-                // Row 3: quality filters
-                HStack(spacing: 8) {
-                    DecadeChip(selection: $selectedDecade)
-                        .frame(maxWidth: .infinity)
-                    RatingChip(minRating: $minRating)
-                        .frame(maxWidth: .infinity)
-                }
+                DecadeChip(selection: $selectedDecade)
+                RatingChip(minRating: $minRating)
             }
         }
     }
@@ -660,7 +646,6 @@ private struct GenreChip: View {
         } label: {
             Label(label, systemImage: "tag")
                 .font(.subheadline)
-                .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
         .tint(!selectedGenres.isEmpty ? .accentColor : .secondary)

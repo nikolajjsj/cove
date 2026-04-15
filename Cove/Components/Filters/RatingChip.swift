@@ -20,7 +20,6 @@ struct RatingChip: View {
         } label: {
             Label(label, systemImage: minRating != nil ? "star.fill" : "star")
                 .font(.subheadline)
-                .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
         .tint(minRating != nil ? .yellow : .secondary)

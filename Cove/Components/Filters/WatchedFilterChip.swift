@@ -17,7 +17,6 @@ struct WatchedFilterChip: View {
                 systemImage: selection.systemImage
             )
             .font(.subheadline)
-            .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
         .tint(selection != .all ? .accentColor : .secondary)

@@ -1,7 +1,8 @@
+import CoveUI
 import Models
 import SwiftUI
 
-/// A horizontal row of tappable external link chips (IMDb, TMDB, TVDB)
+/// A wrapping row of tappable external link chips (IMDb, TMDB, TVDB)
 /// and remote trailer chips ("TRAILER", "TRAILER 1", etc.).
 struct ExternalLinksSection: View {
     let providerIds: ProviderIds?
@@ -15,7 +16,7 @@ struct ExternalLinksSection: View {
         let trailers = buildTrailerLinks()
 
         if !links.isEmpty || !trailers.isEmpty {
-            HStack(spacing: 8) {
+            FlowLayout(spacing: 8) {
                 ForEach(links, id: \.label) { link in
                     Button {
                         openURL(link.url)
