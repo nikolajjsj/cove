@@ -1,9 +1,12 @@
+import Defaults
 import Models
 import SwiftUI
 
 struct RootView: View {
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
+
+    @Default(.appearanceMode) private var appearanceMode
 
     private var coordinator: VideoPlayerCoordinator {
         appState.videoPlayerCoordinator
@@ -85,6 +88,7 @@ struct RootView: View {
                 )
             }
         }
+        .preferredColorScheme(appearanceMode.colorScheme)
         .task {
             await appState.restoreSession()
         }

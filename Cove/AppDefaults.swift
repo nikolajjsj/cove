@@ -49,6 +49,9 @@ extension Defaults.Keys {
     /// The accent color name. Values: "default", "indigo", "purple", "pink", "red", "orange", "teal", "green".
     static let accentColor = Key<String>("accentColor", default: "default")
 
+    /// The app's appearance mode (system, light, or dark). Defaults to dark.
+    static let appearanceMode = Key<AppearanceMode>("appearanceMode", default: .dark)
+
     // MARK: - Subtitle Appearance
 
     /// The size of subtitle text during video playback.
@@ -95,3 +98,4 @@ extension StreamingQuality: Defaults.Serializable {}
 extension GridDensity: Defaults.Serializable {}
 extension LibraryLayoutMode: Defaults.Serializable {}
 extension ResumePlaybackBehavior: Defaults.Serializable {}
+extension AppearanceMode: Defaults.Serializable {}

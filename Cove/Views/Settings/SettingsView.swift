@@ -19,6 +19,7 @@ struct SettingsView: View {
     @Default(.cellularStreamingQuality) var cellularStreamingQuality
     @Default(.resumePlaybackBehavior) var resumePlaybackBehavior
     @Default(.gridDensity) var gridDensity
+    @Default(.appearanceMode) var appearanceMode
 
     @Environment(AppState.self) private var appState
     @Environment(\.platformCapabilities) private var capabilities
@@ -72,6 +73,16 @@ struct SettingsView: View {
             // MARK: - Appearance
 
             Section("Appearance") {
+                Picker(selection: $appearanceMode) {
+                    ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                        Label(mode.label, systemImage: mode.icon)
+                            .tag(mode)
+                    }
+                } label: {
+                    Label("Appearance", systemImage: "moon.fill")
+                }
+                .pickerStyle(.menu)
+
                 Picker(selection: $accentColorName) {
                     ForEach(accentColorOptions, id: \.value) { option in
                         Label {
