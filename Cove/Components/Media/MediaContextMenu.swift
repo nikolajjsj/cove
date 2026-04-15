@@ -31,8 +31,11 @@ struct MediaContextMenuModifier: ViewModifier {
 
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
-    @State private var showPlaylistPicker = false
-    @State private var fetchedTrackIds: [ItemID] = []
+    /// Track IDs to add to a playlist. Non-nil triggers the sheet.
+    /// Using a single optional instead of separate `Bool` + `[ItemID]` state
+    /// variables avoids a race condition where the sheet content closure
+    /// captures the stale initial `[]` before the array state update is applied.
+    @State private var playlistTrackIds: [ItemID]?
 
     private var coordinator: VideoPlayerCoordinator {
         appState.videoPlayerCoordinator
@@ -41,9 +44,16 @@ struct MediaContextMenuModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .contextMenu { menuContent }
-            .sheet(isPresented: $showPlaylistPicker) {
-                PlaylistPickerSheet(trackIds: fetchedTrackIds)
+            .sheet(isPresented: showPlaylistPickerBinding) {
+                PlaylistPickerSheet(trackIds: playlistTrackIds ?? [])
             }
+    }
+
+    private var showPlaylistPickerBinding: Binding<Bool> {
+        Binding(
+            get: { playlistTrackIds != nil },
+            set: { if !$0 { playlistTrackIds = nil } }
+        )
     }
 
     // MARK: - Menu Dispatch
@@ -150,7 +160,7 @@ struct MediaContextMenuModifier: ViewModifier {
         radioButton
 
         Button {
-            Task { await prepareAlbumForPlaylistPicker() }
+            Task { await prepareAlbumTrackIds() }
         } label: {
             Label("Add to Playlist…", systemImage: "text.badge.plus")
         }
@@ -194,8 +204,7 @@ struct MediaContextMenuModifier: ViewModifier {
         radioButton
 
         Button {
-            fetchedTrackIds = [item.id]
-            showPlaylistPicker = true
+            playlistTrackIds = [item.id]
         } label: {
             Label("Add to Playlist…", systemImage: "text.badge.plus")
         }
@@ -286,11 +295,10 @@ struct MediaContextMenuModifier: ViewModifier {
         }
     }
 
-    private func prepareAlbumForPlaylistPicker() async {
+    private func prepareAlbumTrackIds() async {
         do {
             let tracks = try await authManager.provider.tracks(album: item.id)
-            fetchedTrackIds = tracks.map(\.id)
-            showPlaylistPicker = true
+            playlistTrackIds = tracks.map(\.id)
         } catch {
             // Silently fail
         }
