@@ -57,12 +57,7 @@ struct GenreListView: View {
         let provider = authManager.provider
 
         await loader.load {
-            let sort = SortOptions(field: .name, order: .ascending)
-            let filter = FilterOptions(
-                parentId: library.id,
-                includeItemTypes: ["MusicGenre"]
-            )
-            return try await provider.items(in: library, sort: sort, filter: filter)
+            try await provider.genres(in: library)
         }
     }
 }
@@ -73,7 +68,7 @@ private struct GenreRow: View {
     let name: String
 
     var body: some View {
-        Label(name, systemImage: "guitars")
+        Label(name, systemImage: MusicGenreIconMap.icon(for: name))
             .font(.body)
             .padding(.vertical, 4)
     }
