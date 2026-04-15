@@ -84,7 +84,6 @@ struct SeriesDetailView: View {
                 showExternalLinks: !isOffline,
                 overviewLineLimit: 3,
                 overviewFont: .subheadline,
-                overviewExpandThreshold: 150,
                 libraryId: tvShowsLibraryId,
                 isFavorite: item.userData?.isFavorite ?? false,
                 header: {

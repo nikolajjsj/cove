@@ -26,7 +26,6 @@ struct MovieDetailView: View {
                 posterURL: posterURL,
                 heroSubtitleParts: heroSubtitleParts,
                 metadataPills: MetadataPill.videoDetailPills(for: item, displayItem: displayItem),
-                overviewExpandThreshold: 200,
                 libraryId: moviesLibraryId,
                 isFavorite: item.userData?.isFavorite ?? false,
                 header: {

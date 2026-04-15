@@ -23,7 +23,6 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
     let showExternalLinks: Bool
     let overviewLineLimit: Int
     let overviewFont: Font
-    let overviewExpandThreshold: Int?
     let libraryId: ItemID?
     let isFavorite: Bool
     @ViewBuilder let header: Header
@@ -39,7 +38,6 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
         showExternalLinks: Bool = true,
         overviewLineLimit: Int = 4,
         overviewFont: Font = .body,
-        overviewExpandThreshold: Int? = nil,
         libraryId: ItemID? = nil,
         isFavorite: Bool = false,
         @ViewBuilder header: () -> Header,
@@ -54,7 +52,6 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
         self.showExternalLinks = showExternalLinks
         self.overviewLineLimit = overviewLineLimit
         self.overviewFont = overviewFont
-        self.overviewExpandThreshold = overviewExpandThreshold
         self.libraryId = libraryId
         self.isFavorite = isFavorite
         self.header = header()
@@ -102,8 +99,7 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
                     ExpandableOverview(
                         text: overview,
                         lineLimit: overviewLineLimit,
-                        font: overviewFont,
-                        expandThreshold: overviewExpandThreshold
+                        font: overviewFont
                     )
                     .padding(.horizontal)
                 }
