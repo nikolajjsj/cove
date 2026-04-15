@@ -99,13 +99,15 @@ private struct ProgressFillButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color.accentColor.opacity(0.3))
 
-                // Vibrant fill scaled to the watched fraction.
-                // Because Color fills the entire available space during
-                // layout, scaleEffect compresses it visually from the
-                // leading edge without affecting the surrounding layout.
-                Color.accentColor
-                    .scaleEffect(x: max(progress, 0.0), anchor: .leading)
-                    .animation(.easeInOut(duration: 0.4), value: progress)
+                // Vibrant fill clipped to match the overall button shape.
+                // Uses a fractional width so the fill's edges always
+                // conform to the rounded rectangle rather than producing
+                // a sharp vertical cut (which scaleEffect caused).
+                GeometryReader { geo in
+                    Color.accentColor
+                        .frame(width: geo.size.width * max(progress, 0.0))
+                        .animation(.easeInOut(duration: 0.4), value: progress)
+                }
             }
             .clipShape(.rect(cornerRadius: 10))
         } else {
