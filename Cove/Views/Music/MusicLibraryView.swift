@@ -25,6 +25,10 @@ struct MusicLibraryView: View {
                         library: library
                     )
 
+                    // MARK: - Smart Playlists
+
+                    SmartPlaylistsSection()
+
                     // MARK: - Most Played
 
                     MusicDiscoveryShelf(

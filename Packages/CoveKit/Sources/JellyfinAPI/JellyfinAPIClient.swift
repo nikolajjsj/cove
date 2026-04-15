@@ -148,7 +148,8 @@ public final class JellyfinAPIClient: Sendable {
         genres: [String]? = nil,
         personIds: [String]? = nil,
         years: [Int]? = nil,
-        minCommunityRating: Double? = nil
+        minCommunityRating: Double? = nil,
+        cacheMaxAge: TimeInterval = 30
     ) async throws -> ItemsResult {
         let url = baseURL.appendingPathComponent("Users/\(userId)/Items")
 
@@ -199,7 +200,7 @@ public final class JellyfinAPIClient: Sendable {
             "Fetching \(includeItemTypes?.joined(separator: ", ") ?? "items") for user \(userId)")
         return try await httpClient.request(
             url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 30))
+            cachePolicy: .cacheFirst(maxAge: cacheMaxAge))
     }
 
     /// Get a single item's full details.

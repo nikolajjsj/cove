@@ -85,6 +85,13 @@ enum NavigationRouter {
         let library = appState.libraries.first { $0.id == route.libraryId }
         VideoGenreDetailView(genreName: route.genre, library: library)
     }
+
+    /// Returns the detail view for a smart playlist preset.
+    @ViewBuilder
+    static func destination(for preset: SmartPlaylist, appState: AppState) -> some View {
+        let library = appState.libraries.first { $0.collectionType == .music }
+        SmartPlaylistDetailView(preset: preset, library: library)
+    }
 }
 
 // MARK: - Navigation Destinations Modifier
@@ -114,6 +121,9 @@ private struct NavigationDestinations: ViewModifier {
             }
             .navigationDestination(for: VideoGenreRoute.self) { route in
                 NavigationRouter.destination(for: route, appState: appState)
+            }
+            .navigationDestination(for: SmartPlaylist.self) { preset in
+                NavigationRouter.destination(for: preset, appState: appState)
             }
             .navigationDestination(for: SearchSeeAllRoute.self) { route in
                 SearchSeeAllView(

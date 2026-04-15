@@ -143,6 +143,19 @@ public final class JellyfinServerProvider: MediaServerProvider,
     public func pagedItems(in library: MediaLibrary, sort: SortOptions, filter: FilterOptions)
         async throws -> PagedResult<MediaItem>
     {
+        try await pagedItems(in: library, sort: sort, filter: filter, cacheMaxAge: 30)
+    }
+
+    /// Paginated library browsing with a custom cache TTL.
+    ///
+    /// Smart playlists use a high `cacheMaxAge` so that results stay stable
+    /// across repeated visits without hitting the network every time.
+    public func pagedItems(
+        in library: MediaLibrary,
+        sort: SortOptions,
+        filter: FilterOptions,
+        cacheMaxAge: TimeInterval
+    ) async throws -> PagedResult<MediaItem> {
         let (client, userId) = try authenticatedClient()
         let result = try await client.getItems(
             userId: userId,
@@ -157,7 +170,8 @@ public final class JellyfinServerProvider: MediaServerProvider,
             isPlayed: filter.isPlayed,
             genres: filter.genres,
             years: filter.years,
-            minCommunityRating: filter.minCommunityRating
+            minCommunityRating: filter.minCommunityRating,
+            cacheMaxAge: cacheMaxAge
         )
         let items = (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
         return PagedResult(
