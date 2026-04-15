@@ -1,4 +1,3 @@
-import CoveUI
 import Models
 import SwiftUI
 
@@ -19,7 +18,6 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
     let backdropURL: URL?
     let posterURL: URL?
     let heroSubtitleParts: [String]
-    let metadataPills: [MetadataPill]
     let showExternalLinks: Bool
     let overviewLineLimit: Int
     let overviewFont: Font
@@ -34,7 +32,6 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
         backdropURL: URL?,
         posterURL: URL? = nil,
         heroSubtitleParts: [String],
-        metadataPills: [MetadataPill],
         showExternalLinks: Bool = true,
         overviewLineLimit: Int = 4,
         overviewFont: Font = .body,
@@ -48,7 +45,6 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
         self.backdropURL = backdropURL
         self.posterURL = posterURL
         self.heroSubtitleParts = heroSubtitleParts
-        self.metadataPills = metadataPills
         self.showExternalLinks = showExternalLinks
         self.overviewLineLimit = overviewLineLimit
         self.overviewFont = overviewFont
@@ -90,9 +86,9 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
                 header
                     .padding(.horizontal)
 
-                // Metadata pills (horizontal scroll — no horizontal padding)
-                MetadataPillsView(metadataPills)
-                    .contentMargins(.horizontal, 16, for: .scrollContent)
+                // Media info (ratings, technical specs, played status)
+                MediaInfoSection(item: item, displayItem: displayItem)
+                    .padding(.horizontal)
 
                 // Overview
                 if let overview = item.overview, !overview.isEmpty {

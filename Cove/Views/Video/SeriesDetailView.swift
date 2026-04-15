@@ -80,7 +80,7 @@ struct SeriesDetailView: View {
                 backdropURL: backdropURL(for: item),
                 posterURL: posterURL,
                 heroSubtitleParts: heroSubtitleParts,
-                metadataPills: buildMetadataPills(),
+
                 showExternalLinks: !isOffline,
                 overviewLineLimit: 3,
                 overviewFont: .subheadline,
@@ -293,22 +293,6 @@ struct SeriesDetailView: View {
         }
 
         return parts
-    }
-
-    // MARK: - Metadata Pills
-
-    private func buildMetadataPills() -> [MetadataPill] {
-        var pills = MetadataPill.ratingPills(
-            communityRating: item.communityRating,
-            criticRating: item.criticRating,
-            hasImdb: displayItem.providerIds?.imdb != nil
-        )
-
-        if let genres = item.genres, let first = genres.first {
-            pills.append(.genre(first))
-        }
-
-        return pills
     }
 
     // MARK: - Season Picker

@@ -1,4 +1,3 @@
-import CoveUI
 import DownloadManager
 import ImageService
 import JellyfinProvider
@@ -27,10 +26,12 @@ struct EpisodeDetailView: View {
                 displayItem: displayItem,
                 backdropURL: heroImageURL,
                 heroSubtitleParts: heroSubtitleParts,
-                metadataPills: MetadataPill.videoDetailPills(for: item, displayItem: displayItem),
                 libraryId: tvShowsLibraryId,
                 header: {
-                    PlayButton(item: item)
+                    VStack(alignment: .leading, spacing: 8) {
+                        PlayButton(item: item)
+                        EndsAtLabel(item: item)
+                    }
                 },
                 footer: {
                     VStack(alignment: .leading, spacing: 20) {

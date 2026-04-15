@@ -104,10 +104,10 @@ private struct ProgressFillButtonStyle: ButtonStyle {
                 // layout, scaleEffect compresses it visually from the
                 // leading edge without affecting the surrounding layout.
                 Color.accentColor
-                    .clipShape(.rect(cornerRadius: 10))
                     .scaleEffect(x: max(progress, 0.0), anchor: .leading)
                     .animation(.easeInOut(duration: 0.4), value: progress)
             }
+            .clipShape(.rect(cornerRadius: 10))
         } else {
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color.accentColor)

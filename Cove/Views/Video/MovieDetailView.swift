@@ -1,4 +1,3 @@
-import CoveUI
 import DownloadManager
 import ImageService
 import JellyfinProvider
@@ -25,11 +24,13 @@ struct MovieDetailView: View {
                 backdropURL: backdropURL,
                 posterURL: posterURL,
                 heroSubtitleParts: heroSubtitleParts,
-                metadataPills: MetadataPill.videoDetailPills(for: item, displayItem: displayItem),
                 libraryId: moviesLibraryId,
                 isFavorite: item.userData?.isFavorite ?? false,
                 header: {
-                    PlayButton(item: item)
+                    VStack(alignment: .leading, spacing: 8) {
+                        PlayButton(item: item)
+                        EndsAtLabel(item: item)
+                    }
                 },
                 footer: {
                     VStack(alignment: .leading, spacing: 20) {
