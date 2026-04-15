@@ -218,6 +218,8 @@ final class DownloadsViewModel {
 
     /// Delete all downloaded episodes belonging to a series.
     func deleteSeriesEpisodes(seriesId: String) async {
+        guard let serverId else { return }
+
         let episodes = allDownloads.filter { dl in
             dl.state == .completed
                 && dl.mediaType == .episode
@@ -225,9 +227,10 @@ final class DownloadsViewModel {
                     || metadataByItemId[dl.itemId.rawValue]?.seriesId == seriesId)
         }
 
-        // Collect unique group IDs to clean up
+        // Collect unique group IDs and season IDs to clean up
         let groupIds = Set(episodes.compactMap(\.groupId))
         let episodeIds = Set(episodes.map(\.id))
+        let seasonIds = Set(episodes.compactMap { metadataByItemId[$0.itemId.rawValue]?.seasonId })
 
         for episode in episodes {
             try? await downloadManager.deleteDownload(id: episode.id)
@@ -242,10 +245,23 @@ final class DownloadsViewModel {
                 try? await downloadManager.deleteGroup(id: groupId)
             }
         }
+
+        // Clean up season metadata and artwork that deleteGroup may not have covered
+        let storage = DownloadStorage.shared
+        for seasonId in seasonIds {
+            try? await metadataRepository?.delete(itemId: seasonId, serverId: serverId)
+            try? storage.deleteItemDirectoryByRawId(
+                serverId: serverId, mediaType: MediaType.season.rawValue, itemId: seasonId)
+        }
+
+        // Clean up orphaned metadata (series, seasons without remaining downloads)
+        await downloadManager.cleanupOrphanedMetadata(serverId: serverId)
     }
 
     /// Delete all downloaded tracks belonging to an album.
     func deleteAlbumTracks(albumId: String) async {
+        guard let serverId else { return }
+
         let tracks = allDownloads.filter { dl in
             dl.state == .completed
                 && dl.mediaType == .track
@@ -268,6 +284,9 @@ final class DownloadsViewModel {
                 try? await downloadManager.deleteGroup(id: groupId)
             }
         }
+
+        // Clean up orphaned metadata (album metadata without remaining downloads)
+        await downloadManager.cleanupOrphanedMetadata(serverId: serverId)
     }
 
     func deleteAllDownloads() async {

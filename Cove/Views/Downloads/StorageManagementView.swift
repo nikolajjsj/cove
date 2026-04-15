@@ -211,6 +211,14 @@ struct StorageManagementView: View {
         do {
             downloads = try await downloadManager.allDownloads()
 
+            // Clean up orphaned metadata and artwork before measuring storage.
+            // This ensures the displayed size reflects only data that is actually
+            // associated with a known download record.
+            let serverIds = Set(downloads.map(\.serverId))
+            for serverId in serverIds {
+                await downloadManager.cleanupOrphanedMetadata(serverId: serverId)
+            }
+
             let storage = DownloadStorage.shared
             totalUsedBytes = (try? storage.totalDiskUsage()) ?? 0
             availableBytes = (try? storage.availableDiskSpace()) ?? 0

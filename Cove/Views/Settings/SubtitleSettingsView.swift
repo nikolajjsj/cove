@@ -38,13 +38,7 @@ struct SubtitleSettingsView: View {
             Section("Color") {
                 Picker(selection: $subtitleColor) {
                     ForEach(SubtitleColor.allCases, id: \.self) { color in
-                        Label {
-                            Text(color.displayName)
-                        } icon: {
-                            Image(systemName: "circle.fill")
-                                .foregroundStyle(color.color)
-                        }
-                        .tag(color)
+                        Text(color.displayName).tag(color)
                     }
                 } label: {
                     Label("Text Color", systemImage: "paintbrush")

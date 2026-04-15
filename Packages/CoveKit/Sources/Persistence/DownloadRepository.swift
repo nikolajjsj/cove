@@ -112,6 +112,19 @@ public final class DownloadRepository: Sendable {
         }
     }
 
+    /// Count downloads that reference a specific parent item ID.
+    ///
+    /// Used to determine whether a parent's metadata and artwork can be
+    /// safely cleaned up after its last child download is removed.
+    public func countByParentId(_ parentId: String, serverId: String) async throws -> Int {
+        try await dbWriter.read { db in
+            try DownloadRecord
+                .filter(Column("parentId") == parentId)
+                .filter(Column("serverId") == serverId)
+                .fetchCount(db)
+        }
+    }
+
     // MARK: - Delete
 
     /// Delete a single download by ID.
@@ -176,12 +189,18 @@ public final class DownloadRepository: Sendable {
     /// - Parameters:
     ///   - id: The download's unique identifier.
     ///   - localFilePath: The relative path to the downloaded file under the downloads directory.
-    public func markCompleted(id: String, localFilePath: String) async throws {
+    public func markCompleted(id: String, localFilePath: String, actualBytes: Int64? = nil)
+        async throws
+    {
         try await dbWriter.write { db in
             if var record = try DownloadRecord.fetchOne(db, key: id) {
                 record.state = DownloadState.completed.rawValue
                 record.localFilePath = localFilePath
                 record.progress = 1.0
+                if let actualBytes {
+                    record.downloadedBytes = actualBytes
+                    record.totalBytes = actualBytes
+                }
                 record.completedAt = Date()
                 record.errorMessage = nil
                 try record.update(db)

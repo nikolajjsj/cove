@@ -618,31 +618,16 @@ struct SeriesDetailView: View {
     // MARK: - Offline Deletion
 
     private func deleteAllOfflineEpisodes() async {
-        guard let dm = downloadCoordinator.downloadManager, let serverId = offlineServerId else {
-            return
-        }
+        guard let dm = downloadCoordinator.downloadManager else { return }
         for ep in offlineEpisodeDownloads {
             try? await dm.deleteDownload(id: ep.id)
         }
-        for ep in offlineEpisodeDownloads {
-            try? await downloadCoordinator.offlineMetadataRepository?.delete(
-                itemId: ep.itemId.rawValue, serverId: serverId
-            )
-        }
-        try? await downloadCoordinator.offlineMetadataRepository?.delete(
-            itemId: item.id.rawValue, serverId: serverId
-        )
         await loadSeasons()
     }
 
     private func deleteOfflineEpisode(_ dl: DownloadItem) async {
-        guard let dm = downloadCoordinator.downloadManager, let serverId = offlineServerId else {
-            return
-        }
+        guard let dm = downloadCoordinator.downloadManager else { return }
         try? await dm.deleteDownload(id: dl.id)
-        try? await downloadCoordinator.offlineMetadataRepository?.delete(
-            itemId: dl.itemId.rawValue, serverId: serverId
-        )
         await loadSeasons()
     }
 

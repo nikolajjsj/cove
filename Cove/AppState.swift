@@ -75,6 +75,13 @@ final class AppState {
             wireUpPlayer()
             await loadLibraries()
             await downloadCoordinator.syncOfflineReports()
+
+            // Clean up orphaned metadata and artwork that no longer have
+            // corresponding download records (e.g. from interrupted deletions).
+            if let connection = authManager.activeConnection {
+                await downloadCoordinator.downloadManager?.cleanupOrphanedMetadata(
+                    serverId: connection.id.uuidString)
+            }
         }
     }
 

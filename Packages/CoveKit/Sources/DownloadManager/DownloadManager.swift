@@ -347,13 +347,31 @@ public final class DownloadManagerService: @unchecked Sendable {
         return items.allSatisfy { $0.state == .completed }
     }
 
-    /// Delete all downloads in a group, plus the group record itself.
+    /// Delete all downloads in a group, plus the group record and associated metadata.
     public func deleteGroup(id: String) async throws {
         let groupItems = try await downloadRepository.fetchAll(groupId: id)
+        let group = try? await groupRepository?.fetch(id: id)
+
+        // Delete each child download (including its metadata and parent cleanup)
         for item in groupItems {
             try await deleteDownload(id: item.id)
         }
+
+        // Delete the group record itself
         try await groupRepository?.delete(id: id)
+
+        // Clean up metadata for the group's own item (e.g. season metadata)
+        if let group {
+            try? await metadataRepository?.delete(
+                itemId: group.itemId.rawValue, serverId: group.serverId)
+            // Remove the group item's artwork directory
+            try? storage.deleteItemDirectoryByRawId(
+                serverId: group.serverId,
+                mediaType: group.mediaType.rawValue,
+                itemId: group.itemId.rawValue
+            )
+        }
+
         logger.info("Deleted download group \(id) with \(groupItems.count) items")
     }
 
@@ -482,7 +500,7 @@ public final class DownloadManagerService: @unchecked Sendable {
     // MARK: - Public API — Deletion
 
     /// Delete a single download: cancel any in-progress transfer, remove the
-    /// on-disk file, and delete the database record.
+    /// on-disk file, delete the database record, and clean up associated metadata.
     public func deleteDownload(id: String) async throws {
         // Cancel any active task
         let taskId = state.withLock { $0.taskToDownloadID.first(where: { $0.value == id })?.key }
@@ -501,19 +519,78 @@ public final class DownloadManagerService: @unchecked Sendable {
             state.lastProgressWrite.removeValue(forKey: id)
         }
 
+        // Fetch the item before deleting so we can clean up metadata and parent references
+        let item = try await downloadRepository.fetch(id: id)
+
         // Delete files
-        if let item = try await downloadRepository.fetch(id: id) {
+        if let item {
             try? storage.deleteFiles(for: item)
         }
 
         // Delete DB record
         try await downloadRepository.delete(id: id)
+
+        // Clean up offline metadata for this item
+        if let item {
+            try? await metadataRepository?.delete(
+                itemId: item.itemId.rawValue, serverId: item.serverId)
+
+            // If no other downloads reference the same parent, clean up the parent's
+            // metadata and on-disk artwork directory as well.
+            if let parentId = item.parentId {
+                let remainingChildren =
+                    (try? await downloadRepository.countByParentId(
+                        parentId.rawValue, serverId: item.serverId)) ?? 0
+                if remainingChildren == 0 {
+                    let parentMeta = try? await metadataRepository?.fetch(
+                        itemId: parentId.rawValue, serverId: item.serverId)
+                    try? await metadataRepository?.delete(
+                        itemId: parentId.rawValue, serverId: item.serverId)
+                    // Remove the parent's artwork directory
+                    if let parentMediaType = parentMeta?.mediaType {
+                        try? storage.deleteItemDirectoryByRawId(
+                            serverId: item.serverId,
+                            mediaType: parentMediaType,
+                            itemId: parentId.rawValue
+                        )
+                    }
+                }
+            }
+
+            // If this download belonged to a group, check whether the group is
+            // now empty and clean it up automatically. This handles cases where
+            // individual items are deleted from AlbumDetailView or
+            // SeriesDetailView without going through deleteGroup().
+            if let groupId = item.groupId {
+                let remainingInGroup =
+                    (try? await downloadRepository.fetchAll(groupId: groupId)) ?? []
+                if remainingInGroup.isEmpty {
+                    // Fetch the group before deleting so we can clean up its metadata
+                    let group = try? await groupRepository?.fetch(id: groupId)
+                    try? await groupRepository?.delete(id: groupId)
+
+                    // Clean up the group item's own metadata and artwork directory
+                    // (e.g. season metadata, album metadata)
+                    if let group {
+                        try? await metadataRepository?.delete(
+                            itemId: group.itemId.rawValue, serverId: group.serverId)
+                        try? storage.deleteItemDirectoryByRawId(
+                            serverId: group.serverId,
+                            mediaType: group.mediaType.rawValue,
+                            itemId: group.itemId.rawValue
+                        )
+                    }
+                    logger.info("Auto-cleaned empty download group \(groupId)")
+                }
+            }
+        }
+
         logger.info("Deleted download: \(id)")
 
         await startNextDownloadsIfNeeded()
     }
 
-    /// Delete all downloads for a server.
+    /// Delete all downloads for a server, including metadata and groups.
     public func deleteAllDownloads(serverId: String) async throws {
         // Cancel active tasks belonging to this server
         let items = try await downloadRepository.fetchAll(serverId: serverId)
@@ -521,22 +598,31 @@ public final class DownloadManagerService: @unchecked Sendable {
 
         let tasks = await urlSession.allTasks
         state.withLock { state in
+            var cancelledCount = 0
             for (taskId, downloadId) in state.taskToDownloadID where itemIDs.contains(downloadId) {
                 tasks.first(where: { $0.taskIdentifier == taskId })?.cancel()
                 state.taskToDownloadID.removeValue(forKey: taskId)
+                cancelledCount += 1
             }
             for itemId in itemIDs {
                 state.resumeDataCache.removeValue(forKey: itemId)
+                state.expectedBytesCache.removeValue(forKey: itemId)
+                state.lastProgressWrite.removeValue(forKey: itemId)
             }
-            state.activeDownloadCount = max(0, state.activeDownloadCount - itemIDs.count)
+            state.activeDownloadCount = max(0, state.activeDownloadCount - cancelledCount)
         }
 
-        // Delete all files for this server
+        // Delete all files for this server (includes artwork, media, and parent directories)
         try? storage.deleteAllFiles(serverId: serverId)
 
         // Delete all DB records
         try await downloadRepository.deleteAll(serverId: serverId)
-        logger.info("Deleted all downloads for server \(serverId)")
+
+        // Clean up all associated metadata and groups for this server
+        try? await metadataRepository?.deleteAll(serverId: serverId)
+        try? await groupRepository?.deleteAll(serverId: serverId)
+
+        logger.info("Deleted all downloads, metadata, and groups for server \(serverId)")
 
         await startNextDownloadsIfNeeded()
     }
@@ -546,6 +632,51 @@ public final class DownloadManagerService: @unchecked Sendable {
     /// Total bytes of completed downloads for a specific server (from the DB).
     public func totalStorageUsed(serverId: String) async throws -> Int64 {
         try await downloadRepository.totalDownloadedBytes(serverId: serverId)
+    }
+
+    /// Remove orphaned offline metadata records that no longer have a
+    /// corresponding download record.
+    ///
+    /// This handles cases where metadata was saved for parent items (series,
+    /// seasons, albums, playlists) during download setup but was never cleaned
+    /// up when all child downloads were removed. Call this periodically or
+    /// after batch deletions to reclaim database space and ensure the storage
+    /// display is accurate.
+    public func cleanupOrphanedMetadata(serverId: String) async {
+        guard let metadataRepository else { return }
+        guard let allMeta = try? await metadataRepository.fetchAll(serverId: serverId) else {
+            return
+        }
+
+        let allDownloads = (try? await downloadRepository.fetchAll(serverId: serverId)) ?? []
+        let downloadItemIds = Set(allDownloads.map(\.itemId.rawValue))
+        let downloadParentIds = Set(allDownloads.compactMap(\.parentId?.rawValue))
+
+        var orphanCount = 0
+        for meta in allMeta {
+            // Keep metadata if a download exists for this item or if any download
+            // references it as a parent
+            let isReferenced =
+                downloadItemIds.contains(meta.itemId)
+                || downloadParentIds.contains(meta.itemId)
+            if !isReferenced {
+                try? await metadataRepository.delete(
+                    itemId: meta.itemId, serverId: meta.serverId)
+                // Remove the orphaned artwork directory
+                try? storage.deleteItemDirectoryByRawId(
+                    serverId: meta.serverId,
+                    mediaType: meta.mediaType,
+                    itemId: meta.itemId
+                )
+                orphanCount += 1
+            }
+        }
+
+        if orphanCount > 0 {
+            logger.info(
+                "Cleaned up \(orphanCount) orphaned metadata record(s) for server \(serverId)"
+            )
+        }
     }
 
     /// Resolve a `DownloadItem`'s local file path to an absolute `URL`.
@@ -568,6 +699,9 @@ public final class DownloadManagerService: @unchecked Sendable {
     /// 3. Kicks the scheduler to start new downloads.
     public func restoreDownloadsOnLaunch() async {
         logger.info("Restoring downloads on launch…")
+
+        // 0. Clean up any leftover staged files from previous sessions.
+        storage.cleanupStagingDirectory()
 
         // 1. Get all tasks the background session still knows about.
         let existingTasks = await urlSession.allTasks
@@ -826,8 +960,21 @@ public final class DownloadManagerService: @unchecked Sendable {
             do {
                 let relativePath = try storage.moveToPermamentStorage(
                     from: stagedFile, for: item, fileExtension: ext)
+
+                // Read the actual file size for accurate storage reporting
+                let permanentURL = storage.mediaFileURL(for: item, fileExtension: ext)
+                let actualBytes: Int64? = {
+                    guard
+                        let attrs = try? FileManager.default.attributesOfItem(
+                            atPath: permanentURL.path),
+                        let fileSize = attrs[.size] as? UInt64
+                    else { return nil }
+                    return Int64(fileSize)
+                }()
+
                 try await downloadRepository.markCompleted(
-                    id: downloadID, localFilePath: relativePath)
+                    id: downloadID, localFilePath: relativePath,
+                    actualBytes: actualBytes)
                 logger.info("Download completed: \(item.title) → \(relativePath)")
             } catch {
                 logger.error(

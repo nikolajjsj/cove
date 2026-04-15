@@ -446,15 +446,6 @@ struct AlbumDetailView: View {
         for dl in allDownloads where dl.mediaType == .track && dl.parentId == albumItem.id {
             try? await dm.deleteDownload(id: dl.id)
         }
-        // Clean up metadata
-        for track in tracks {
-            try? await downloadCoordinator.offlineMetadataRepository?.delete(
-                itemId: track.id.rawValue, serverId: serverId
-            )
-        }
-        try? await downloadCoordinator.offlineMetadataRepository?.delete(
-            itemId: albumItem.id.rawValue, serverId: serverId
-        )
         isAlbumDownloaded = false
     }
 
@@ -475,33 +466,18 @@ struct AlbumDetailView: View {
     // MARK: - Offline Deletion
 
     private func deleteOfflineAlbum() async {
-        guard let dm = downloadCoordinator.downloadManager, let serverId = offlineServerId else {
-            return
-        }
+        guard let dm = downloadCoordinator.downloadManager else { return }
         for dl in offlineDownloads {
             try? await dm.deleteDownload(id: dl.id)
         }
-        for dl in offlineDownloads {
-            try? await downloadCoordinator.offlineMetadataRepository?.delete(
-                itemId: dl.itemId.rawValue, serverId: serverId
-            )
-        }
-        try? await downloadCoordinator.offlineMetadataRepository?.delete(
-            itemId: albumItem.id.rawValue, serverId: serverId
-        )
         await loadTracks()
     }
 
     private func deleteOfflineTrack(_ track: Track) async {
-        guard let dm = downloadCoordinator.downloadManager, let serverId = offlineServerId else {
-            return
-        }
+        guard let dm = downloadCoordinator.downloadManager else { return }
         if let dl = offlineDownloads.first(where: { $0.itemId == track.id }) {
             try? await dm.deleteDownload(id: dl.id)
         }
-        try? await downloadCoordinator.offlineMetadataRepository?.delete(
-            itemId: track.id.rawValue, serverId: serverId
-        )
         await loadTracks()
     }
 }

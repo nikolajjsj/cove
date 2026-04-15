@@ -352,6 +352,51 @@ public struct DownloadStorage: Sendable {
         return 0
     }
 
+    // MARK: - Orphan Cleanup
+
+    /// Remove any leftover files in the `.staging` directory.
+    ///
+    /// The staging directory is used as a temporary holding area when downloads
+    /// complete. If the app crashes between staging and the final move to
+    /// permanent storage, staged files remain as orphans. Call this on launch
+    /// to reclaim the space.
+    public func cleanupStagingDirectory() {
+        let stagingDir = downloadsDirectory.appendingPathComponent(".staging", isDirectory: true)
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: stagingDir.path) else { return }
+        do {
+            try fm.removeItem(at: stagingDir)
+            logger.info("Cleaned up staging directory")
+        } catch {
+            logger.warning("Failed to clean staging directory: \(error.localizedDescription)")
+        }
+    }
+
+    /// Delete a specific item's directory using raw identifiers.
+    ///
+    /// This is used to clean up artwork directories for parent items (series,
+    /// albums, seasons, playlists) that no longer have any child downloads.
+    ///
+    /// - Parameters:
+    ///   - serverId: The server connection UUID string.
+    ///   - mediaType: The raw media type string (e.g. "series", "album").
+    ///   - itemId: The item's raw identifier string.
+    public func deleteItemDirectoryByRawId(
+        serverId: String, mediaType: String, itemId: String
+    ) throws {
+        let dir =
+            downloadsDirectory
+            .appendingPathComponent(serverId, isDirectory: true)
+            .appendingPathComponent(mediaType, isDirectory: true)
+            .appendingPathComponent(itemId, isDirectory: true)
+        let fm = FileManager.default
+        if fm.fileExists(atPath: dir.path) {
+            try fm.removeItem(at: dir)
+            logger.info("Deleted item directory: \(dir.path)")
+        }
+        cleanupEmptyAncestors(of: dir, upTo: downloadsDirectory)
+    }
+
     // MARK: - Private Helpers
 
     /// Recursively calculate the total size of all files within a directory.

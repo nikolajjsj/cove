@@ -75,8 +75,7 @@ struct SettingsView: View {
             Section("Appearance") {
                 Picker(selection: $appearanceMode) {
                     ForEach(AppearanceMode.allCases, id: \.self) { mode in
-                        Label(mode.label, systemImage: mode.icon)
-                            .tag(mode)
+                        Text(mode.label).tag(mode)
                     }
                 } label: {
                     Label("Appearance", systemImage: "moon.fill")
@@ -100,8 +99,7 @@ struct SettingsView: View {
 
                 Picker(selection: $gridDensity) {
                     ForEach(GridDensity.allCases, id: \.self) { density in
-                        Label(density.label, systemImage: density.icon)
-                            .tag(density)
+                        Text(density.label).tag(density)
                     }
                 } label: {
                     Label("Grid Density", systemImage: "square.grid.2x2")
