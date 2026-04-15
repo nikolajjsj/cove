@@ -33,6 +33,8 @@ final class NowPlayingService: NowPlayingProvider {
 
     /// Register remote command targets for playback control.
     func setup() {
+        teardown()
+
         let center = commandCenter
 
         center.playCommand.isEnabled = true

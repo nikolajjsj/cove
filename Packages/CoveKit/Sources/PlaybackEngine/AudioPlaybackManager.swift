@@ -99,6 +99,8 @@ public final class AudioPlaybackManager {
         rebuildPlayerQueue()
         playerBackend.play()
         isPlaying = true
+        nowPlaying.setup()
+        setupRemoteCommandHandlers()
         currentTime = 0
         updateDuration()
         updateNowPlaying()
@@ -357,6 +359,7 @@ public final class AudioPlaybackManager {
     private func setupPlayerCallbacks() {
         playerBackend.onTimeUpdate = { [weak self] time in
             guard let self else { return }
+            guard time.isFinite, time >= 0 else { return }
             self.currentTime = time
             if let backendDuration = self.playerBackend.currentItemDuration {
                 self.duration = backendDuration
@@ -430,8 +433,11 @@ public final class AudioPlaybackManager {
         let endIndex = min(nextIndex + 2, queue.tracks.count)
         guard nextIndex < endIndex else { return }
 
+        let enqueuedTrackIds = Set(tokenToTrack.values.map(\.id))
+
         for i in nextIndex..<endIndex {
             let track = queue.tracks[i]
+            guard !enqueuedTrackIds.contains(track.id) else { continue }
             if let url = resolveStreamURL(for: track) {
                 let token = playerBackend.enqueue(url: url)
                 tokenToTrack[token] = track
