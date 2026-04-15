@@ -8,9 +8,10 @@ import SwiftUI
 /// items with existing progress. Shows a loading indicator while the
 /// player is initializing.
 ///
-/// When the item has a resume position, a thin progress bar is rendered
-/// beneath the button to give users an immediate visual sense of how
-/// far through the content they are.
+/// When the item has a resume position, the button's background visually
+/// fills from the leading edge with the accent color to reflect how far
+/// through the content the user has watched. The unwatched portion uses
+/// a subdued tint so the button itself acts as a progress indicator.
 ///
 /// ```swift
 /// PlayButton(item: item)
@@ -26,35 +27,27 @@ struct PlayButton: View {
     }
 
     var body: some View {
-        VStack(spacing: 6) {
-            Button {
-                coordinator.play(item: item, using: authManager.provider)
-            } label: {
-                HStack(spacing: 8) {
-                    if coordinator.isLoadingItem(item.id) {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Image(systemName: "play.fill")
-                            .font(.body)
-                    }
-
-                    Text(playButtonLabel)
-                        .fontWeight(.semibold)
+        Button {
+            coordinator.play(item: item, using: authManager.provider)
+        } label: {
+            HStack(spacing: 8) {
+                if coordinator.isLoadingItem(item.id) {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.body)
                 }
-                .font(.callout)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.accentColor)
-            .disabled(coordinator.isLoadingItem(item.id))
 
-            // Visual progress bar for resume position
-            if let progress = playbackProgress {
-                ResumeProgressBar(progress: progress)
+                Text(playButtonLabel)
+                    .fontWeight(.semibold)
             }
+            .font(.callout)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
         }
+        .buttonStyle(ProgressFillButtonStyle(progress: playbackProgress))
+        .disabled(coordinator.isLoadingItem(item.id))
     }
 
     // MARK: - Helpers
@@ -69,7 +62,7 @@ struct PlayButton: View {
     /// Calculates the playback progress as a fraction from 0.0 to 1.0.
     ///
     /// Returns `nil` when there is no resume position or no runtime,
-    /// which hides the progress bar entirely.
+    /// which keeps the button fully filled with the accent color.
     private var playbackProgress: Double? {
         guard let position = item.userData?.playbackPosition, position > 0,
             let runtime = item.runtime, runtime > 0
@@ -78,27 +71,46 @@ struct PlayButton: View {
     }
 }
 
-// MARK: - Resume Progress Bar
+// MARK: - Progress Fill Button Style
 
-/// A thin progress bar showing how far through a media item the user has watched.
+/// A button style that doubles as a progress indicator.
 ///
-/// Rendered beneath the play button to provide an at-a-glance visual indicator
-/// of resume position.
-private struct ResumeProgressBar: View {
-    let progress: Double
+/// When `progress` is `nil` the button renders as a standard filled
+/// button in the accent color. When a progress value is provided, the
+/// background splits into a vibrant leading portion (watched) and a
+/// muted trailing portion (unwatched), giving users an immediate,
+/// integrated sense of their playback position.
+private struct ProgressFillButtonStyle: ButtonStyle {
+    let progress: Double?
 
-    var body: some View {
-        GeometryReader { geometry in
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(.white)
+            .background { progressBackground }
+            .opacity(configuration.isPressed ? 0.75 : 1.0)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+
+    @ViewBuilder
+    private var progressBackground: some View {
+        if let progress {
             ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(.secondary.opacity(0.2))
+                // Muted base spanning the full width (unwatched portion)
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.accentColor.opacity(0.3))
 
-                Capsule()
-                    .fill(Color.accentColor)
-                    .frame(width: geometry.size.width * min(max(progress, 0), 1.0))
+                // Vibrant fill scaled to the watched fraction.
+                // Because Color fills the entire available space during
+                // layout, scaleEffect compresses it visually from the
+                // leading edge without affecting the surrounding layout.
+                Color.accentColor
+                    .clipShape(.rect(cornerRadius: 10))
+                    .scaleEffect(x: max(progress, 0.0), anchor: .leading)
+                    .animation(.easeInOut(duration: 0.4), value: progress)
             }
+        } else {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.accentColor)
         }
-        .frame(height: 4)
-        .clipShape(.capsule)
     }
 }
