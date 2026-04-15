@@ -871,7 +871,8 @@ public final class JellyfinAPIClient: Sendable {
             name: name,
             userId: userId,
             ids: trackIds,
-            mediaType: "Audio"
+            mediaType: "Audio",
+            isPublic: false
         )
         let rawBody = try Self.pascalCaseEncoder.encode(body)
         logger.debug("Creating playlist '\(name)'")
@@ -1150,12 +1151,14 @@ struct CreatePlaylistRequest: Encodable, Sendable {
     let userId: String
     let ids: [String]
     let mediaType: String
+    let isPublic: Bool
 
     enum CodingKeys: String, CodingKey {
         case name = "Name"
         case userId = "UserId"
         case ids = "Ids"
         case mediaType = "MediaType"
+        case isPublic = "IsPublic"
     }
 }
 
