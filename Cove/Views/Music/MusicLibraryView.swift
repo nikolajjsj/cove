@@ -41,6 +41,10 @@ struct MusicLibraryView: View {
 
                     ArtistsShelfSection(library: library)
 
+                    // MARK: - Genres
+
+                    MusicGenresShelfSection(library: library)
+
                     // MARK: - Playlists
 
                     PlaylistsShelfSection()
@@ -223,6 +227,74 @@ private struct ArtistsShelfSection: View {
             type: .primary,
             maxSize: CGSize(width: 240, height: 240)
         )
+    }
+}
+
+// MARK: - Music Genres Shelf Section
+
+/// Loads music genres for the current library and displays them as
+/// gradient cards in a horizontal scroll rail, matching the visual
+/// language of the video genre section on the home screen.
+/// A "See All" link navigates to the full genre list via `MusicBrowseRoute`.
+private struct MusicGenresShelfSection: View {
+    let library: MediaLibrary
+    @Environment(AuthManager.self) private var authManager
+    @State private var loader = CollectionLoader<MediaItem>()
+
+    var body: some View {
+        if loader.isLoading || !loader.items.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Genres")
+                        .font(.title2)
+                        .bold()
+
+                    Spacer()
+
+                    NavigationLink(value: MusicBrowseRoute.allGenres(libraryId: library.id)) {
+                        Text("See All")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+                }
+                .padding(.horizontal)
+
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: 14) {
+                        ForEach(loader.items) { genre in
+                            NavigationLink(value: genre) {
+                                GenreCard(
+                                    name: genre.title,
+                                    icon: MusicGenreIconMap.icon(for: genre.title)
+                                )
+                            }
+                            .buttonStyle(MusicGenreCardButtonStyle())
+                        }
+                    }
+                    .scrollTargetLayout()
+                }
+                .contentMargins(.horizontal, 16, for: .scrollContent)
+                .scrollIndicators(.hidden)
+                .scrollClipDisabled()
+            }
+            .task(id: library.id) {
+                await loader.load {
+                    try await authManager.provider.genres(in: library)
+                }
+            }
+        }
+    }
+}
+
+/// Spring-scale press effect for music genre cards.
+private struct MusicGenreCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(
+                .spring(response: 0.25, dampingFraction: 0.7),
+                value: configuration.isPressed
+            )
     }
 }
 

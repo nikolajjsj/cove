@@ -192,6 +192,7 @@ private struct GenreCardSkeleton: View {
 /// and clean typography.
 struct GenreCard: View {
     let name: String
+    var icon: String? = nil
 
     static let cardWidth: CGFloat = 172
     static let cardHeight: CGFloat = 100
@@ -207,7 +208,7 @@ struct GenreCard: View {
             )
 
             // MARK: Decorative background icon (ghosted, rotated)
-            Image(systemName: GenreIconMap.icon(for: name))
+            Image(systemName: resolvedIcon)
                 .font(.system(size: 72, weight: .black))
                 .foregroundStyle(.white.opacity(0.13))
                 .rotationEffect(.degrees(-12))
@@ -236,7 +237,7 @@ struct GenreCard: View {
                 Spacer()
 
                 HStack(spacing: 5) {
-                    Image(systemName: GenreIconMap.icon(for: name))
+                    Image(systemName: resolvedIcon)
                         .font(.caption2.bold())
                         .foregroundStyle(.white.opacity(0.85))
 
@@ -259,6 +260,10 @@ struct GenreCard: View {
     }
 
     // MARK: Gradient
+
+    private var resolvedIcon: String {
+        icon ?? GenreIconMap.icon(for: name)
+    }
 
     private var gradientColors: [Color] {
         let index = abs(name.deterministicHash) % GenreGradients.palette.count

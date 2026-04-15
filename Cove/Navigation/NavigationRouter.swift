@@ -72,6 +72,10 @@ enum NavigationRouter {
             AlbumListView(library: library)
                 .navigationTitle("Albums")
                 .largeNavigationTitle()
+        case .allGenres:
+            GenreListView(library: library)
+                .navigationTitle("Genres")
+                .largeNavigationTitle()
         case .allPlaylists:
             PlaylistListView()
                 .navigationTitle("Playlists")
