@@ -150,9 +150,16 @@ final class VideoPlayerCoordinator {
     }
 
     /// Resolve stream info and present the player for the given item.
+    ///
+    /// - Parameters:
+    ///   - item: The item to play.
+    ///   - provider: The server provider for stream resolution.
+    ///   - overridePosition: When non-nil, playback starts at this position
+    ///     and the resume prompt is skipped. Used for chapter navigation.
     private func resolveAndPresent(
         item: MediaItem,
-        using provider: JellyfinServerProvider
+        using provider: JellyfinServerProvider,
+        overridePosition: TimeInterval? = nil
     ) async throws {
         let quality = effectiveStreamingQuality
         let (info, segments) = try await resolveStream(for: item, using: provider)
@@ -168,24 +175,30 @@ final class VideoPlayerCoordinator {
         streamInfo = info
         mediaSegments = segments
 
-        let position = item.userData?.playbackPosition ?? 0
-        if position > 30 {
-            let behavior = Defaults[.resumePlaybackBehavior]
-            switch behavior {
-            case .askEveryTime:
-                savedPosition = position
-                showResumePrompt = true
-            case .alwaysResume:
-                startPosition = position
-                isPresented = true
-            case .alwaysStartOver:
+        if let overridePosition {
+            // Explicit position requested (e.g. chapter navigation) — skip resume prompt
+            startPosition = overridePosition
+            isPresented = true
+        } else {
+            let position = item.userData?.playbackPosition ?? 0
+            if position > 30 {
+                let behavior = Defaults[.resumePlaybackBehavior]
+                switch behavior {
+                case .askEveryTime:
+                    savedPosition = position
+                    showResumePrompt = true
+                case .alwaysResume:
+                    startPosition = position
+                    isPresented = true
+                case .alwaysStartOver:
+                    startPosition = 0
+                    isPresented = true
+                }
+            } else {
+                // No meaningful progress — start from the beginning
                 startPosition = 0
                 isPresented = true
             }
-        } else {
-            // No meaningful progress — start from the beginning
-            startPosition = 0
-            isPresented = true
         }
     }
 
@@ -209,6 +222,46 @@ final class VideoPlayerCoordinator {
 
             do {
                 try await resolveAndPresent(item: item, using: provider)
+            } catch {
+                self.error = PlaybackError(
+                    itemTitle: item.title,
+                    underlyingError: error
+                )
+            }
+        }
+    }
+
+    /// Resolve the stream for `item` and start playback at a specific position,
+    /// bypassing the resume prompt.
+    ///
+    /// Used for chapter-based navigation where the user has explicitly chosen
+    /// a playback position.
+    ///
+    /// - Parameters:
+    ///   - item: The `MediaItem` to play (movie or episode).
+    ///   - provider: The Jellyfin server provider used to resolve the stream URL.
+    ///   - position: The position in seconds at which to begin playback.
+    func play(
+        item: MediaItem,
+        using provider: JellyfinServerProvider,
+        startingAt position: TimeInterval
+    ) {
+        guard !isLoading else { return }
+
+        Task {
+            isLoading = true
+            loadingItemId = item.id
+            defer {
+                isLoading = false
+                loadingItemId = nil
+            }
+
+            do {
+                try await resolveAndPresent(
+                    item: item,
+                    using: provider,
+                    overridePosition: position
+                )
             } catch {
                 self.error = PlaybackError(
                     itemTitle: item.title,

@@ -138,6 +138,90 @@ extension MetadataPill {
         return nil
     }
 
+    /// Creates a video codec pill (e.g. "HEVC", "AV1", "H.264").
+    ///
+    /// Normalizes common codec identifiers into user-friendly labels.
+    /// Returns `nil` when the codec string is `nil` or empty.
+    public static func videoCodec(_ codec: String?) -> MetadataPill? {
+        guard let codec, !codec.isEmpty else { return nil }
+        let label: String
+        switch codec.lowercased() {
+        case "hevc", "h265", "h.265":
+            label = "HEVC"
+        case "h264", "h.264", "avc":
+            label = "H.264"
+        case "av1":
+            label = "AV1"
+        case "vp9":
+            label = "VP9"
+        case "vc1":
+            label = "VC-1"
+        case "mpeg2video", "mpeg2":
+            label = "MPEG-2"
+        case "mpeg4":
+            label = "MPEG-4"
+        default:
+            label = codec.uppercased()
+        }
+        return MetadataPill(icon: "film", label: label, tint: nil)
+    }
+
+    /// Creates an audio codec pill (e.g. "Atmos", "TrueHD", "EAC3").
+    ///
+    /// Normalizes common audio codec identifiers into user-friendly labels.
+    /// Returns `nil` when the codec string is `nil` or empty.
+    public static func audioCodec(_ codec: String?) -> MetadataPill? {
+        guard let codec, !codec.isEmpty else { return nil }
+        let label: String
+        switch codec.lowercased() {
+        case "truehd":
+            label = "TrueHD"
+        case "eac3":
+            label = "EAC-3"
+        case "ac3":
+            label = "AC-3"
+        case "dts":
+            label = "DTS"
+        case "dca":
+            label = "DTS"
+        case "dtshd":
+            label = "DTS-HD MA"
+        case "aac":
+            label = "AAC"
+        case "flac":
+            label = "FLAC"
+        case "opus":
+            label = "Opus"
+        case "vorbis":
+            label = "Vorbis"
+        case "mp3":
+            label = "MP3"
+        case "pcm_s16le", "pcm_s24le", "pcm":
+            label = "PCM"
+        default:
+            label = codec.uppercased()
+        }
+        return MetadataPill(icon: "waveform", label: label, tint: nil)
+    }
+
+    /// Creates a bitrate pill (e.g. "42 Mbps", "8.5 Mbps").
+    ///
+    /// Returns `nil` when the bitrate is `nil`, zero, or negative.
+    public static func bitrate(_ bitrate: Int?) -> MetadataPill? {
+        guard let bitrate, bitrate > 0 else { return nil }
+        let mbps = Double(bitrate) / 1_000_000.0
+        let label: String
+        if mbps >= 10 {
+            label = "\(Int(mbps)) Mbps"
+        } else if mbps >= 1 {
+            label = mbps.formatted(.number.precision(.fractionLength(1))) + " Mbps"
+        } else {
+            let kbps = bitrate / 1000
+            label = "\(kbps) kbps"
+        }
+        return MetadataPill(icon: "speedometer", label: label, tint: nil)
+    }
+
     /// Creates an audio channels pill (e.g. "5.1", "7.1", "Stereo").
     public static func audioChannels(_ channels: Int) -> MetadataPill? {
         let label: String

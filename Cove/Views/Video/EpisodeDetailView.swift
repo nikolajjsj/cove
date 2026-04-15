@@ -27,17 +27,36 @@ struct EpisodeDetailView: View {
                 displayItem: displayItem,
                 backdropURL: heroImageURL,
                 heroSubtitleParts: heroSubtitleParts,
-                metadataPills: buildMetadataPills(),
+                metadataPills: MetadataPill.videoDetailPills(for: item, displayItem: displayItem),
                 libraryId: tvShowsLibraryId,
                 header: {
-                    EpisodePlayButton(
-                        item: item,
-                        coordinator: coordinator,
-                        provider: authManager.provider
-                    )
+                    PlayButton(item: item)
                 },
                 footer: {
                     VStack(alignment: .leading, spacing: 20) {
+                        // Last played date
+                        if let lastPlayed = item.userData?.lastPlayedDate {
+                            EpisodeLastPlayedLabel(date: lastPlayed)
+                                .padding(.horizontal)
+                        }
+
+                        // Chapter markers
+                        if !displayItem.chapters.isEmpty {
+                            ChapterRail(
+                                chapters: displayItem.chapters,
+                                chapterImageURL: { chapter in
+                                    chapterImageURL(for: chapter)
+                                },
+                                onSelect: { chapter in
+                                    coordinator.play(
+                                        item: item,
+                                        using: authManager.provider,
+                                        startingAt: chapter.startPosition
+                                    )
+                                }
+                            )
+                        }
+
                         if !displayItem.people.isEmpty {
                             CastCrewRail(people: displayItem.people)
                         }
@@ -49,13 +68,13 @@ struct EpisodeDetailView: View {
                                 coordinator: coordinator,
                                 provider: authManager.provider
                             )
+                            .padding(.horizontal)
                         }
 
                         MediaItemRail(title: "More Like This") { [item] in
                             try await authManager.provider.similarItems(for: item, limit: 12)
                         }
                     }
-                    .padding(.horizontal)
                     .padding(.top, 20)
                     .padding(.bottom, 32)
                 }
@@ -154,87 +173,41 @@ struct EpisodeDetailView: View {
             parts.append(TimeFormatting.duration(runtime))
         }
 
+        // Air date for episodes
+        if let premiereDate = displayItem.premiereDate {
+            parts.append(premiereDate.formatted(date: .abbreviated, time: .omitted))
+        }
+
         return parts
     }
 
-    // MARK: - Metadata Pills
+    // MARK: - Chapter Image
 
-    private func buildMetadataPills() -> [MetadataPill] {
-        var pills = MetadataPill.ratingPills(
-            communityRating: item.communityRating,
-            criticRating: item.criticRating,
-            hasImdb: displayItem.providerIds?.imdb != nil
+    private func chapterImageURL(for chapter: Chapter) -> URL? {
+        guard let tag = chapter.imageTag else { return nil }
+        return authManager.provider.chapterImageURL(
+            itemId: item.id,
+            chapterIndex: chapter.id,
+            tag: tag,
+            maxWidth: 400
         )
-
-        if let streams = displayItem.mediaStreams {
-            if let videoStream = streams.first(where: { $0.type == .video }) {
-                if let pill = MetadataPill.resolution(width: videoStream.width ?? 0) {
-                    pills.append(pill)
-                }
-                if let pill = MetadataPill.hdr(
-                    videoRange: videoStream.videoRange,
-                    videoRangeType: videoStream.videoRangeType
-                ) {
-                    pills.append(pill)
-                }
-            }
-
-            if let audioStream = streams.first(where: { $0.type == .audio }) {
-                if let pill = MetadataPill.audioChannels(audioStream.channels ?? 0) {
-                    pills.append(pill)
-                }
-            }
-        }
-
-        if let userData = item.userData {
-            if userData.isPlayed {
-                pills.append(.played)
-            }
-            if let pill = MetadataPill.playCount(userData.playCount) {
-                pills.append(pill)
-            }
-        }
-
-        return pills
     }
 }
 
-// MARK: - Episode Play Button
+// MARK: - Episode Last Played Label
 
-private struct EpisodePlayButton: View {
-    let item: MediaItem
-    let coordinator: VideoPlayerCoordinator
-    let provider: JellyfinServerProvider
+/// A subtle label showing when the user last watched this episode.
+private struct EpisodeLastPlayedLabel: View {
+    let date: Date
 
     var body: some View {
-        Button {
-            coordinator.play(item: item, using: provider)
-        } label: {
-            HStack(spacing: 8) {
-                if coordinator.isLoadingItem(item.id) {
-                    ProgressView()
-                        .tint(.white)
-                } else {
-                    Image(systemName: "play.fill")
-                        .font(.body)
-                }
-                Text(playButtonLabel)
-                    .fontWeight(.semibold)
-            }
-            .font(.callout)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
+        HStack(spacing: 6) {
+            Image(systemName: "clock")
+                .font(.caption2)
+            Text("Last watched \(date.formatted(date: .abbreviated, time: .omitted))")
+                .font(.caption)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(.accentColor)
-        .disabled(coordinator.isLoadingItem(item.id))
-    }
-
-    private var playButtonLabel: String {
-        if let position = item.userData?.playbackPosition, position > 0 {
-            return "Resume at \(TimeFormatting.playbackPosition(position))"
-        }
-        return "Play"
+        .foregroundStyle(.tertiary)
     }
 }
 

@@ -13,6 +13,7 @@ struct CastCrewRail: View {
                 Text("Cast & Crew")
                     .font(.title3)
                     .bold()
+                    .padding(.horizontal)
 
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 16) {
@@ -23,7 +24,9 @@ struct CastCrewRail: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    .scrollTargetLayout()
                 }
+                .contentMargins(.horizontal, 16, for: .scrollContent)
                 .scrollIndicators(.hidden)
             }
         }

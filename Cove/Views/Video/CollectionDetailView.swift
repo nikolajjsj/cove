@@ -10,12 +10,20 @@ import SwiftUI
 struct CollectionDetailView: View {
     let item: MediaItem
 
+    @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
 
     @State private var loader = CollectionLoader<MediaItem>()
+    @State private var detailLoader = DetailItemLoader()
 
     @Default(.gridDensity) private var gridDensity
+
+    /// The fully-fetched item (with people, genres, studios, etc.),
+    /// falling back to the navigation item.
+    private var displayItem: MediaItem {
+        detailLoader.displayItem(fallback: item)
+    }
 
     var body: some View {
         ScrollView {
@@ -30,15 +38,54 @@ struct CollectionDetailView: View {
                     // Overview
                     if let overview = item.overview, !overview.isEmpty {
                         ExpandableOverview(text: overview, lineLimit: 3)
+                            .padding(.horizontal)
                     }
 
                     // Metadata pills
                     metadataPills
+                        .padding(.horizontal)
+
+                    // External Links
+                    if let providerIds = displayItem.providerIds,
+                        providerIds.hasAny
+                    {
+                        ExternalLinksSection(
+                            providerIds: providerIds,
+                            mediaType: item.mediaType
+                        )
+                        .padding(.horizontal)
+                    }
+
+                    // Genres
+                    if let genres = displayItem.genres ?? item.genres, !genres.isEmpty {
+                        TappableChipFlowSection(
+                            title: "Genres",
+                            items: genres,
+                            libraryId: nil
+                        )
+                        .padding(.horizontal)
+                    }
+
+                    // Studios
+                    if let studios = displayItem.studios, !studios.isEmpty {
+                        ChipFlowSection(title: "Studios", items: studios)
+                            .padding(.horizontal)
+                    }
 
                     // Items in collection
                     collectionItemsSection
+                        .padding(.horizontal)
+
+                    // Cast & Crew (horizontal scroll — no padding)
+                    if !displayItem.people.isEmpty {
+                        CastCrewRail(people: displayItem.people)
+                    }
+
+                    // More Like This (horizontal scroll — no padding)
+                    MediaItemRail(title: "More Like This") { [item] in
+                        try await authManager.provider.similarItems(for: item, limit: 12)
+                    }
                 }
-                .padding(.horizontal)
                 .padding(.top, 20)
                 .padding(.bottom, 40)
             }
@@ -47,6 +94,11 @@ struct CollectionDetailView: View {
         .navigationTitle(item.title)
         .toolbarBackground(.hidden, for: .navigationBar)
         .inlineNavigationTitle()
+        .task {
+            await detailLoader.load {
+                try await authManager.provider.item(id: item.id)
+            }
+        }
         .task {
             await loader.load {
                 try await authManager.provider.collectionItems(collectionId: item.id)

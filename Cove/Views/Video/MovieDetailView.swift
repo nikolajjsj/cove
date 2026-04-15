@@ -17,30 +17,58 @@ struct MovieDetailView: View {
 
     @State private var detailLoader = DetailItemLoader()
 
-    private var coordinator: VideoPlayerCoordinator {
-        appState.videoPlayerCoordinator
-    }
-
     var body: some View {
         ScrollView {
             VideoDetailScaffold(
                 item: item,
                 displayItem: displayItem,
                 backdropURL: backdropURL,
+                posterURL: posterURL,
                 heroSubtitleParts: heroSubtitleParts,
-                metadataPills: buildMetadataPills(),
+                metadataPills: MetadataPill.videoDetailPills(for: item, displayItem: displayItem),
+                overviewExpandThreshold: 200,
                 libraryId: moviesLibraryId,
+                isFavorite: item.userData?.isFavorite ?? false,
                 header: {
-                    playButton
+                    PlayButton(item: item)
                 },
                 footer: {
                     VStack(alignment: .leading, spacing: 20) {
+                        // Last played date
+                        if let lastPlayed = item.userData?.lastPlayedDate {
+                            LastPlayedLabel(date: lastPlayed)
+                                .padding(.horizontal)
+                        }
+
+                        // Chapter markers
+                        if !displayItem.chapters.isEmpty {
+                            ChapterRail(
+                                chapters: displayItem.chapters,
+                                chapterImageURL: { chapter in
+                                    chapterImageURL(for: chapter)
+                                },
+                                onSelect: { chapter in
+                                    coordinator.play(
+                                        item: item,
+                                        using: authManager.provider,
+                                        startingAt: chapter.startPosition
+                                    )
+                                }
+                            )
+                        }
+
                         if !displayItem.people.isEmpty {
                             CastCrewRail(people: displayItem.people)
                         }
 
                         MediaItemRail(title: "Trailers", style: .landscape) { [item] in
                             try await authManager.provider.localTrailers(for: item)
+                        }
+
+                        // Remote trailers (e.g. YouTube links)
+                        if !displayItem.remoteTrailerURLs.isEmpty {
+                            RemoteTrailerLinks(urls: displayItem.remoteTrailerURLs)
+                                .padding(.horizontal)
                         }
 
                         MediaItemRail(title: "Special Features", style: .landscape) { [item] in
@@ -51,7 +79,6 @@ struct MovieDetailView: View {
                             try await authManager.provider.similarItems(for: item, limit: 12)
                         }
                     }
-                    .padding(.horizontal)
                     .padding(.top, 20)
                     .padding(.bottom, 32)
                 }
@@ -100,6 +127,10 @@ struct MovieDetailView: View {
         detailLoader.displayItem(fallback: item)
     }
 
+    private var coordinator: VideoPlayerCoordinator {
+        appState.videoPlayerCoordinator
+    }
+
     /// The ID of the first movies library, used for genre chip navigation.
     private var moviesLibraryId: ItemID? {
         appState.libraries.first { $0.collectionType == .movies }?.id
@@ -128,83 +159,6 @@ struct MovieDetailView: View {
         return parts
     }
 
-    // MARK: - Metadata Pills
-
-    private func buildMetadataPills() -> [MetadataPill] {
-        var pills = MetadataPill.ratingPills(
-            communityRating: item.communityRating,
-            criticRating: item.criticRating,
-            hasImdb: displayItem.providerIds?.imdb != nil
-        )
-
-        // Media info pills from streams
-        if let streams = displayItem.mediaStreams {
-            // Resolution pill from the first video stream
-            if let videoStream = streams.first(where: { $0.type == .video }) {
-                if let pill = MetadataPill.resolution(width: videoStream.width ?? 0) {
-                    pills.append(pill)
-                }
-                if let pill = MetadataPill.hdr(
-                    videoRange: videoStream.videoRange,
-                    videoRangeType: videoStream.videoRangeType
-                ) {
-                    pills.append(pill)
-                }
-            }
-
-            // Audio channels pill from the first audio stream
-            if let audioStream = streams.first(where: { $0.type == .audio }) {
-                if let pill = MetadataPill.audioChannels(audioStream.channels ?? 0) {
-                    pills.append(pill)
-                }
-            }
-        }
-
-        if let userData = item.userData {
-            if userData.isPlayed {
-                pills.append(.played)
-            }
-            if let pill = MetadataPill.playCount(userData.playCount) {
-                pills.append(pill)
-            }
-        }
-
-        return pills
-    }
-
-    // MARK: - Play Button
-
-    private var playButton: some View {
-        Button {
-            coordinator.play(item: item, using: authManager.provider)
-        } label: {
-            HStack(spacing: 8) {
-                if coordinator.isLoadingItem(item.id) {
-                    ProgressView()
-                        .tint(.white)
-                } else {
-                    Image(systemName: "play.fill")
-                        .font(.body)
-                }
-                Text(playButtonLabel)
-                    .fontWeight(.semibold)
-            }
-            .font(.callout)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(.accentColor)
-        .disabled(coordinator.isLoadingItem(item.id))
-    }
-
-    private var playButtonLabel: String {
-        if let position = item.userData?.playbackPosition, position > 0 {
-            return "Resume at \(TimeFormatting.playbackPosition(position))"
-        }
-        return "Play"
-    }
-
     // MARK: - Image Helpers
 
     private var backdropURL: URL? {
@@ -213,5 +167,76 @@ struct MovieDetailView: View {
             type: .backdrop,
             maxSize: CGSize(width: 1280, height: 720)
         )
+    }
+
+    private var posterURL: URL? {
+        authManager.provider.imageURL(
+            for: item,
+            type: .primary,
+            maxSize: CGSize(width: 300, height: 450)
+        )
+    }
+
+    private func chapterImageURL(for chapter: Chapter) -> URL? {
+        guard let tag = chapter.imageTag else { return nil }
+        return authManager.provider.chapterImageURL(
+            itemId: item.id,
+            chapterIndex: chapter.id,
+            tag: tag,
+            maxWidth: 400
+        )
+    }
+}
+
+// MARK: - Last Played Label
+
+/// A subtle label showing when the user last watched this item.
+private struct LastPlayedLabel: View {
+    let date: Date
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock")
+                .font(.caption2)
+            Text("Last watched \(date.formatted(date: .abbreviated, time: .omitted))")
+                .font(.caption)
+        }
+        .foregroundStyle(.tertiary)
+    }
+}
+
+// MARK: - Remote Trailer Links
+
+/// Tappable links for remote trailers (typically YouTube URLs).
+private struct RemoteTrailerLinks: View {
+    let urls: [URL]
+
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        if !urls.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Online Trailers")
+                    .font(.headline)
+
+                ForEach(urls, id: \.absoluteString) { url in
+                    Button {
+                        openURL(url)
+                    } label: {
+                        Label(trailerLabel(for: url), systemImage: "play.rectangle")
+                            .font(.subheadline)
+                            .foregroundStyle(.accent)
+                    }
+                }
+            }
+        }
+    }
+
+    private func trailerLabel(for url: URL) -> String {
+        let host = url.host() ?? ""
+        if host.localizedStandardContains("youtube") || host.localizedStandardContains("youtu.be") {
+            return "Watch on YouTube"
+        }
+        return "Watch Trailer"
     }
 }

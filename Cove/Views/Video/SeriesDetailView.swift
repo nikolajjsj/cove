@@ -78,6 +78,7 @@ struct SeriesDetailView: View {
                 item: item,
                 displayItem: displayItem,
                 backdropURL: backdropURL(for: item),
+                posterURL: posterURL,
                 heroSubtitleParts: heroSubtitleParts,
                 metadataPills: buildMetadataPills(),
                 showExternalLinks: !isOffline,
@@ -85,6 +86,7 @@ struct SeriesDetailView: View {
                 overviewFont: .subheadline,
                 overviewExpandThreshold: 150,
                 libraryId: tvShowsLibraryId,
+                isFavorite: item.userData?.isFavorite ?? false,
                 header: {
                     EmptyView()
                 },
@@ -142,7 +144,6 @@ struct SeriesDetailView: View {
                                         for: item, limit: 12)
                                 }
                             }
-                            .padding(.horizontal)
                             .padding(.top, 20)
                         }
                     }
@@ -323,16 +324,18 @@ struct SeriesDetailView: View {
                     } label: {
                         Text(season.title)
                             .font(.subheadline.weight(.semibold))
+                            .contentTransition(.interpolate)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(
-                                Capsule()
-                                    .fill(
-                                        selectedSeason?.id == season.id
-                                            ? AnyShapeStyle(Color.accentColor)
-                                            : AnyShapeStyle(.quaternary)
-                                    )
-                            )
+                            .background {
+                                if selectedSeason?.id == season.id {
+                                    Capsule()
+                                        .fill(Color.accentColor)
+                                } else {
+                                    Capsule()
+                                        .fill(.quaternary)
+                                }
+                            }
                             .foregroundStyle(
                                 selectedSeason?.id == season.id ? .white : .primary
                             )
@@ -341,6 +344,7 @@ struct SeriesDetailView: View {
                 }
             }
             .padding(.horizontal)
+            .animation(.easeInOut(duration: 0.2), value: selectedSeason?.id)
         }
         .scrollIndicators(.hidden)
     }
@@ -563,6 +567,20 @@ struct SeriesDetailView: View {
             for: item,
             type: .backdrop,
             maxSize: CGSize(width: 1280, height: 720)
+        )
+    }
+
+    private var posterURL: URL? {
+        if offlineServerId != nil {
+            if let path = offlineSeriesMetadata?.primaryImagePath {
+                return DownloadStorage.shared.localImageURL(relativePath: path)
+            }
+            return nil
+        }
+        return authManager.provider.imageURL(
+            for: item,
+            type: .primary,
+            maxSize: CGSize(width: 300, height: 450)
         )
     }
 
