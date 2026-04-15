@@ -64,12 +64,6 @@ struct MovieDetailView: View {
                             try await authManager.provider.localTrailers(for: item)
                         }
 
-                        // Remote trailers (e.g. YouTube links)
-                        if !displayItem.remoteTrailerURLs.isEmpty {
-                            RemoteTrailerLinks(urls: displayItem.remoteTrailerURLs)
-                                .padding(.horizontal)
-                        }
-
                         MediaItemRail(title: "Special Features", style: .landscape) { [item] in
                             try await authManager.provider.specialFeatures(for: item)
                         }
@@ -201,41 +195,5 @@ private struct LastPlayedLabel: View {
                 .font(.caption)
         }
         .foregroundStyle(.tertiary)
-    }
-}
-
-// MARK: - Remote Trailer Links
-
-/// Tappable links for remote trailers (typically YouTube URLs).
-private struct RemoteTrailerLinks: View {
-    let urls: [URL]
-
-    @Environment(\.openURL) private var openURL
-
-    var body: some View {
-        if !urls.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Online Trailers")
-                    .font(.headline)
-
-                ForEach(urls, id: \.absoluteString) { url in
-                    Button {
-                        openURL(url)
-                    } label: {
-                        Label(trailerLabel(for: url), systemImage: "play.rectangle")
-                            .font(.subheadline)
-                            .foregroundStyle(.accent)
-                    }
-                }
-            }
-        }
-    }
-
-    private func trailerLabel(for url: URL) -> String {
-        let host = url.host() ?? ""
-        if host.localizedStandardContains("youtube") || host.localizedStandardContains("youtu.be") {
-            return "Watch on YouTube"
-        }
-        return "Watch Trailer"
     }
 }

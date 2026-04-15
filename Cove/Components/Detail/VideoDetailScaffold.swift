@@ -106,14 +106,15 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
 
                 // Enriched content — fades in once the detail fetch completes
                 Group {
-                    // External Links
+                    // External Links & Trailers
                     if showExternalLinks,
-                        let providerIds = displayItem.providerIds,
-                        providerIds.hasAny
+                        (displayItem.providerIds?.hasAny ?? false)
+                            || !displayItem.remoteTrailerURLs.isEmpty
                     {
                         ExternalLinksSection(
-                            providerIds: providerIds,
-                            mediaType: item.mediaType
+                            providerIds: displayItem.providerIds,
+                            mediaType: item.mediaType,
+                            trailerURLs: displayItem.remoteTrailerURLs
                         )
                         .padding(.horizontal)
                     }
