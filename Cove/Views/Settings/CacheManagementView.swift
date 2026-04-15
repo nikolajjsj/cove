@@ -1,5 +1,6 @@
 import ImageService
 import SwiftUI
+import JellyfinProvider
 
 /// A settings view for managing cached data such as images and API responses.
 struct CacheManagementView: View {
