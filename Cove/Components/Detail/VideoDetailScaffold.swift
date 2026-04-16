@@ -54,12 +54,12 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
 
     /// Whether the item has been fully watched, read reactively from the store.
     private var isPlayed: Bool {
-        userDataStore.isPlayed(item.id, fallback: item.userData)
+        userDataStore.isPlayed(item.id, fallback: displayItem.userData)
     }
 
     /// Whether the item is marked as a favorite, read reactively from the store.
     private var isFavorite: Bool {
-        userDataStore.isFavorite(item.id, fallback: item.userData)
+        userDataStore.isFavorite(item.id, fallback: displayItem.userData)
     }
 
     var body: some View {

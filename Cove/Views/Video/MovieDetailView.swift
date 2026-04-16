@@ -82,6 +82,15 @@ struct MovieDetailView: View {
                 try await authManager.provider.item(id: item.id)
             }
         }
+        .onChange(of: appState.videoPlayerCoordinator.isPresented) { wasPresented, isPresented in
+            if wasPresented && !isPresented {
+                Task {
+                    await detailLoader.load {
+                        try await authManager.provider.item(id: item.id)
+                    }
+                }
+            }
+        }
         .ignoresSafeArea(edges: .top)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {

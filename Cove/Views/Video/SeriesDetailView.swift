@@ -259,6 +259,18 @@ struct SeriesDetailView: View {
                 }
             }
         }
+        .onChange(of: appState.videoPlayerCoordinator.isPresented) { wasPresented, isPresented in
+            if wasPresented && !isPresented && !isOffline {
+                Task {
+                    await detailLoader.load {
+                        try await authManager.provider.item(id: item.id)
+                    }
+                    if let selectedSeason {
+                        await loadEpisodes(for: selectedSeason)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Hero Subtitle Parts
