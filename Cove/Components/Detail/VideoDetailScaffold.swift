@@ -23,6 +23,7 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
     let overviewFont: Font
     let libraryId: ItemID?
     let isFavorite: Bool
+    @Environment(UserDataStore.self) private var userDataStore
     @ViewBuilder let header: Header
     @ViewBuilder let footer: Footer
 
@@ -54,6 +55,11 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
         self.footer = footer()
     }
 
+    /// Whether the item has been fully watched, read reactively from the store.
+    private var isPlayed: Bool {
+        userDataStore.isPlayed(item.id, fallback: item.userData)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // MARK: - Hero Section
@@ -67,17 +73,26 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
                     originalTitle: displayItem.originalTitle,
                     subtitleParts: heroSubtitleParts,
                     tagline: displayItem.tagline,
-                    isFavorite: isFavorite
+                    isFavorite: isFavorite,
+                    isPlayed: isPlayed
                 )
             } else {
                 // Classic hero: portrait backdrop with overlaid text
-                HeroSection(imageURL: backdropURL) {
-                    VideoHeroOverlay(
-                        title: item.title,
-                        originalTitle: displayItem.originalTitle,
-                        subtitleParts: heroSubtitleParts,
-                        tagline: displayItem.tagline
-                    )
+                ZStack(alignment: .topTrailing) {
+                    HeroSection(imageURL: backdropURL) {
+                        VideoHeroOverlay(
+                            title: item.title,
+                            originalTitle: displayItem.originalTitle,
+                            subtitleParts: heroSubtitleParts,
+                            tagline: displayItem.tagline
+                        )
+                    }
+
+                    if isPlayed {
+                        WatchedBadge()
+                            .padding(.top, 52)
+                            .padding(.trailing, 4)
+                    }
                 }
             }
 

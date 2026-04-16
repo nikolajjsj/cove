@@ -47,6 +47,9 @@ struct CompositeHeroSection: View {
     /// Whether the item is marked as a favorite.
     var isFavorite: Bool = false
 
+    /// Whether the item has been fully watched.
+    var isPlayed: Bool = false
+
     // MARK: - Constants
 
     /// Width of the floating poster card.
@@ -141,12 +144,18 @@ struct CompositeHeroSection: View {
     // MARK: - Poster Card
 
     private var posterCard: some View {
-        MediaImage.poster(
-            url: posterURL,
-            aspectRatio: 2.0 / 3.0,
-            icon: "film",
-            cornerRadius: 12
-        )
+        ZStack(alignment: .topTrailing) {
+            MediaImage.poster(
+                url: posterURL,
+                aspectRatio: 2.0 / 3.0,
+                icon: "film",
+                cornerRadius: 12
+            )
+
+            if isPlayed {
+                WatchedBadge()
+            }
+        }
         .frame(width: posterWidth)
         .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
     }
@@ -209,7 +218,8 @@ struct CompositeHeroSection: View {
                 title: "The Shawshank Redemption",
                 originalTitle: "Die Verurteilten",
                 subtitleParts: ["1994", "R", "2h 22m"],
-                tagline: "Fear can hold you prisoner. Hope can set you free."
+                tagline: "Fear can hold you prisoner. Hope can set you free.",
+                isPlayed: true
             )
         }
         .ignoresSafeArea(edges: .top)

@@ -5,13 +5,11 @@ import SwiftUI
 /// A modern, visually rich media info section that replaces the old
 /// horizontally-scrolling metadata pills.
 ///
-/// Displays three logical groups:
+/// Displays two logical groups:
 /// 1. **Rating badges** — prominent side-by-side cards for community
 ///    and critic ratings with source branding (IMDb, RT).
 /// 2. **Technical info card** — a clean material card with labeled rows
 ///    for video resolution, HDR, codecs, audio channels, and bitrate.
-/// 3. **Played indicator** — a subtle label when the user has watched
-///    the content.
 ///
 /// Each group gracefully hides when its data is unavailable, so the
 /// section adapts to whatever metadata the server provides.
@@ -55,14 +53,10 @@ struct MediaInfoSection: View {
         videoStream != nil || audioStream != nil
     }
 
-    private var userData: UserData? {
-        item.userData
-    }
-
     // MARK: - Body
 
     var body: some View {
-        if hasRatings || hasTechnicalInfo || userData?.isPlayed == true {
+        if hasRatings || hasTechnicalInfo {
             VStack(alignment: .leading, spacing: 12) {
                 if hasRatings {
                     RatingCardsRow(
@@ -77,10 +71,6 @@ struct MediaInfoSection: View {
                         videoStream: videoStream,
                         audioStream: audioStream
                     )
-                }
-
-                if let userData, userData.isPlayed {
-                    PlayedStatusLabel(playCount: userData.playCount)
                 }
             }
         }
@@ -387,31 +377,6 @@ private struct TechRow: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-        }
-    }
-}
-
-// MARK: - Played Status Label
-
-/// A subtle label indicating the user has watched the content.
-private struct PlayedStatusLabel: View {
-    let playCount: Int
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.caption2)
-                .foregroundStyle(.green)
-
-            if playCount > 1 {
-                Text("Watched \(playCount) times")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Watched")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
     }
 }
