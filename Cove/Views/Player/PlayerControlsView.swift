@@ -15,6 +15,7 @@ import SwiftUI
 /// invalidate those small subtrees — not the entire controls view.  This stops
 /// context-menus from flickering closed on every playback tick.
 struct PlayerControlsView: View {
+    @Environment(\.dismiss) private var dismiss
     let track: Track
     @Binding var currentPage: PlayerPage
     @Environment(AppState.self) private var appState
@@ -99,6 +100,7 @@ struct PlayerControlsView: View {
                             mediaType: .album
                         )
                         appState.navigate(to: .music, destination: albumItem)
+                        dismiss()
                     } label: {
                         Label("Go to Album", systemImage: "square.stack")
                     }
@@ -112,6 +114,7 @@ struct PlayerControlsView: View {
                             mediaType: .artist
                         )
                         appState.navigate(to: .music, destination: artistItem)
+                        dismiss()
                     } label: {
                         Label("Go to Artist", systemImage: "music.mic")
                     }
