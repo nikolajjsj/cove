@@ -21,9 +21,15 @@ struct PlayButton: View {
 
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
+    @Environment(UserDataStore.self) private var userDataStore
 
     private var coordinator: VideoPlayerCoordinator {
         appState.videoPlayerCoordinator
+    }
+
+    /// Effective user data incorporating optimistic overrides from the store.
+    private var effectiveUserData: UserData {
+        userDataStore.userData(for: item.id, fallback: item.userData)
     }
 
     var body: some View {
@@ -53,7 +59,8 @@ struct PlayButton: View {
     // MARK: - Helpers
 
     private var playButtonLabel: String {
-        if let position = item.userData?.playbackPosition, position > 0 {
+        let position = effectiveUserData.playbackPosition
+        if position > 0 {
             return "Resume at \(TimeFormatting.playbackPosition(position))"
         }
         return "Play"
@@ -64,8 +71,8 @@ struct PlayButton: View {
     /// Returns `nil` when there is no resume position or no runtime,
     /// which keeps the button fully filled with the accent color.
     private var playbackProgress: Double? {
-        guard let position = item.userData?.playbackPosition, position > 0,
-            let runtime = item.runtime, runtime > 0
+        let position = effectiveUserData.playbackPosition
+        guard position > 0, let runtime = item.runtime, runtime > 0
         else { return nil }
         return min(position / runtime, 1.0)
     }

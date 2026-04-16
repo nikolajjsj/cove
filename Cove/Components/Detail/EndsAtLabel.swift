@@ -12,6 +12,7 @@ import SwiftUI
 /// ```
 struct EndsAtLabel: View {
     let item: MediaItem
+    @Environment(UserDataStore.self) private var userDataStore
 
     var body: some View {
         if let endTime {
@@ -36,7 +37,7 @@ struct EndsAtLabel: View {
     private var endTime: Date? {
         guard let runtime = item.runtime, runtime > 0 else { return nil }
 
-        let resumePosition = item.userData?.playbackPosition ?? 0
+        let resumePosition = userDataStore.userData(for: item.id, fallback: item.userData).playbackPosition
         let remaining = max(runtime - resumePosition, 0)
 
         guard remaining > 0 else { return nil }

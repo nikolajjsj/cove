@@ -25,7 +25,6 @@ struct MovieDetailView: View {
                 posterURL: posterURL,
                 heroSubtitleParts: heroSubtitleParts,
                 libraryId: moviesLibraryId,
-                isFavorite: item.userData?.isFavorite ?? false,
                 header: {
                     VStack(alignment: .leading, spacing: 8) {
                         PlayButton(item: item)

@@ -85,7 +85,6 @@ struct SeriesDetailView: View {
                 overviewLineLimit: 3,
                 overviewFont: .subheadline,
                 libraryId: tvShowsLibraryId,
-                isFavorite: item.userData?.isFavorite ?? false,
                 header: {
                     EmptyView()
                 },

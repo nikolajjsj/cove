@@ -22,7 +22,6 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
     let overviewLineLimit: Int
     let overviewFont: Font
     let libraryId: ItemID?
-    let isFavorite: Bool
     @Environment(UserDataStore.self) private var userDataStore
     @ViewBuilder let header: Header
     @ViewBuilder let footer: Footer
@@ -37,7 +36,6 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
         overviewLineLimit: Int = 4,
         overviewFont: Font = .body,
         libraryId: ItemID? = nil,
-        isFavorite: Bool = false,
         @ViewBuilder header: () -> Header,
         @ViewBuilder footer: () -> Footer
     ) {
@@ -50,7 +48,6 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
         self.overviewLineLimit = overviewLineLimit
         self.overviewFont = overviewFont
         self.libraryId = libraryId
-        self.isFavorite = isFavorite
         self.header = header()
         self.footer = footer()
     }
@@ -58,6 +55,11 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
     /// Whether the item has been fully watched, read reactively from the store.
     private var isPlayed: Bool {
         userDataStore.isPlayed(item.id, fallback: item.userData)
+    }
+
+    /// Whether the item is marked as a favorite, read reactively from the store.
+    private var isFavorite: Bool {
+        userDataStore.isFavorite(item.id, fallback: item.userData)
     }
 
     var body: some View {
