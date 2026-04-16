@@ -24,6 +24,8 @@ enum NavigationRouter {
             AlbumDetailView(albumItem: item)
         case .genre:
             GenreDetailView(genreItem: item, library: nil)
+        case .track:
+            SongDetailView(item: item)
         default:
             Text(item.title)
                 .navigationTitle(item.title)
