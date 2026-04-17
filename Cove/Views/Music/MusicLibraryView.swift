@@ -8,55 +8,80 @@ import SwiftUI
 
 struct MusicLibraryView: View {
     let library: MediaLibrary?
+    @Default(.musicSections) private var sections
+    @State private var showCustomization = false
+    @State private var hasMigratedSections = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 28) {
                 if let library {
-                    // MARK: - Recently Played Songs
-
-                    RecentlyPlayedSongsSection(library: library)
-
-                    // MARK: - Recently Added
-
-                    MusicDiscoveryShelf(
-                        title: "Recently Added",
-                        sortField: .dateCreated,
-                        library: library
-                    )
-
-                    // MARK: - Smart Playlists
-
-                    SmartPlaylistsSection()
-
-                    // MARK: - Most Played
-
-                    MusicDiscoveryShelf(
-                        title: "Most Played",
-                        sortField: .playCount,
-                        library: library
-                    )
-
-                    // MARK: - Artists
-
-                    ArtistsShelfSection(library: library)
-
-                    // MARK: - Genres
-
-                    MusicGenresShelfSection(library: library)
-
-                    // MARK: - Playlists
-
-                    PlaylistsShelfSection()
-
-                    // MARK: - Albums
-
-                    AlbumsGridSection(library: library)
+                    ForEach(visibleSections, id: \.section) { config in
+                        sectionView(for: config.section, library: library)
+                    }
                 }
             }
             .padding(.vertical, 12)
         }
         .navigationTitle("Music")
+        .onAppear {
+            guard !hasMigratedSections else { return }
+            hasMigratedSections = true
+            sections.migrateMissingSections()
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Customize", systemImage: "slider.horizontal.3") {
+                    showCustomization = true
+                }
+            }
+        }
+        .sheet(isPresented: $showCustomization) {
+            MusicCustomizationSheet()
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var visibleSections: [SectionConfig<MusicSection>] {
+        sections.filter(\.isVisible)
+    }
+
+    @ViewBuilder
+    private func sectionView(for section: MusicSection, library: MediaLibrary) -> some View {
+        switch section {
+        case .recentlyPlayed:
+            RecentlyPlayedSongsSection(library: library)
+
+        case .recentlyAdded:
+            MusicDiscoveryShelf(
+                title: "Recently Added",
+                sortField: .dateCreated,
+                library: library
+            )
+
+        case .smartPlaylists:
+            SmartPlaylistsSection()
+
+        case .mostPlayed:
+            MusicDiscoveryShelf(
+                title: "Most Played",
+                sortField: .playCount,
+                library: library
+            )
+
+        case .artists:
+            ArtistsShelfSection(library: library)
+
+        case .genres:
+            MusicGenresShelfSection(library: library)
+
+        case .playlists:
+            PlaylistsShelfSection()
+
+        case .albums:
+            AlbumsGridSection(library: library)
+        }
     }
 }
 

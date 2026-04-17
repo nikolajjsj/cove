@@ -82,13 +82,20 @@ extension Defaults.Keys {
     /// The preferred layout for music library views (grid or list).
     static let musicLibraryLayout = Key<LibraryLayoutMode>("musicLibraryLayout", default: .grid)
 
-    // MARK: - Home Screen
+    // MARK: - Section Customization
 
     /// Ordered list of home screen sections with visibility toggles.
     /// Users can reorder and show/hide sections via the customization sheet.
-    static let homeSections = Key<[HomeSectionConfig]>(
+    static let homeSections = Key<[SectionConfig<HomeSection>]>(
         "homeSections",
-        default: HomeSectionConfig.defaultSections
+        default: HomeSection.defaultConfigurations
+    )
+
+    /// Ordered list of music library sections with visibility toggles.
+    /// Users can reorder and show/hide sections via the customization sheet.
+    static let musicSections = Key<[SectionConfig<MusicSection>]>(
+        "musicSections",
+        default: MusicSection.defaultConfigurations
     )
 }
 

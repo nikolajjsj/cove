@@ -3,9 +3,9 @@ import Foundation
 
 /// Identifies a section on the home screen.
 ///
-/// Each case maps to a specific content rail or banner in ``HomeView``.
+/// Each case maps to a specific content rail or banner in `HomeView`.
 /// The raw value is used as a stable persistence key in `AppDefaults`.
-enum HomeSection: String, CaseIterable, Codable, Sendable, Defaults.Serializable {
+enum HomeSection: String, ConfigurableSection {
     case heroBanner = "heroBanner"
     case continueWatching = "continueWatching"
     case upNext = "upNext"
@@ -45,30 +45,19 @@ enum HomeSection: String, CaseIterable, Codable, Sendable, Defaults.Serializable
         case .recentlyAdded: "clock"
         }
     }
-}
 
-/// A single entry in the user's ordered home-section list.
-///
-/// Persisted as a `Codable` array in `AppDefaults.Keys.homeSections`.
-/// The order of entries in the array determines display order;
-/// `isVisible` controls whether the section is shown.
-struct HomeSectionConfig: Codable, Equatable, Sendable, Defaults.Serializable {
-    /// Which home section this entry represents.
-    let section: HomeSection
-
-    /// Whether the section is currently shown on the home screen.
-    var isVisible: Bool
-
-    /// The default configuration used on first launch or after a reset.
-    static let defaultSections: [HomeSectionConfig] = [
-        HomeSectionConfig(section: .heroBanner, isVisible: true),
-        HomeSectionConfig(section: .continueWatching, isVisible: true),
-        HomeSectionConfig(section: .upNext, isVisible: true),
-        HomeSectionConfig(section: .genres, isVisible: true),
-        HomeSectionConfig(section: .movies, isVisible: true),
-        HomeSectionConfig(section: .tvShows, isVisible: true),
-        HomeSectionConfig(section: .collections, isVisible: true),
-        HomeSectionConfig(section: .becauseYouWatched, isVisible: true),
-        HomeSectionConfig(section: .recentlyAdded, isVisible: true),
-    ]
+    /// The default section order and visibility for first launch or reset.
+    static var defaultConfigurations: [SectionConfig<HomeSection>] {
+        [
+            SectionConfig(section: .heroBanner, isVisible: true),
+            SectionConfig(section: .continueWatching, isVisible: true),
+            SectionConfig(section: .upNext, isVisible: true),
+            SectionConfig(section: .genres, isVisible: true),
+            SectionConfig(section: .movies, isVisible: true),
+            SectionConfig(section: .tvShows, isVisible: true),
+            SectionConfig(section: .collections, isVisible: true),
+            SectionConfig(section: .becauseYouWatched, isVisible: true),
+            SectionConfig(section: .recentlyAdded, isVisible: true),
+        ]
+    }
 }
