@@ -140,6 +140,36 @@ final class UserDataStore {
         }
     }
 
+    /// Update local playback state after video playback ends.
+    ///
+    /// The video player reports progress to the server directly, so this
+    /// method only updates the local override for immediate UI reactivity.
+    /// Marks the item as played if the user watched at least 90% of the content.
+    ///
+    /// - Parameters:
+    ///   - itemId: The item that was played.
+    ///   - position: The final playback position in seconds.
+    ///   - runtime: The total runtime of the item in seconds, if known.
+    ///   - currentData: The item's existing `UserData` used as a base to
+    ///     preserve fields like `isFavorite`.
+    func updatePlaybackPosition(
+        itemId: ItemID,
+        position: TimeInterval,
+        runtime: TimeInterval?,
+        currentData: UserData?
+    ) {
+        var data = userData(for: itemId, fallback: currentData)
+        data.playbackPosition = position
+
+        if let runtime, runtime > 0, position / runtime >= 0.9 {
+            data.isPlayed = true
+            data.playCount += 1
+            data.lastPlayedDate = .now
+        }
+
+        overrides[itemId] = data
+    }
+
     /// Toggle played/watched: apply optimistic update → call server → rollback on failure.
     ///
     /// - Returns: The new played state after the server confirms.

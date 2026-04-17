@@ -85,6 +85,8 @@ struct MovieDetailView: View {
         .onChange(of: appState.videoPlayerCoordinator.isPresented) { wasPresented, isPresented in
             if wasPresented && !isPresented {
                 Task {
+                    // Allow time for the playback stop report to reach the server
+                    try? await Task.sleep(for: .seconds(2))
                     await detailLoader.load {
                         try await authManager.provider.item(id: item.id)
                     }

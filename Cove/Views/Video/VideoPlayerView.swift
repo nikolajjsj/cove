@@ -555,8 +555,14 @@ struct VideoPlayerView: View {
         videoManager.onPlaybackProgress = { item, position in
             try? await provider.reportPlaybackProgress(item: item, position: position)
         }
-        videoManager.onPlaybackStopped = { item, position in
+        videoManager.onPlaybackStopped = { [appState] item, position in
             try? await provider.reportPlaybackStopped(item: item, position: position)
+            appState.userDataStore?.updatePlaybackPosition(
+                itemId: item.id,
+                position: position,
+                runtime: item.runtime,
+                currentData: item.userData
+            )
         }
         videoManager.onPlayNextEpisode = { [self] nextItem in
             let provider = authManager.provider
