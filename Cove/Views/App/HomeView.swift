@@ -15,7 +15,10 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
-                if appState.libraries.isEmpty {
+                if appState.libraries.isEmpty, appState.libraryLoadFailed {
+                    ServerUnavailableView()
+                        .frame(maxWidth: .infinity)
+                } else if appState.libraries.isEmpty {
                     ContentUnavailableView(
                         "No Libraries",
                         systemImage: "folder",
@@ -32,6 +35,7 @@ struct HomeView: View {
             .id(refreshID)
         }
         .refreshable {
+            await appState.retryLoadLibraries()
             refreshID = UUID()
         }
         .onAppear {

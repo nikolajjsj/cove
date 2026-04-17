@@ -16,6 +16,13 @@ final class AppState {
 
     var libraries: [MediaLibrary] = []
 
+    /// `true` when the last `loadLibraries()` call failed due to a network or server error.
+    /// Used by the home view to distinguish "server has no libraries" from "couldn't connect."
+    var libraryLoadFailed = false
+
+    /// `true` while a manual retry of `loadLibraries()` is in progress.
+    var isRetryingLibraries = false
+
     // MARK: - User Data
 
     /// Centralized store for optimistic user data mutations (favorite, played, etc.).
@@ -104,9 +111,18 @@ final class AppState {
     func loadLibraries() async {
         do {
             libraries = try await authManager.provider.libraries()
+            libraryLoadFailed = false
         } catch {
             libraries = []
+            libraryLoadFailed = true
         }
+    }
+
+    /// Retry loading libraries with visual feedback for the UI.
+    func retryLoadLibraries() async {
+        isRetryingLibraries = true
+        await loadLibraries()
+        isRetryingLibraries = false
     }
 
     // MARK: - Player Wiring
@@ -231,9 +247,14 @@ final class AppState {
                 guard let self else { break }
                 self.isOffline = !connected
 
-                // When coming back online, sync pending reports
+                // When coming back online, sync pending reports and retry failed loads
                 if connected {
                     await self.downloadCoordinator.syncOfflineReports()
+
+                    // Automatically retry loading libraries if the previous attempt failed
+                    if self.libraryLoadFailed {
+                        await self.loadLibraries()
+                    }
                 }
             }
         }
