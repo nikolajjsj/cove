@@ -8,9 +8,12 @@ import SwiftUI
 
 /// Full-screen audio player presented as a modal sheet.
 ///
-/// Architecture: a three-page horizontal `TabView` (artwork, lyrics, queue)
-/// with persistent playback controls below. The background is a dominant-color
-/// gradient extracted from the current track's album artwork.
+/// Layout:
+///  - A dynamic content area switches between artwork mode and secondary mode
+///    (queue / lyrics). Only this area participates in page transitions.
+///  - A persistent section — scrubber, transport controls, and the bottom
+///    toolbar — is always pinned at the same vertical position so the
+///    scrubber never jumps when switching pages.
 struct AudioPlayerView: View {
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
@@ -45,32 +48,22 @@ struct AudioPlayerView: View {
     @ViewBuilder
     private func playerContent(track: Track) -> some View {
         VStack(spacing: 0) {
-            Spacer()
-
-            // Swipeable pages
-            TabView(selection: $currentPage) {
-                // Page 1: Artwork
-                artworkPage(track: track).tag(PlayerPage.artwork)
-
-                // Page 2: Lyrics
-                LyricsView(track: track).tag(PlayerPage.lyrics)
-
-                // Page 3: Queue
-                QueueView().tag(PlayerPage.queue)
+            // Dynamic area — only this region transitions between pages
+            Group {
+                if currentPage == .artwork {
+                    artworkContent(track: track).transition(.opacity)
+                } else {
+                    secondaryContent(track: track).transition(.opacity)
+                }
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .animation(.easeInOut(duration: 0.3), value: currentPage)
-            .aspectRatio(1, contentMode: .fit)
-            .padding(24)
+            .frame(maxHeight: .infinity)
 
-            Spacer()
-
-            // Persistent controls
-            PlayerControlsView(track: track, currentPage: $currentPage)
-                .padding(.bottom, 8)
+            // Persistent section — fixed position, never participates in transitions
+            PlayerControlsView()
+            PlayerBottomToolbar(currentPage: $currentPage)
         }
         .background(backgroundGradient)
-        .preferredColorScheme(dominantColor.isLight ? .dark : nil)
+        .preferredColorScheme(.dark)
         .onChange(of: track.id) { _, _ in
             updateDominantColor(for: track)
         }
@@ -79,21 +72,52 @@ struct AudioPlayerView: View {
         }
     }
 
-    // MARK: - Page 1: Artwork
+    // MARK: - Artwork Content
 
+    /// Large album art fills the dynamic area; the adaptive track info row
+    /// (no thumbnail, with live-lyric preview) anchors at the bottom of this
+    /// area — directly above the persistent scrubber.
     @ViewBuilder
-    private func artworkPage(track: Track) -> some View {
-        VStack {
-            Spacer()
+    private func artworkContent(track: Track) -> some View {
+        VStack(spacing: 0) {
+            VStack {
+                Spacer()
+                MediaImage.artwork(url: artworkURL(for: track), cornerRadius: 12)
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(maxWidth: 500)
+                    .padding(.horizontal, 32)
+                    .animation(.easeInOut(duration: 0.3), value: track.id)
+                Spacer()
+            }
+            .frame(maxHeight: .infinity)
 
-            MediaImage.artwork(url: artworkURL(for: track), cornerRadius: 12)
-                .frame(maxWidth: 600, maxHeight: 600)
-                .padding(.horizontal, 16)
-                .animation(.easeInOut(duration: 0.3), value: track.id)
-
-            Spacer()
+            PlayerTrackInfoRow(track: track, showThumbnail: false, showLyricPreview: true)
+                .padding(.horizontal, 8)
         }
-        .padding(.top, 12)
+    }
+
+    // MARK: - Secondary Content (Lyrics / Queue)
+
+    /// Compact track info (with thumbnail) anchors at the top; the queue or
+    /// lyrics scroll view fills the remaining space below.
+    @ViewBuilder
+    private func secondaryContent(track: Track) -> some View {
+        VStack(spacing: 0) {
+            PlayerTrackInfoRow(track: track, showThumbnail: true, showLyricPreview: false)
+
+            Divider()
+                .overlay(.white.opacity(0.2))
+
+            Group {
+                if currentPage == .queue {
+                    QueueView(showCurrentTrack: false)
+                } else {
+                    LyricsView(track: track)
+                }
+            }
+            .frame(maxHeight: .infinity)
+            .animation(.easeInOut(duration: 0.25), value: currentPage)
+        }
     }
 
     // MARK: - Background Gradient
@@ -132,7 +156,6 @@ struct AudioPlayerView: View {
     private func extractColorAsync(for track: Track) async {
         let cacheKey = track.albumId?.rawValue ?? track.id.rawValue
 
-        // Return cached result if available
         if let cached = colorCache[cacheKey] {
             withAnimation(.easeInOut(duration: 0.6)) {
                 dominantColor = cached
@@ -140,7 +163,6 @@ struct AudioPlayerView: View {
             return
         }
 
-        // Load image and extract colors
         guard let url = artworkURL(for: track) else {
             withAnimation(.easeInOut(duration: 0.6)) {
                 dominantColor = DominantColorExtractor.fallback

@@ -13,7 +13,12 @@ struct QueueView: View {
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
     @State private var showClearConfirmation = false
-    @State private var draggedTrackID: String?
+    @State private var dropTargetID: String?
+
+    /// When `false`, hides the "Playing From" context pill and the "Now Playing"
+    /// row. Set to `false` when the view is hosted inside the secondary player
+    /// layout, where `PlayerCompactHeader` already shows this information.
+    var showCurrentTrack: Bool = true
 
     var body: some View {
         let player = appState.audioPlayer
@@ -54,15 +59,17 @@ struct QueueView: View {
     private func queueContent(player: AudioPlaybackManager, queue: PlayQueue) -> some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                // Playing From
-                if let context = queue.context {
-                    playingFromPill(context: context)
-                        .padding(.bottom, 16)
-                }
+                if showCurrentTrack {
+                    // Playing From
+                    if let context = queue.context {
+                        playingFromPill(context: context)
+                            .padding(.bottom, 16)
+                    }
 
-                // Now Playing
-                if let currentTrack = queue.currentTrack {
-                    nowPlayingSection(track: currentTrack, isPlaying: player.isPlaying)
+                    // Now Playing
+                    if let currentTrack = queue.currentTrack {
+                        nowPlayingSection(track: currentTrack, isPlaying: player.isPlaying)
+                    }
                 }
 
                 // Up Next
@@ -190,8 +197,6 @@ struct QueueView: View {
     }
 
     private func upNextRow(track: Track, offset: Int, queue: PlayQueue) -> some View {
-        let isDragged = draggedTrackID == track.id.rawValue
-
         return Button {
             let absoluteIndex = queue.currentIndex + 1 + offset
             appState.audioPlayer.skipTo(index: absoluteIndex)
@@ -246,7 +251,12 @@ struct QueueView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .opacity(isDragged ? 0.4 : 1.0)
+        .background {
+            if dropTargetID == track.id.rawValue {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(.white.opacity(0.12))
+            }
+        }
         .draggable(track.id.rawValue) {
             // Drag preview
             HStack(spacing: 8) {
@@ -260,9 +270,6 @@ struct QueueView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-            .onAppear {
-                draggedTrackID = track.id.rawValue
-            }
         }
         .dropDestination(for: String.self) { droppedIDs, _ in
             guard let sourceID = droppedIDs.first else { return false }
@@ -287,22 +294,21 @@ struct QueueView: View {
                 queue.move(from: sourceAbsolute, to: destinationAbsolute)
             }
 
-            draggedTrackID = nil
             return true
         } isTargeted: { isTargeted in
-            // Could add hover highlight here if desired
+            dropTargetID = isTargeted ? track.id.rawValue : nil
         }
     }
 
     // MARK: - Actions
 
     private func clearUpNext(queue: PlayQueue) {
-        let upNextCount = queue.upNext.count
-        for _ in 0..<upNextCount {
-            let removeIndex = queue.currentIndex + 1
-            if queue.tracks.indices.contains(removeIndex) {
-                queue.remove(at: removeIndex)
-            }
+        let upNext = queue.upNext
+        guard !upNext.isEmpty else { return }
+        // Remove in descending order so earlier indices remain valid after each removal.
+        let startIndex = queue.currentIndex + 1
+        for offset in stride(from: upNext.count - 1, through: 0, by: -1) {
+            queue.remove(at: startIndex + offset)
         }
         ToastManager.shared.show("Queue cleared", icon: "checkmark.circle.fill")
     }

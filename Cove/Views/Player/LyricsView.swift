@@ -61,9 +61,10 @@ struct LyricsView: View {
     private func syncedLyricsView(lyrics: Lyrics) -> some View {
         ScrollView {
             LazyVStack(spacing: 16) {
-                // Top spacer for centering
-                Spacer()
-                    .frame(height: 80)
+                // Top spacer — half the scroll view's visible height so the
+                // first line can be scrolled to the centre of the view.
+                Color.clear
+                    .containerRelativeFrame(.vertical) { height, _ in height / 2 }
 
                 ForEach(lyrics.lines.enumerated(), id: \.offset) { index, line in
                     let isCurrentLine = currentLineIndex == index
@@ -84,9 +85,10 @@ struct LyricsView: View {
                     .id(index)
                 }
 
-                // Bottom spacer
-                Spacer()
-                    .frame(height: 80)
+                // Bottom spacer — mirrors the top spacer so the last line
+                // can also be scrolled to the centre of the view.
+                Color.clear
+                    .containerRelativeFrame(.vertical) { height, _ in height / 2 }
             }
         }
         .scrollPosition($scrollPosition)

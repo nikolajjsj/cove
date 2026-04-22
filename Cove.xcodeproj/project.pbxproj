@@ -16,8 +16,7 @@
 		B51553F52F87EE7C005CC1D3 /* JellyfinAPI in Frameworks */ = {isa = PBXBuildFile; productRef = B51553F42F87EE7C005CC1D3 /* JellyfinAPI */; };
 		B54F33112F8BD1B000AE95DA /* OpenSubtitlesAPI in Frameworks */ = {isa = PBXBuildFile; productRef = B54F33102F8BD1B000AE95DA /* OpenSubtitlesAPI */; };
 		B56230832F88C06C00335A25 /* DataLoading in Frameworks */ = {isa = PBXBuildFile; productRef = B56230822F88C06C00335A25 /* DataLoading */; };
-		B5FDE3BF2F83808F00F54FAA /* Defaults in Frameworks */ = {isa = PBXBuildFile; productRef = B5FDE3BE2F83808F00F54FAA /* Defaults */; };
-		B5FDE3C12F83808F00F54FAA /* DefaultsMacros in Frameworks */ = {isa = PBXBuildFile; productRef = B5FDE3C02F83808F00F54FAA /* DefaultsMacros */; };
+		B562FA252F98FACE002A6ACC /* Defaults in Frameworks */ = {isa = PBXBuildFile; productRef = B562FA242F98FACE002A6ACC /* Defaults */; };
 		C0000001AAAAAAAAAAAA0001 /* Models in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0001 /* Models */; };
 		C0000001AAAAAAAAAAAA0002 /* MediaServerKit in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0002 /* MediaServerKit */; };
 		C0000001AAAAAAAAAAAA0003 /* JellyfinAPI in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0003 /* JellyfinAPI */; };
@@ -120,12 +119,11 @@
 				C0000001AAAAAAAAAAAA0001 /* Models in Frameworks */,
 				C0000001AAAAAAAAAAAA0002 /* MediaServerKit in Frameworks */,
 				C0000001AAAAAAAAAAAA0003 /* JellyfinAPI in Frameworks */,
-				B5FDE3C12F83808F00F54FAA /* DefaultsMacros in Frameworks */,
 				B54F33112F8BD1B000AE95DA /* OpenSubtitlesAPI in Frameworks */,
 				C0000001AAAAAAAAAAAA0004 /* JellyfinProvider in Frameworks */,
+				B562FA252F98FACE002A6ACC /* Defaults in Frameworks */,
 				C0000001AAAAAAAAAAAA0005 /* PlaybackEngine in Frameworks */,
 				B56230832F88C06C00335A25 /* DataLoading in Frameworks */,
-				B5FDE3BF2F83808F00F54FAA /* Defaults in Frameworks */,
 				C0000001AAAAAAAAAAAA0006 /* DownloadManager in Frameworks */,
 				C0000001AAAAAAAAAAAA0007 /* Persistence in Frameworks */,
 				C0000001AAAAAAAAAAAA0008 /* Networking in Frameworks */,
@@ -231,11 +229,10 @@
 				C0000002AAAAAAAAAAAA0008 /* Networking */,
 				C0000002AAAAAAAAAAAA0009 /* ImageService */,
 				C0000002AAAAAAAAAAAA000A /* CoveUI */,
-				B5FDE3BE2F83808F00F54FAA /* Defaults */,
-				B5FDE3C02F83808F00F54FAA /* DefaultsMacros */,
 				B51553F22F87EE43005CC1D3 /* AppGroup */,
 				B56230822F88C06C00335A25 /* DataLoading */,
 				B54F33102F8BD1B000AE95DA /* OpenSubtitlesAPI */,
+				B562FA242F98FACE002A6ACC /* Defaults */,
 			);
 			productName = Cove;
 			productReference = B53D7B9F2F823DC20023368C /* Cove.app */;
@@ -270,7 +267,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				C0000004AAAAAAAAAAAA0001 /* XCLocalSwiftPackageReference "Packages/CoveKit" */,
-				B5FDE3BD2F83808F00F54FAA /* XCRemoteSwiftPackageReference "Defaults" */,
+				B562FA232F98FACE002A6ACC /* XCRemoteSwiftPackageReference "Defaults" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B53D7BA02F823DC20023368C /* Products */;
@@ -668,7 +665,7 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		B5FDE3BD2F83808F00F54FAA /* XCRemoteSwiftPackageReference "Defaults" */ = {
+		B562FA232F98FACE002A6ACC /* XCRemoteSwiftPackageReference "Defaults" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sindresorhus/Defaults";
 			requirement = {
@@ -704,15 +701,10 @@
 			package = C0000004AAAAAAAAAAAA0001 /* XCLocalSwiftPackageReference "Packages/CoveKit" */;
 			productName = DataLoading;
 		};
-		B5FDE3BE2F83808F00F54FAA /* Defaults */ = {
+		B562FA242F98FACE002A6ACC /* Defaults */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B5FDE3BD2F83808F00F54FAA /* XCRemoteSwiftPackageReference "Defaults" */;
+			package = B562FA232F98FACE002A6ACC /* XCRemoteSwiftPackageReference "Defaults" */;
 			productName = Defaults;
-		};
-		B5FDE3C02F83808F00F54FAA /* DefaultsMacros */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B5FDE3BD2F83808F00F54FAA /* XCRemoteSwiftPackageReference "Defaults" */;
-			productName = DefaultsMacros;
 		};
 		C0000002AAAAAAAAAAAA0001 /* Models */ = {
 			isa = XCSwiftPackageProductDependency;
