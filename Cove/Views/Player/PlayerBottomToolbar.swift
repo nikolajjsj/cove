@@ -39,12 +39,6 @@ struct PlayerBottomToolbar: View {
             }
         }
         .foregroundStyle(isActive ? .primary : .secondary)
-        .background {
-            if isActive {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.white.opacity(0.15))
-            }
-        }
         .buttonStyle(.plain)
     }
 }
