@@ -28,44 +28,37 @@ struct PlayerControlsView: View {
 private struct ScrubberView: View {
     @Environment(AppState.self) private var appState
     @State private var isSeeking = false
-    @State private var seekTime: TimeInterval = 0
+    @State private var scrubPosition: Double = 0
 
     private var player: AudioPlaybackManager { appState.audioPlayer }
-    private var totalDuration: TimeInterval { player.duration }
-    private var displayTime: TimeInterval { isSeeking ? seekTime : player.currentTime }
-    private var sliderBinding: Binding<TimeInterval> {
-        Binding(
-            get: { displayTime },
-            set: { newValue in
-                if !isSeeking { isSeeking = true }
-                seekTime = newValue
-            }
-        )
-    }
 
     var body: some View {
         VStack(spacing: 6) {
             Slider(
-                value: sliderBinding,
-                in: 0...max(totalDuration, 1),
+                value: $scrubPosition,
+                in: 0...max(player.duration, 1),
                 onEditingChanged: { editing in
+                    isSeeking = editing
                     if !editing {
-                        player.seek(to: seekTime)
-                        isSeeking = false
+                        player.seek(to: scrubPosition)
                     }
                 }
             )
             .tint(.primary)
 
             HStack {
-                Text(TimeFormatting.playbackPosition(displayTime))
+                Text(TimeFormatting.playbackPosition(scrubPosition))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("-\(TimeFormatting.playbackPosition(max(totalDuration - displayTime, 0)))")
+                Text("-\(TimeFormatting.playbackPosition(max(player.duration - scrubPosition, 0)))")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
+        }
+        .onChange(of: player.currentTime, initial: true) { _, newTime in
+            guard !isSeeking else { return }
+            scrubPosition = newTime
         }
     }
 }
