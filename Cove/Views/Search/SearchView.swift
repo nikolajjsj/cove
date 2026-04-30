@@ -4,35 +4,10 @@ import MediaServerKit
 import Models
 import SwiftUI
 
-// MARK: - Search Scope
-
-enum SearchScope: String, CaseIterable {
-    case all
-    case video
-    case music
-
-    var label: String {
-        switch self {
-        case .all: "All"
-        case .video: "Video"
-        case .music: "Music"
-        }
-    }
-
-    var mediaTypes: [MediaType] {
-        switch self {
-        case .all: [.movie, .series, .episode, .artist, .album, .track]
-        case .video: [.movie, .series, .episode]
-        case .music: [.artist, .album, .track]
-        }
-    }
-}
-
 // MARK: - Search View
 
 struct SearchView: View {
     @State private var searchText = ""
-    @State private var scope: SearchScope = .all
     @State private var watchedFilter: WatchedFilter = .all
     @State private var favoriteOnly = false
     @State private var selectedDecade: Decade? = nil
@@ -47,7 +22,6 @@ struct SearchView: View {
         // that applies .searchable, not on the view itself.
         SearchContentView(
             searchText: $searchText,
-            scope: scope,
             watchedFilter: $watchedFilter,
             favoriteOnly: $favoriteOnly,
             selectedDecade: $selectedDecade,
@@ -62,11 +36,6 @@ struct SearchView: View {
         )
         // Scope picker appears below the search bar while searching.
         .searchable(text: $searchText, prompt: "Movies, shows, music…")
-        .searchScopes($scope) {
-            ForEach(SearchScope.allCases, id: \.self) { s in
-                Text(s.label).tag(s)
-            }
-        }
         .onAppear {
             loadRecentSearches()
         }
@@ -99,7 +68,6 @@ struct SearchView: View {
 /// resolves correctly.
 private struct SearchContentView: View {
     @Binding var searchText: String
-    let scope: SearchScope
     @Binding var watchedFilter: WatchedFilter
     @Binding var favoriteOnly: Bool
     @Binding var selectedDecade: Decade?
@@ -125,16 +93,6 @@ private struct SearchContentView: View {
 
     private var hasActiveFilters: Bool {
         watchedFilter != .all || favoriteOnly || selectedDecade != nil || minRating != nil
-    }
-
-    /// Scope filtering is done client-side so switching between All/Video/Music
-    /// is instant with no extra network request.
-    private var scopedResults: SearchResults? {
-        guard let results else { return nil }
-        guard scope != .all else { return results }
-        return SearchResults(
-            items: results.items.filter { scope.mediaTypes.contains($0.mediaType) }
-        )
     }
 
     private var searchTaskKey: SearchKey {
@@ -202,13 +160,25 @@ private struct SearchContentView: View {
         } else if isLoading {
             ProgressView()
                 .transition(.opacity)
-        } else if let scoped = scopedResults {
-            if scoped.items.isEmpty {
-                SearchEmptyState(query: trimmedQuery, hasActiveFilters: hasActiveFilters)
-                    .transition(.opacity)
+        } else if let results {
+            if results.items.isEmpty {
+                Group {
+                    if hasActiveFilters {
+                        ContentUnavailableView(
+                            "No Results",
+                            systemImage: "line.3.horizontal.decrease.circle",
+                            description: Text(
+                                "No items match '\(trimmedQuery)' with the current filters. Try removing some filters."
+                            )
+                        )
+                    } else {
+                        ContentUnavailableView.search(text: trimmedQuery)
+                    }
+                }
+                .transition(.opacity)
             } else {
                 SearchResultsScrollView(
-                    results: scoped,
+                    results: results,
                     query: trimmedQuery,
                     maxPreviewItems: maxPreviewItems
                 )
@@ -271,8 +241,12 @@ private struct SearchDiscoveryView: View {
 
     var body: some View {
         if recentSearches.isEmpty {
-            SearchHero()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ContentUnavailableView(
+                "Search Your Library",
+                systemImage: "magnifyingglass",
+                description: Text("Movies, shows, artists, albums, and more.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
                 RecentSearchesSection(
@@ -283,61 +257,6 @@ private struct SearchDiscoveryView: View {
                 .padding()
             }
         }
-    }
-}
-
-// MARK: - Search Hero
-
-private struct SearchHero: View {
-    var body: some View {
-        VStack(spacing: 20) {
-            ZStack {
-                // Soft gradient halo behind the icon.
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.accentColor.opacity(0.18), .purple.opacity(0.10)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 112, height: 112)
-                    .blur(radius: 4)
-
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.accentColor.opacity(0.12), .purple.opacity(0.08)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 96, height: 96)
-
-                Image(systemName: "magnifyingglass")
-                    .font(.system(.largeTitle, weight: .light))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.accentColor, .purple],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-
-            VStack(spacing: 6) {
-                Text("Search Your Library")
-                    .font(.title2)
-                    .bold()
-
-                Text("Movies, shows, artists, albums, and more.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 32)
     }
 }
 
@@ -470,27 +389,6 @@ private struct SearchFilterBar: View {
             FavoriteChip(isOn: $favoriteOnly)
             DecadeChip(selection: $selectedDecade)
             RatingChip(minRating: $minRating)
-        }
-    }
-}
-
-// MARK: - Empty State
-
-private struct SearchEmptyState: View {
-    let query: String
-    let hasActiveFilters: Bool
-
-    var body: some View {
-        if hasActiveFilters {
-            ContentUnavailableView(
-                "No Results",
-                systemImage: "line.3.horizontal.decrease.circle",
-                description: Text(
-                    "No items match '\(query)' with the current filters. Try removing some filters."
-                )
-            )
-        } else {
-            ContentUnavailableView.search(text: query)
         }
     }
 }
