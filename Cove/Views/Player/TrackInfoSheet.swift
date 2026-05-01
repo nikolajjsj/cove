@@ -12,7 +12,7 @@ struct TrackInfoSheet: View {
                     row(label: "Format", value: codec.uppercased())
                 }
                 if let bitRate = track.bitRate {
-                    row(label: "Bit Rate", value: bitRate.formatted(.number) + " kbps")
+                    row(label: "Bit Rate", value: (bitRate / 1000).formatted(.number) + " kbps")
                 }
                 if let sampleRate = track.sampleRate {
                     row(label: "Sample Rate", value: sampleRate.formatted(.number) + " Hz")
