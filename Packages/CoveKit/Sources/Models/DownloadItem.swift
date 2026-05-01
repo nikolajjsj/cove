@@ -143,10 +143,8 @@ extension DownloadItem {
 
     /// A formatted string describing the downloaded size (e.g. "12.3 MB / 100.0 MB").
     public var formattedProgress: String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        let downloaded = formatter.string(fromByteCount: downloadedBytes)
-        let total = formatter.string(fromByteCount: totalBytes)
+        let downloaded = downloadedBytes.formatted(.byteCount(style: .file))
+        let total = totalBytes.formatted(.byteCount(style: .file))
         return "\(downloaded) / \(total)"
     }
 }
