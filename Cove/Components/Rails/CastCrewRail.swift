@@ -58,14 +58,11 @@ private struct PersonCard: View {
                     .lineLimit(1)
                     .foregroundStyle(.primary)
 
-                // Role
-                if let role = person.role, !role.isEmpty {
-                    Text(role)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                } else if let type = person.type, !type.isEmpty {
-                    Text(type)
+                // Role or type
+                if let label = person.role.flatMap({ $0.isEmpty ? nil : $0 })
+                    ?? person.type.flatMap({ $0.isEmpty ? nil : $0 })
+                {
+                    Text(label)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
