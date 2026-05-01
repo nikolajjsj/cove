@@ -17,77 +17,14 @@ struct SongListView: View {
     private let pageSize = 40
 
     var body: some View {
-        Group {
-            mainContent
-        }
+        SongListContent(
+            loader: loader,
+            onPlay: playFromIndex,
+            onItemAppeared: { loader.onItemAppeared($0) }
+        )
         .task(id: "\(library?.id.rawValue ?? "")-\(sortField)-\(sortOrder)-\(isFavoriteFilter)") {
             await loadFirstPage()
         }
-    }
-
-    // MARK: - Main Content
-
-    @ViewBuilder
-    private var mainContent: some View {
-        switch loader.phase {
-        case .loading:
-            ProgressView("Loading songs…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .failed(let message):
-            ContentUnavailableView(
-                "Unable to Load Songs",
-                systemImage: "exclamationmark.triangle",
-                description: Text(message)
-            )
-        case .empty:
-            ContentUnavailableView(
-                "No Songs",
-                systemImage: "music.note",
-                description: Text("Your music library doesn't contain any songs yet.")
-            )
-        case .loaded:
-            scrollContent
-        }
-    }
-
-    private var scrollContent: some View {
-        List {
-            ForEach(loader.items.enumerated(), id: \.element.id) { index, item in
-                TrackRow(
-                    title: item.title,
-                    subtitle: item.genres?.first,
-                    imageURL: imageURL(for: item),
-                    duration: item.runtime,
-                    isCurrentTrack: isCurrentTrack(item),
-                    isPlaying: isCurrentTrack(item) && appState.audioPlayer.isPlaying,
-                    isFavorite: appState.userDataStore?.isFavorite(item.id, fallback: item.userData)
-                        ?? item.userData?.isFavorite ?? false,
-                    onTap: { playFromIndex(index) }
-                )
-                .onAppear { loader.onItemAppeared(item) }
-                .mediaContextMenu(item: item)
-            }
-
-            if loader.isLoadingMore {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .padding(.vertical, 8)
-                    Spacer()
-                }
-                .listRowSeparator(.hidden)
-            }
-
-            if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
-                Text("\(loader.totalCount) \(loader.totalCount == 1 ? "song" : "songs")")
-                    .font(.footnote)
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity)
-                    .listRowSeparator(.hidden)
-                    .padding(.vertical, 8)
-            }
-        }
-        .listStyle(.plain)
     }
 
     // MARK: - Data Loading
@@ -128,6 +65,90 @@ struct SongListView: View {
     }
 
     // MARK: - Helpers
+
+    private func imageURL(for item: MediaItem) -> URL? {
+        authManager.provider.imageURL(
+            for: item,
+            type: .primary,
+            maxSize: CGSize(width: 80, height: 80)
+        )
+    }
+}
+
+// MARK: - Song List Content
+
+private struct SongListContent: View {
+    let loader: PagedCollectionLoader<MediaItem>
+    let onPlay: (Int) -> Void
+    let onItemAppeared: (MediaItem) -> Void
+
+    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        switch loader.phase {
+        case .loading:
+            ProgressView("Loading songs…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let message):
+            ContentUnavailableView(
+                "Unable to Load Songs",
+                systemImage: "exclamationmark.triangle",
+                description: Text(message)
+            )
+        case .empty:
+            ContentUnavailableView(
+                "No Songs",
+                systemImage: "music.note",
+                description: Text("Your music library doesn't contain any songs yet.")
+            )
+        case .loaded:
+            List {
+                ForEach(loader.items.enumerated(), id: \.element.id) { index, item in
+                    TrackRow(
+                        title: item.title,
+                        subtitle: item.genres?.first,
+                        imageURL: imageURL(for: item),
+                        duration: item.runtime,
+                        isCurrentTrack: isCurrentTrack(item),
+                        isPlaying: isCurrentTrack(item) && appState.audioPlayer.isPlaying,
+                        isFavorite: appState.userDataStore?.isFavorite(
+                            item.id, fallback: item.userData
+                        ) ?? item.userData?.isFavorite ?? false,
+                        onTap: { onPlay(index) }
+                    )
+                    .onAppear { onItemAppeared(item) }
+                    .mediaContextMenu(item: item)
+                }
+
+                if loader.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding(.vertical, 8)
+                        Spacer()
+                    }
+                    .listRowSeparator(.hidden)
+                }
+
+                if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
+                    Text(
+                        "\(loader.totalCount) \(loader.totalCount == 1 ? "song" : "songs")"
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
+                    .listRowSeparator(.hidden)
+                    .padding(.vertical, 8)
+                }
+            }
+            .listStyle(.plain)
+        }
+    }
+
+    private func isCurrentTrack(_ item: MediaItem) -> Bool {
+        appState.audioPlayer.queue.currentTrack?.id.rawValue == item.id.rawValue
+    }
 
     private func imageURL(for item: MediaItem) -> URL? {
         authManager.provider.imageURL(

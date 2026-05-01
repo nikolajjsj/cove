@@ -114,7 +114,7 @@ struct VideoGestureLayer: View {
                 // MARK: - Seek scrub indicator
 
                 if isDragging, dragType == .horizontalSeek {
-                    seekIndicator
+                    SeekIndicatorView(dragSeekTime: dragSeekTime, currentTime: currentTime)
                         .allowsHitTesting(false)
                 }
             }
@@ -202,7 +202,7 @@ struct VideoGestureLayer: View {
                             ? "arrowtriangle.forward.fill"
                             : "arrowtriangle.backward.fill"
                     )
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.subheadline.bold())
                     .foregroundStyle(.white.opacity(isBright ? 1.0 : 0.3))
                 }
             }
@@ -248,12 +248,18 @@ struct VideoGestureLayer: View {
         dragSeekTime = 0
     }
 
-    // MARK: - Seek Indicator
+}
 
-    private var seekIndicator: some View {
+// MARK: - Seek Indicator
+
+private struct SeekIndicatorView: View {
+    let dragSeekTime: TimeInterval
+    let currentTime: TimeInterval
+
+    var body: some View {
         VStack(spacing: 4) {
             Text(TimeFormatting.playbackPosition(dragSeekTime))
-                .font(.system(size: 36, weight: .bold, design: .monospaced))
+                .font(.title.bold().monospaced())
                 .foregroundStyle(.white)
 
             let delta = dragSeekTime - currentTime

@@ -32,17 +32,28 @@ struct PlaylistDetailView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
-                        playlistHeader
-                            .padding(.bottom, 20)
+                        PlaylistHeaderView(
+                            playlist: playlist,
+                            imageURL: playlistImageURL
+                        )
+                        .padding(.bottom, 20)
 
-                        actionButtons
-                            .padding(.horizontal)
-                            .padding(.bottom, 16)
+                        PlaylistActionButtons(
+                            tracks: tracks,
+                            onPlay: { playAllTracks(startingAt: 0) },
+                            onShuffle: { playShuffled() }
+                        )
+                        .padding(.horizontal)
+                        .padding(.bottom, 16)
 
                         Divider()
                             .padding(.horizontal)
 
-                        trackList
+                        PlaylistTrackListView(
+                            tracks: tracks,
+                            onPlayTrack: { playAllTracks(startingAt: $0) },
+                            onRemoveTrack: { index in await removeTrack(at: index) }
+                        )
                     }
                     .padding(.bottom, 32)
                 }
@@ -105,89 +116,6 @@ struct PlaylistDetailView: View {
         } message: {
             Text("This action cannot be undone.")
         }
-    }
-
-    // MARK: - Header
-
-    private var playlistHeader: some View {
-        VStack(spacing: 12) {
-            MediaImage.artwork(url: playlistImageURL, cornerRadius: 12)
-                .frame(width: 220, height: 220)
-                .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
-
-            Text(playlist.name)
-                .font(.title2)
-                .bold()
-                .multilineTextAlignment(.center)
-
-            playlistMetadata
-        }
-        .padding(.top, 16)
-        .padding(.horizontal)
-    }
-
-    private var playlistMetadata: some View {
-        HStack(spacing: 6) {
-            if let count = playlist.itemCount {
-                Text("\(count) \(count == 1 ? "track" : "tracks")")
-            }
-
-            if playlist.itemCount != nil, playlist.duration != nil {
-                Text("·")
-            }
-
-            if let duration = playlist.duration {
-                Text(TimeFormatting.longDuration(duration))
-            }
-        }
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-    }
-
-    // MARK: - Action Buttons
-
-    private var actionButtons: some View {
-        PlayShuffleButtons(
-            isDisabled: tracks.isEmpty,
-            onPlay: { playAllTracks(startingAt: 0) },
-            onShuffle: { playShuffled() }
-        )
-    }
-
-    // MARK: - Track List
-
-    private var trackList: some View {
-        LazyVStack(spacing: 0) {
-            ForEach(tracks.enumerated(), id: \.element.id) { index, track in
-                TrackRow(
-                    title: track.title,
-                    subtitle: track.artistName,
-                    imageURL: trackImageURL(for: track),
-                    duration: track.duration,
-                    isCurrentTrack: isCurrentTrack(track),
-                    isPlaying: isCurrentTrack(track) && appState.audioPlayer.isPlaying,
-                    isFavorite: appState.userDataStore?.isFavorite(
-                        track.id, fallback: track.userData) ?? track.userData?.isFavorite ?? false,
-                    onTap: { playAllTracks(startingAt: index) }
-                )
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .mediaContextMenu(track: track)
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    Button(role: .destructive) {
-                        Task { await removeTrack(at: index) }
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                }
-
-                if index < tracks.count - 1 {
-                    Divider()
-                        .padding(.leading, 68)
-                }
-            }
-        }
-        .padding(.top, 8)
     }
 
     // MARK: - Playback
@@ -280,6 +208,120 @@ struct PlaylistDetailView: View {
         authManager.provider.imageURL(
             for: playlist.id, type: .primary, maxSize: CGSize(width: 440, height: 440)
         )
+    }
+
+    private func trackImageURL(for track: Track) -> URL? {
+        if let albumId = track.albumId {
+            return authManager.provider.imageURL(
+                for: albumId, type: .primary, maxSize: CGSize(width: 80, height: 80)
+            )
+        }
+        return authManager.provider.imageURL(
+            for: track.id, type: .primary, maxSize: CGSize(width: 80, height: 80)
+        )
+    }
+}
+
+// MARK: - Playlist Header View
+
+private struct PlaylistHeaderView: View {
+    let playlist: Playlist
+    let imageURL: URL?
+
+    var body: some View {
+        VStack(spacing: 12) {
+            MediaImage.artwork(url: imageURL, cornerRadius: 12)
+                .frame(width: 220, height: 220)
+                .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
+
+            Text(playlist.name)
+                .font(.title2)
+                .bold()
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 6) {
+                if let count = playlist.itemCount {
+                    Text("\(count) \(count == 1 ? "track" : "tracks")")
+                }
+
+                if playlist.itemCount != nil, playlist.duration != nil {
+                    Text("·")
+                }
+
+                if let duration = playlist.duration {
+                    Text(TimeFormatting.longDuration(duration))
+                }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.top, 16)
+        .padding(.horizontal)
+    }
+}
+
+// MARK: - Playlist Action Buttons
+
+private struct PlaylistActionButtons: View {
+    let tracks: [Track]
+    let onPlay: () -> Void
+    let onShuffle: () -> Void
+
+    var body: some View {
+        PlayShuffleButtons(
+            isDisabled: tracks.isEmpty,
+            onPlay: onPlay,
+            onShuffle: onShuffle
+        )
+    }
+}
+
+// MARK: - Playlist Track List View
+
+private struct PlaylistTrackListView: View {
+    let tracks: [Track]
+    let onPlayTrack: (Int) -> Void
+    let onRemoveTrack: (Int) async -> Void
+
+    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(tracks.enumerated(), id: \.element.id) { index, track in
+                TrackRow(
+                    title: track.title,
+                    subtitle: track.artistName,
+                    imageURL: trackImageURL(for: track),
+                    duration: track.duration,
+                    isCurrentTrack: isCurrentTrack(track),
+                    isPlaying: isCurrentTrack(track) && appState.audioPlayer.isPlaying,
+                    isFavorite: appState.userDataStore?.isFavorite(
+                        track.id, fallback: track.userData) ?? track.userData?.isFavorite ?? false,
+                    onTap: { onPlayTrack(index) }
+                )
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .mediaContextMenu(track: track)
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        Task { await onRemoveTrack(index) }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+
+                if index < tracks.count - 1 {
+                    Divider()
+                        .padding(.leading, 68)
+                }
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    private func isCurrentTrack(_ track: Track) -> Bool {
+        appState.audioPlayer.queue.currentTrack?.id == track.id
     }
 
     private func trackImageURL(for track: Track) -> URL? {

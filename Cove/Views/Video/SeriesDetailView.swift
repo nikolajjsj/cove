@@ -117,11 +117,37 @@ struct SeriesDetailView: View {
                             )
                             .padding(.vertical, 32)
                         } else {
-                            seasonPickerSection
-                                .padding(.top, 16)
+                            SeasonPickerSection(
+                                seasons: seasons,
+                                selectedSeason: selectedSeason,
+                                onSelectSeason: selectSeason
+                            )
+                            .padding(.top, 16)
 
-                            episodeListSection
-                                .padding(.top, 8)
+                            EpisodeListSection(
+                                isLoadingEpisodes: isLoadingEpisodes,
+                                episodesError: episodesError,
+                                episodes: episodes,
+                                isOffline: isOffline,
+                                offlineEpisodeDownloads: offlineEpisodeDownloads,
+                                seriesId: item.id,
+                                seriesName: item.title,
+                                thumbnailURL: { episodeThumbnailURL(for: $0) },
+                                progress: { episodeProgress(for: $0) },
+                                onPlay: { episode in
+                                    if let serverId = offlineServerId {
+                                        playOfflineEpisode(episode, serverId: serverId)
+                                    } else {
+                                        coordinator.playEpisode(
+                                            id: episode.id,
+                                            title: episode.title,
+                                            using: authManager.provider
+                                        )
+                                    }
+                                },
+                                onRequestDelete: { dl in episodeToDelete = dl }
+                            )
+                            .padding(.top, 8)
                         }
 
                         // MARK: - Additional Content
@@ -202,7 +228,15 @@ struct SeriesDetailView: View {
             }
         }
         .sheet(isPresented: $showDownloadSheet) {
-            seasonDownloadSheet
+            SeasonDownloadSheet(
+                seasons: seasons,
+                item: item,
+                downloadingSeasons: downloadingSeasons,
+                downloadedSeasons: downloadedSeasons,
+                onDownloadSeason: { season in await downloadSeason(season) },
+                onDownloadAll: { await downloadAllSeasons() },
+                onDismiss: { showDownloadSheet = false }
+            )
         }
         .alert("Download Error", isPresented: $showDownloadError) {
             Button("OK", role: .cancel) {}
@@ -306,126 +340,6 @@ struct SeriesDetailView: View {
         }
 
         return parts
-    }
-
-    // MARK: - Season Picker
-
-    @ViewBuilder
-    private var seasonPickerSection: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(seasons) { season in
-                    Button {
-                        selectSeason(season)
-                    } label: {
-                        Text(season.title)
-                            .font(.subheadline.weight(.semibold))
-                            .contentTransition(.interpolate)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background {
-                                if selectedSeason?.id == season.id {
-                                    Capsule()
-                                        .fill(Color.accentColor)
-                                } else {
-                                    Capsule()
-                                        .fill(.quaternary)
-                                }
-                            }
-                            .foregroundStyle(
-                                selectedSeason?.id == season.id ? .white : .primary
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal)
-            .animation(.easeInOut(duration: 0.2), value: selectedSeason?.id)
-        }
-        .scrollIndicators(.hidden)
-    }
-
-    // MARK: - Episode List
-
-    @ViewBuilder
-    private var episodeListSection: some View {
-        if isLoadingEpisodes {
-            HStack {
-                Spacer()
-                ProgressView("Loading episodes…")
-                Spacer()
-            }
-            .padding(.vertical, 32)
-        } else if let error = episodesError {
-            ContentUnavailableView(
-                "Unable to Load Episodes",
-                systemImage: "exclamationmark.triangle",
-                description: Text(error)
-            )
-            .padding(.vertical, 32)
-        } else if episodes.isEmpty {
-            ContentUnavailableView(
-                "No Episodes",
-                systemImage: "play.rectangle",
-                description: Text("No episodes found for this season.")
-            )
-            .padding(.vertical, 32)
-        } else {
-            LazyVStack(spacing: 5) {
-                ForEach(episodes.enumerated(), id: \.element.id) { index, episode in
-                    let row = EpisodeRow(
-                        episode: episode,
-                        thumbnailURL: episodeThumbnailURL(for: episode),
-                        progress: episodeProgress(for: episode),
-                        onPlay: {
-                            if let serverId = offlineServerId {
-                                playOfflineEpisode(episode, serverId: serverId)
-                            } else {
-                                coordinator.playEpisode(
-                                    id: episode.id,
-                                    title: episode.title,
-                                    using: authManager.provider
-                                )
-                            }
-                        }
-                    )
-                    .overlay {
-                        if coordinator.isLoadingItem(episode.id) {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(.ultraThinMaterial)
-                                .overlay { ProgressView() }
-                        }
-                    }
-
-                    if isOffline {
-                        row.contextMenu {
-                            Button(role: .destructive) {
-                                if let dl = offlineEpisodeDownloads.first(where: {
-                                    $0.itemId == episode.id
-                                }) {
-                                    episodeToDelete = dl
-                                }
-                            } label: {
-                                Label("Remove Download", systemImage: "trash")
-                            }
-                        }
-                    } else {
-                        row.mediaContextMenu(
-                            episode: episode,
-                            seriesId: item.id,
-                            seriesName: item.title
-                        )
-                    }
-
-                    if index < episodes.count - 1 {
-                        Divider()
-                            .padding(.leading, 172)
-                            .padding(.top, 4)
-                    }
-                }
-            }
-            .padding(.horizontal)
-        }
     }
 
     // MARK: - Data Loading
@@ -552,7 +466,7 @@ struct SeriesDetailView: View {
 
     // MARK: - Image Helpers
 
-    func backdropURL(for item: MediaItem) -> URL? {
+    private func backdropURL(for item: MediaItem) -> URL? {
         if offlineServerId != nil {
             if let path = offlineSeriesMetadata?.backdropImagePath {
                 return DownloadStorage.shared.localImageURL(relativePath: path)
@@ -637,15 +551,159 @@ struct SeriesDetailView: View {
         )
     }
 
-    // MARK: - Download Sheet
+    // MARK: - Download Actions
 
-    @ViewBuilder
-    private var seasonDownloadSheet: some View {
+}
+
+// MARK: - Season Picker Section
+
+private struct SeasonPickerSection: View {
+    let seasons: [Season]
+    let selectedSeason: Season?
+    let onSelectSeason: (Season) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(seasons) { season in
+                    Button {
+                        onSelectSeason(season)
+                    } label: {
+                        Text(season.title)
+                            .font(.subheadline.weight(.semibold))
+                            .contentTransition(.interpolate)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background {
+                                if selectedSeason?.id == season.id {
+                                    Capsule()
+                                        .fill(Color.accentColor)
+                                } else {
+                                    Capsule()
+                                        .fill(.quaternary)
+                                }
+                            }
+                            .foregroundStyle(
+                                selectedSeason?.id == season.id ? .white : .primary
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
+            .animation(.easeInOut(duration: 0.2), value: selectedSeason?.id)
+        }
+        .scrollIndicators(.hidden)
+    }
+}
+
+// MARK: - Episode List Section
+
+private struct EpisodeListSection: View {
+    let isLoadingEpisodes: Bool
+    let episodesError: String?
+    let episodes: [Episode]
+    let isOffline: Bool
+    let offlineEpisodeDownloads: [DownloadItem]
+    let seriesId: ItemID
+    let seriesName: String
+    let thumbnailURL: (Episode) -> URL?
+    let progress: (Episode) -> Double?
+    let onPlay: (Episode) -> Void
+    let onRequestDelete: (DownloadItem) -> Void
+
+    @Environment(AppState.self) private var appState
+
+    private var coordinator: VideoPlayerCoordinator { appState.videoPlayerCoordinator }
+
+    var body: some View {
+        if isLoadingEpisodes {
+            HStack {
+                Spacer()
+                ProgressView("Loading episodes…")
+                Spacer()
+            }
+            .padding(.vertical, 32)
+        } else if let error = episodesError {
+            ContentUnavailableView(
+                "Unable to Load Episodes",
+                systemImage: "exclamationmark.triangle",
+                description: Text(error)
+            )
+            .padding(.vertical, 32)
+        } else if episodes.isEmpty {
+            ContentUnavailableView(
+                "No Episodes",
+                systemImage: "play.rectangle",
+                description: Text("No episodes found for this season.")
+            )
+            .padding(.vertical, 32)
+        } else {
+            LazyVStack(spacing: 5) {
+                ForEach(episodes.enumerated(), id: \.element.id) { index, episode in
+                    let row = EpisodeRow(
+                        episode: episode,
+                        thumbnailURL: thumbnailURL(episode),
+                        progress: progress(episode),
+                        onPlay: { onPlay(episode) }
+                    )
+                    .overlay {
+                        if coordinator.isLoadingItem(episode.id) {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(.ultraThinMaterial)
+                                .overlay { ProgressView() }
+                        }
+                    }
+
+                    if isOffline {
+                        row.contextMenu {
+                            Button(role: .destructive) {
+                                if let dl = offlineEpisodeDownloads.first(where: {
+                                    $0.itemId == episode.id
+                                }) {
+                                    onRequestDelete(dl)
+                                }
+                            } label: {
+                                Label("Remove Download", systemImage: "trash")
+                            }
+                        }
+                    } else {
+                        row.mediaContextMenu(
+                            episode: episode,
+                            seriesId: seriesId,
+                            seriesName: seriesName
+                        )
+                    }
+
+                    if index < episodes.count - 1 {
+                        Divider()
+                            .padding(.leading, 172)
+                            .padding(.top, 4)
+                    }
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+}
+
+// MARK: - Season Download Sheet
+
+private struct SeasonDownloadSheet: View {
+    let seasons: [Season]
+    let item: MediaItem
+    let downloadingSeasons: Set<SeasonID>
+    let downloadedSeasons: Set<SeasonID>
+    let onDownloadSeason: (Season) async -> Void
+    let onDownloadAll: () async -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
         NavigationStack {
             List {
                 Section {
                     Button {
-                        Task { await downloadAllSeasons() }
+                        Task { await onDownloadAll() }
                     } label: {
                         HStack {
                             Label("Download All Seasons", systemImage: "arrow.down.circle.fill")
@@ -677,7 +735,7 @@ struct SeriesDetailView: View {
                                 ProgressView()
                             } else {
                                 Button {
-                                    Task { await downloadSeason(season) }
+                                    Task { await onDownloadSeason(season) }
                                 } label: {
                                     Image(systemName: "arrow.down.circle")
                                         .font(.title3)
@@ -691,15 +749,15 @@ struct SeriesDetailView: View {
             .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { showDownloadSheet = false }
+                    Button("Done") { onDismiss() }
                 }
             }
         }
         .presentationDetents([.medium, .large])
     }
+}
 
-    // MARK: - Download Actions
-
+extension SeriesDetailView {
     private func downloadSeason(_ season: Season) async {
         downloadingSeasons.insert(season.id)
         defer { downloadingSeasons.remove(season.id) }

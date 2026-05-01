@@ -61,17 +61,32 @@ struct AlbumDetailView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
-                        albumHeader
-                            .padding(.bottom, 20)
+                        AlbumHeaderView(
+                            albumItem: albumItem,
+                            imageURL: albumImageURL,
+                            artistName: inferredArtistName,
+                            metadata: metadataParts.joined(separator: " · "),
+                            isOffline: isOffline
+                        )
+                        .padding(.bottom, 20)
 
-                        actionButtons
-                            .padding(.horizontal)
-                            .padding(.bottom, 16)
+                        AlbumActionButtons(
+                            tracks: tracks,
+                            onPlay: { playAllTracks(startingAt: 0) },
+                            onShuffle: { playShuffled() }
+                        )
+                        .padding(.horizontal)
+                        .padding(.bottom, 16)
 
                         Divider()
                             .padding(.horizontal)
 
-                        trackList
+                        AlbumTrackListView(
+                            tracks: tracks,
+                            isOffline: isOffline,
+                            onPlayTrack: { playAllTracks(startingAt: $0) },
+                            onDeleteOfflineTrack: { track in await deleteOfflineTrack(track) }
+                        )
                     }
                     .padding(.bottom, 32)
                 }
@@ -80,6 +95,11 @@ struct AlbumDetailView: View {
         .navigationTitle(albumItem.title)
         .inlineNavigationTitle()
         .toolbar {
+            if !isOffline {
+                ToolbarItem(placement: .primaryAction) {
+                    FavoriteToggle(itemId: albumItem.id, userData: albumItem.userData)
+                }
+            }
             ToolbarItem {
                 if isOffline {
                     Menu {
@@ -92,7 +112,13 @@ struct AlbumDetailView: View {
                         Label("Options", systemImage: "ellipsis.circle")
                     }
                 } else if downloadCoordinator.downloadManager != nil {
-                    albumDownloadButton
+                    AlbumDownloadButton(
+                        isDownloadingAlbum: isDownloadingAlbum,
+                        isAlbumDownloaded: isAlbumDownloaded,
+                        tracksIsEmpty: tracks.isEmpty,
+                        onRemove: { showRemoveConfirmation = true },
+                        onDownload: { await downloadAlbum() }
+                    )
                 }
             }
         }
@@ -135,47 +161,6 @@ struct AlbumDetailView: View {
         }
     }
 
-    // MARK: - Album Header
-
-    private var albumHeader: some View {
-        VStack(spacing: 16) {
-            // Album artwork
-            MediaImage.artwork(url: albumImageURL, cornerRadius: 12)
-                .frame(width: 280, height: 280)
-                .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
-
-            // Album title
-            Text(albumItem.title)
-                .font(.title2)
-                .bold()
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-
-            // Artist name
-            if let artistName = inferredArtistName {
-                Text(artistName)
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-            }
-
-            // Metadata line: Year • Genre • Tracks • Duration
-            albumMetadata
-        }
-        .padding(.top, 16)
-    }
-
-    @ViewBuilder
-    private var albumMetadata: some View {
-        let parts = metadataParts
-        if !parts.isEmpty {
-            Text(parts.joined(separator: " · "))
-                .font(.subheadline)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-        }
-    }
-
     private var metadataParts: [String] {
         var parts: [String] = []
 
@@ -194,90 +179,6 @@ struct AlbumDetailView: View {
         }
 
         return parts
-    }
-
-    // MARK: - Action Buttons
-
-    private var actionButtons: some View {
-        PlayShuffleButtons(
-            isDisabled: tracks.isEmpty,
-            onPlay: { playAllTracks(startingAt: 0) },
-            onShuffle: { playShuffled() }
-        )
-    }
-
-    // MARK: - Track List
-
-    private var trackList: some View {
-        LazyVStack(spacing: 0) {
-            ForEach(groupedByDisc.keys.sorted(), id: \.self) { discNumber in
-                if let discTracks = groupedByDisc[discNumber] {
-                    // Show disc header only if there are multiple discs
-                    if groupedByDisc.count > 1 {
-                        discHeader(discNumber)
-                    }
-
-                    ForEach(discTracks.enumerated(), id: \.element.id) { localIndex, track in
-                        let globalIndex = globalTrackIndex(for: track)
-                        let isFav =
-                            appState.userDataStore?.isFavorite(
-                                track.id, fallback: track.userData
-                            ) ?? track.userData?.isFavorite ?? false
-                        let row = AlbumTrackRow(
-                            track: track,
-                            isCurrentTrack: isCurrentTrack(track),
-                            isPlaying: isCurrentTrack(track) && appState.audioPlayer.isPlaying,
-                            isFavorite: isFav
-                        ) {
-                            playAllTracks(startingAt: globalIndex)
-                        }
-
-                        if isOffline {
-                            row.contextMenu {
-                                Button(role: .destructive) {
-                                    Task { await deleteOfflineTrack(track) }
-                                } label: {
-                                    Label("Remove Download", systemImage: "trash")
-                                }
-                            }
-                        } else {
-                            row.mediaContextMenu(track: track)
-                        }
-
-                        if localIndex < discTracks.count - 1 {
-                            Divider()
-                                .padding(.leading, 52)
-                        }
-                    }
-                }
-            }
-        }
-        .padding(.top, 8)
-    }
-
-    private func discHeader(_ discNumber: Int) -> some View {
-        HStack {
-            Image(systemName: "opticaldisc")
-                .foregroundStyle(.secondary)
-            Text("Disc \(discNumber)")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-        .padding(.horizontal)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
-    }
-
-    // MARK: - Disc Grouping
-
-    private var groupedByDisc: [Int: [Track]] {
-        Dictionary(grouping: tracks) { $0.discNumber ?? 1 }
-    }
-
-    private func globalTrackIndex(for track: Track) -> Int {
-        tracks.firstIndex(where: { $0.id == track.id }) ?? 0
     }
 
     // MARK: - Playback
@@ -391,33 +292,6 @@ struct AlbumDetailView: View {
         offlineAlbumMetadata?.artistName ?? tracks.first?.artistName
     }
 
-    // MARK: - Album Download (Online)
-
-    @ViewBuilder
-    private var albumDownloadButton: some View {
-        if isDownloadingAlbum {
-            ProgressView()
-        } else if isAlbumDownloaded {
-            Button {
-                showRemoveConfirmation = true
-            } label: {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.green)
-            }
-        } else {
-            Button {
-                Task { await downloadAlbum() }
-            } label: {
-                Image(systemName: "arrow.down.circle")
-                    .font(.title2)
-                    .foregroundStyle(.tint)
-                    .symbolRenderingMode(.hierarchical)
-            }
-            .disabled(tracks.isEmpty)
-        }
-    }
-
     private func downloadAlbum() async {
         guard !tracks.isEmpty else { return }
         isDownloadingAlbum = true
@@ -484,6 +358,184 @@ struct AlbumDetailView: View {
             try? await dm.deleteDownload(id: dl.id)
         }
         await loadTracks()
+    }
+}
+
+// MARK: - Album Header View
+
+private struct AlbumHeaderView: View {
+    let albumItem: MediaItem
+    let imageURL: URL?
+    let artistName: String?
+    let metadata: String
+    let isOffline: Bool
+
+    var body: some View {
+        VStack(spacing: 16) {
+            // Album artwork
+            MediaImage.artwork(url: imageURL, cornerRadius: 12)
+                .frame(width: 280, height: 280)
+                .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
+
+            // Album title
+            Text(albumItem.title)
+                .font(.title2)
+                .bold()
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            // Artist name
+            if let artistName {
+                Text(artistName)
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Metadata line: Year · Tracks · Duration
+            if !metadata.isEmpty {
+                Text(metadata)
+                    .font(.subheadline)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+        }
+        .padding(.top, 16)
+    }
+}
+
+// MARK: - Album Action Buttons
+
+private struct AlbumActionButtons: View {
+    let tracks: [Track]
+    let onPlay: () -> Void
+    let onShuffle: () -> Void
+
+    var body: some View {
+        PlayShuffleButtons(
+            isDisabled: tracks.isEmpty,
+            onPlay: onPlay,
+            onShuffle: onShuffle
+        )
+    }
+}
+
+// MARK: - Album Track List View
+
+private struct AlbumTrackListView: View {
+    let tracks: [Track]
+    let isOffline: Bool
+    let onPlayTrack: (Int) -> Void
+    let onDeleteOfflineTrack: (Track) async -> Void
+
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(groupedByDisc.keys.sorted(), id: \.self) { discNumber in
+                if let discTracks = groupedByDisc[discNumber] {
+                    // Show disc header only if there are multiple discs
+                    if groupedByDisc.count > 1 {
+                        discHeader(discNumber)
+                    }
+
+                    ForEach(discTracks.enumerated(), id: \.element.id) { localIndex, track in
+                        let globalIndex = globalTrackIndex(for: track)
+                        let isFav =
+                            appState.userDataStore?.isFavorite(
+                                track.id, fallback: track.userData
+                            ) ?? track.userData?.isFavorite ?? false
+                        let row = AlbumTrackRow(
+                            track: track,
+                            isCurrentTrack: isCurrentTrack(track),
+                            isPlaying: isCurrentTrack(track) && appState.audioPlayer.isPlaying,
+                            isFavorite: isFav
+                        ) {
+                            onPlayTrack(globalIndex)
+                        }
+
+                        if isOffline {
+                            row.contextMenu {
+                                Button(role: .destructive) {
+                                    Task { await onDeleteOfflineTrack(track) }
+                                } label: {
+                                    Label("Remove Download", systemImage: "trash")
+                                }
+                            }
+                        } else {
+                            row.mediaContextMenu(track: track)
+                        }
+
+                        if localIndex < discTracks.count - 1 {
+                            Divider()
+                                .padding(.leading, 52)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    private func discHeader(_ discNumber: Int) -> some View {
+        HStack {
+            Image(systemName: "opticaldisc")
+                .foregroundStyle(.secondary)
+            Text("Disc \(discNumber)")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+    }
+
+    private var groupedByDisc: [Int: [Track]] {
+        Dictionary(grouping: tracks) { $0.discNumber ?? 1 }
+    }
+
+    private func globalTrackIndex(for track: Track) -> Int {
+        tracks.firstIndex(where: { $0.id == track.id }) ?? 0
+    }
+
+    private func isCurrentTrack(_ track: Track) -> Bool {
+        appState.audioPlayer.queue.currentTrack?.id == track.id
+    }
+}
+
+// MARK: - Album Download Button
+
+private struct AlbumDownloadButton: View {
+    let isDownloadingAlbum: Bool
+    let isAlbumDownloaded: Bool
+    let tracksIsEmpty: Bool
+    let onRemove: () -> Void
+    let onDownload: () async -> Void
+
+    var body: some View {
+        if isDownloadingAlbum {
+            ProgressView()
+        } else if isAlbumDownloaded {
+            Button {
+                onRemove()
+            } label: {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.green)
+            }
+        } else {
+            Button {
+                Task { await onDownload() }
+            } label: {
+                Image(systemName: "arrow.down.circle")
+                    .font(.title2)
+                    .foregroundStyle(.tint)
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .disabled(tracksIsEmpty)
+        }
     }
 }
 

@@ -24,7 +24,6 @@ struct VideoGenreDetailView: View {
 
     private let pageSize = 40
 
-    @Default(.gridDensity) private var gridDensity
     @Default(.videoLibraryLayout) private var layoutMode
 
     /// Resolves the library — uses the explicitly provided one, or falls back
@@ -54,7 +53,7 @@ struct VideoGenreDetailView: View {
 
     var body: some View {
         Group {
-            mainContent
+            VideoGenreMainContent(loader: loader, itemNoun: itemNoun)
         }
         .navigationTitle(genreName)
         .largeNavigationTitle()
@@ -66,126 +65,12 @@ struct VideoGenreDetailView: View {
                 ) {
                     layoutMode = layoutMode == .grid ? .list : .grid
                 }
-                sortMenu
+                VideoGenreSortMenu(sortField: $sortField, sortOrder: $sortOrder)
             }
         }
         .task(id: genreName) { await loadFirstPage() }
         .onChange(of: sortField) { _, _ in reloadAfterSortChange() }
         .onChange(of: sortOrder) { _, _ in reloadAfterSortChange() }
-    }
-
-    // MARK: - Sort Menu
-
-    private var sortMenu: some View {
-        Menu {
-            Picker("Sort By", selection: $sortField) {
-                Text("Name").tag(SortField.name)
-                Text("Date Added").tag(SortField.dateAdded)
-                Text("Rating").tag(SortField.communityRating)
-                Text("Runtime").tag(SortField.runtime)
-            }
-
-            Divider()
-
-            Picker("Order", selection: $sortOrder) {
-                Label("Ascending", systemImage: "arrow.up")
-                    .tag(Models.SortOrder.ascending)
-                Label("Descending", systemImage: "arrow.down")
-                    .tag(Models.SortOrder.descending)
-            }
-        } label: {
-            Image(systemName: "arrow.up.arrow.down")
-        }
-    }
-
-    // MARK: - Main Content
-
-    @ViewBuilder
-    private var mainContent: some View {
-        switch loader.phase {
-        case .loading:
-            ProgressView("Loading…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .failed(let message):
-            ContentUnavailableView(
-                "Unable to Load",
-                systemImage: "exclamationmark.triangle",
-                description: Text(message)
-            )
-        case .empty:
-            ContentUnavailableView(
-                "No Items",
-                systemImage: "film",
-                description: Text("No movies or shows found in this genre.")
-            )
-        case .loaded:
-            scrollContent
-        }
-    }
-
-    // MARK: - Scroll Content
-
-    @ViewBuilder
-    private var scrollContent: some View {
-        if layoutMode == .list {
-            List {
-                ForEach(loader.items) { item in
-                    NavigationLink(value: item) {
-                        MediaListRow(item: item)
-                    }
-                    .onAppear {
-                        loader.onItemAppeared(item)
-                    }
-                }
-
-                if loader.isLoadingMore {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                        Spacer()
-                    }
-                }
-
-                if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
-                    Text("\(loader.totalCount) \(itemNoun)")
-                        .font(.footnote)
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .listStyle(.plain)
-        } else {
-            ScrollView {
-                LazyVGrid(columns: gridDensity.columns, spacing: gridDensity.gridSpacing) {
-                    ForEach(loader.items) { item in
-                        NavigationLink(value: item) {
-                            MediaCard(item: item)
-                        }
-                        .buttonStyle(.plain)
-                        .onAppear {
-                            loader.onItemAppeared(item)
-                        }
-                    }
-                }
-                .padding()
-
-                if loader.isLoadingMore {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                            .padding(.vertical, 16)
-                        Spacer()
-                    }
-                }
-
-                if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
-                    Text("\(loader.totalCount) \(itemNoun)")
-                        .font(.footnote)
-                        .foregroundStyle(.tertiary)
-                        .padding(.bottom, 24)
-                }
-            }
-        }
     }
 
     // MARK: - Sort Change Reload
@@ -232,6 +117,148 @@ struct VideoGenreDetailView: View {
         default:
             return loader.totalCount == 1 ? "item" : "items"
         }
+    }
+}
+
+// MARK: - Sort Menu
+
+private struct VideoGenreSortMenu: View {
+    @Binding var sortField: SortField
+    @Binding var sortOrder: Models.SortOrder
+
+    var body: some View {
+        Menu {
+            Picker("Sort By", selection: $sortField) {
+                Text("Name").tag(SortField.name)
+                Text("Date Added").tag(SortField.dateAdded)
+                Text("Rating").tag(SortField.communityRating)
+                Text("Runtime").tag(SortField.runtime)
+            }
+
+            Divider()
+
+            Picker("Order", selection: $sortOrder) {
+                Label("Ascending", systemImage: "arrow.up")
+                    .tag(Models.SortOrder.ascending)
+                Label("Descending", systemImage: "arrow.down")
+                    .tag(Models.SortOrder.descending)
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+        }
+    }
+}
+
+// MARK: - Main Content
+
+private struct VideoGenreMainContent: View {
+    let loader: PagedCollectionLoader<MediaItem>
+    let itemNoun: String
+
+    var body: some View {
+        switch loader.phase {
+        case .loading:
+            ProgressView("Loading…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let message):
+            ContentUnavailableView(
+                "Unable to Load",
+                systemImage: "exclamationmark.triangle",
+                description: Text(message)
+            )
+        case .empty:
+            ContentUnavailableView(
+                "No Items",
+                systemImage: "film",
+                description: Text("No movies or shows found in this genre.")
+            )
+        case .loaded:
+            VideoGenreScrollContent(loader: loader, itemNoun: itemNoun)
+        }
+    }
+}
+
+// MARK: - Scroll Content
+
+private struct VideoGenreScrollContent: View {
+    let loader: PagedCollectionLoader<MediaItem>
+    let itemNoun: String
+
+    @Default(.gridDensity) private var gridDensity
+    @Default(.videoLibraryLayout) private var layoutMode
+
+    var body: some View {
+        if layoutMode == .list {
+            List {
+                ForEach(loader.items) { item in
+                    NavigationLink(value: item) {
+                        MediaListRow(item: item)
+                    }
+                    .onAppear {
+                        loader.onItemAppeared(item)
+                    }
+                }
+
+                if loader.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    }
+                }
+
+                if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
+                    VideoGenreItemCountFooter(
+                        totalCount: loader.totalCount, itemNoun: itemNoun)
+                }
+            }
+            .listStyle(.plain)
+        } else {
+            ScrollView {
+                LazyVGrid(columns: gridDensity.columns, spacing: gridDensity.gridSpacing) {
+                    ForEach(loader.items) { item in
+                        NavigationLink(value: item) {
+                            MediaCard(item: item)
+                        }
+                        .buttonStyle(.plain)
+                        .onAppear {
+                            loader.onItemAppeared(item)
+                        }
+                    }
+                }
+                .padding()
+
+                if loader.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding(.vertical, 16)
+                        Spacer()
+                    }
+                }
+
+                if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
+                    VideoGenreItemCountFooter(
+                        totalCount: loader.totalCount, itemNoun: itemNoun
+                    )
+                    .padding(.bottom, 24)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Item Count Footer
+
+private struct VideoGenreItemCountFooter: View {
+    let totalCount: Int
+    let itemNoun: String
+
+    var body: some View {
+        Text("\(totalCount) \(itemNoun)")
+            .font(.footnote)
+            .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity)
     }
 }
 

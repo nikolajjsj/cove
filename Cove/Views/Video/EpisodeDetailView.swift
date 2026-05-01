@@ -37,7 +37,7 @@ struct EpisodeDetailView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         // Last played date
                         if let lastPlayed = item.userData?.lastPlayedDate {
-                            EpisodeLastPlayedLabel(date: lastPlayed)
+                            LastPlayedLabel(date: lastPlayed)
                                 .padding(.horizontal)
                         }
 
@@ -195,25 +195,6 @@ struct EpisodeDetailView: View {
     }
 }
 
-// MARK: - Episode Last Played Label
-
-/// A subtle label showing when the user last watched this episode.
-private struct EpisodeLastPlayedLabel: View {
-    let date: Date
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "clock")
-                .font(.caption2)
-            Text("Last watched \(date.formatted(date: .abbreviated, time: .omitted))")
-                .font(.caption)
-        }
-        .foregroundStyle(.tertiary)
-    }
-}
-
-// MARK: - More Episodes Section
-
 private struct MoreEpisodesSection: View {
     let item: MediaItem
     let seriesId: ItemID
@@ -234,7 +215,7 @@ private struct MoreEpisodesSection: View {
             }
         } else if !nearbyEpisodes.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                sectionTitle
+                MoreEpisodesSectionTitle(seasonNumber: item.parentIndexNumber)
 
                 LazyVStack(spacing: 5) {
                     ForEach(nearbyEpisodes.enumerated(), id: \.element.id) { index, episode in
@@ -266,44 +247,8 @@ private struct MoreEpisodesSection: View {
                     }
                 }
 
-                seeAllLink
+                MoreEpisodesSeeAllLink(seriesId: seriesId, seriesName: item.seriesName)
             }
-        }
-    }
-
-    // MARK: - Section Title
-
-    private var sectionTitle: some View {
-        Group {
-            if let seasonNumber = item.parentIndexNumber {
-                Text("More from Season \(seasonNumber)")
-                    .font(.title3.bold())
-            } else {
-                Text("More Episodes")
-                    .font(.title3.bold())
-            }
-        }
-    }
-
-    // MARK: - See All Link
-
-    private var seeAllLink: some View {
-        NavigationLink(
-            value: MediaItem(
-                id: seriesId,
-                title: item.seriesName ?? "Series",
-                mediaType: .series
-            )
-        ) {
-            HStack {
-                Text("See All Episodes")
-                    .font(.subheadline.weight(.medium))
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-            }
-            .foregroundStyle(.accent)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.vertical, 8)
         }
     }
 
@@ -352,5 +297,50 @@ private struct MoreEpisodesSection: View {
             userData.playbackPosition > 0
         else { return nil }
         return min(userData.playbackPosition / runtime, 1.0)
+    }
+}
+
+// MARK: - More Episodes Section Title
+
+private struct MoreEpisodesSectionTitle: View {
+    let seasonNumber: Int?
+
+    var body: some View {
+        Group {
+            if let seasonNumber {
+                Text("More from Season \(seasonNumber)")
+                    .font(.title3.bold())
+            } else {
+                Text("More Episodes")
+                    .font(.title3.bold())
+            }
+        }
+    }
+}
+
+// MARK: - More Episodes See All Link
+
+private struct MoreEpisodesSeeAllLink: View {
+    let seriesId: ItemID
+    let seriesName: String?
+
+    var body: some View {
+        NavigationLink(
+            value: MediaItem(
+                id: seriesId,
+                title: seriesName ?? "Series",
+                mediaType: .series
+            )
+        ) {
+            HStack {
+                Text("See All Episodes")
+                    .font(.subheadline.weight(.medium))
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(.accent)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 8)
+        }
     }
 }

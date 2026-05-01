@@ -131,8 +131,18 @@ private struct SearchContentView: View {
             }
 
             // Content area — crossfades between all states.
-            contentArea
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            SearchContentArea(
+                isQueryLongEnough: isQueryLongEnough,
+                isLoading: isLoading,
+                results: results,
+                hasActiveFilters: hasActiveFilters,
+                trimmedQuery: trimmedQuery,
+                maxPreviewItems: maxPreviewItems,
+                recentSearches: recentSearches,
+                onSelectRecent: onSelectRecent,
+                onClearRecents: onClearRecents
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         // Spring drives the chip bar; easeInOut drives content-level transitions.
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: isSearching)
@@ -140,50 +150,6 @@ private struct SearchContentView: View {
         .animation(.easeInOut(duration: 0.18), value: isLoading)
         .task(id: searchTaskKey) {
             await performSearch()
-        }
-    }
-
-    // MARK: Content Area
-
-    @ViewBuilder
-    private var contentArea: some View {
-        if !isQueryLongEnough {
-            // Show the discovery view whether or not the bar is focused.
-            // Tapping the bar does NOT cause a jarring state switch —
-            // the chips just slide in above the same content.
-            SearchDiscoveryView(
-                recentSearches: recentSearches,
-                onSelectRecent: onSelectRecent,
-                onClearRecents: onClearRecents
-            )
-            .transition(.opacity)
-        } else if isLoading {
-            ProgressView()
-                .transition(.opacity)
-        } else if let results {
-            if results.items.isEmpty {
-                Group {
-                    if hasActiveFilters {
-                        ContentUnavailableView(
-                            "No Results",
-                            systemImage: "line.3.horizontal.decrease.circle",
-                            description: Text(
-                                "No items match '\(trimmedQuery)' with the current filters. Try removing some filters."
-                            )
-                        )
-                    } else {
-                        ContentUnavailableView.search(text: trimmedQuery)
-                    }
-                }
-                .transition(.opacity)
-            } else {
-                SearchResultsScrollView(
-                    results: results,
-                    query: trimmedQuery,
-                    maxPreviewItems: maxPreviewItems
-                )
-                .transition(.opacity)
-            }
         }
     }
 
@@ -226,6 +192,62 @@ private struct SearchContentView: View {
             if !fetched.items.isEmpty { onSearch(trimmedQuery) }
         } catch {
             if !Task.isCancelled { results = SearchResults() }
+        }
+    }
+}
+
+// MARK: - Content Area
+
+/// Crossfades between discovery, loading, empty, and results states.
+private struct SearchContentArea: View {
+    let isQueryLongEnough: Bool
+    let isLoading: Bool
+    let results: SearchResults?
+    let hasActiveFilters: Bool
+    let trimmedQuery: String
+    let maxPreviewItems: Int
+    let recentSearches: [String]
+    let onSelectRecent: (String) -> Void
+    let onClearRecents: () -> Void
+
+    var body: some View {
+        if !isQueryLongEnough {
+            // Show the discovery view whether or not the bar is focused.
+            // Tapping the bar does NOT cause a jarring state switch —
+            // the chips just slide in above the same content.
+            SearchDiscoveryView(
+                recentSearches: recentSearches,
+                onSelectRecent: onSelectRecent,
+                onClearRecents: onClearRecents
+            )
+            .transition(.opacity)
+        } else if isLoading {
+            ProgressView()
+                .transition(.opacity)
+        } else if let results {
+            if results.items.isEmpty {
+                Group {
+                    if hasActiveFilters {
+                        ContentUnavailableView(
+                            "No Results",
+                            systemImage: "line.3.horizontal.decrease.circle",
+                            description: Text(
+                                "No items match '\(trimmedQuery)' with the current filters. Try removing some filters."
+                            )
+                        )
+                    } else {
+                        ContentUnavailableView.search(text: trimmedQuery)
+                    }
+                }
+                .transition(.opacity)
+            } else {
+                SearchResultsScrollView(
+                    results: results,
+                    query: trimmedQuery,
+                    maxPreviewItems: maxPreviewItems
+                )
+                .transition(.opacity)
+            }
         }
     }
 }

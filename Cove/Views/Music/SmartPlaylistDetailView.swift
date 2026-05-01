@@ -46,135 +46,12 @@ struct SmartPlaylistDetailView: View {
                     description: Text("No tracks match this smart playlist's criteria.")
                 )
             } else {
-                scrollContent
+                SmartPlaylistScrollContent(preset: preset, items: items)
             }
         }
         .navigationTitle(preset.name)
         .inlineNavigationTitle()
         .task { await loadTracks() }
-    }
-
-    // MARK: - Scroll Content
-
-    private var scrollContent: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                presetHeader
-                    .padding(.bottom, 20)
-
-                actionButtons
-                    .padding(.horizontal)
-                    .padding(.bottom, 16)
-
-                Divider()
-                    .padding(.horizontal)
-
-                trackList
-            }
-            .padding(.bottom, 32)
-        }
-    }
-
-    // MARK: - Header
-
-    private var presetHeader: some View {
-        VStack(spacing: 16) {
-            SmartPlaylistHeaderIcon(preset: preset)
-                .frame(width: 160, height: 160)
-                .shadow(
-                    color: preset.gradientColors.first?.opacity(0.4) ?? .clear, radius: 16, y: 8)
-
-            VStack(spacing: 6) {
-                Text(preset.name)
-                    .font(.title2)
-                    .bold()
-                    .multilineTextAlignment(.center)
-
-                Text(preset.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-
-                trackCountLabel
-            }
-        }
-        .padding(.top, 16)
-        .padding(.horizontal)
-    }
-
-    private var trackCountLabel: some View {
-        HStack(spacing: 6) {
-            Text("\(items.count) \(items.count == 1 ? "track" : "tracks")")
-
-            if let totalDuration {
-                Text("·")
-                Text(TimeFormatting.longDuration(totalDuration))
-            }
-        }
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-    }
-
-    private var totalDuration: TimeInterval? {
-        let sum = items.compactMap(\.runtime).reduce(0, +)
-        return sum > 0 ? sum : nil
-    }
-
-    // MARK: - Action Buttons
-
-    private var actionButtons: some View {
-        PlayShuffleButtons(
-            isDisabled: items.isEmpty,
-            onPlay: { playAllTracks(startingAt: 0) },
-            onShuffle: { playShuffled() }
-        )
-    }
-
-    // MARK: - Track List
-
-    private var trackList: some View {
-        LazyVStack(spacing: 0) {
-            ForEach(items.enumerated(), id: \.element.id) { index, item in
-                TrackRow(
-                    title: item.title,
-                    subtitle: item.artistName ?? item.albumName,
-                    imageURL: trackImageURL(for: item),
-                    duration: item.runtime,
-                    isCurrentTrack: isCurrentTrack(item),
-                    isPlaying: isCurrentTrack(item) && appState.audioPlayer.isPlaying,
-                    isFavorite: appState.userDataStore?.isFavorite(item.id, fallback: item.userData)
-                        ?? item.userData?.isFavorite ?? false,
-                    onTap: { playAllTracks(startingAt: index) }
-                )
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .mediaContextMenu(item: item)
-
-                if index < items.count - 1 {
-                    Divider()
-                        .padding(.leading, 68)
-                }
-            }
-        }
-        .padding(.top, 8)
-    }
-
-    // MARK: - Playback
-
-    private func playAllTracks(startingAt index: Int) {
-        let tracks = items.map { $0.asTrack }
-        guard !tracks.isEmpty else { return }
-        appState.audioPlayer.play(tracks: tracks, startingAt: index)
-    }
-
-    private func playShuffled() {
-        let tracks = items.map { $0.asTrack }.shuffled()
-        guard !tracks.isEmpty else { return }
-        appState.audioPlayer.play(tracks: tracks, startingAt: 0)
-    }
-
-    private func isCurrentTrack(_ item: MediaItem) -> Bool {
-        appState.audioPlayer.queue.currentTrack?.id.rawValue == item.id.rawValue
     }
 
     // MARK: - Data Loading
@@ -210,8 +87,156 @@ struct SmartPlaylistDetailView: View {
         }
         isLoading = false
     }
+}
 
-    // MARK: - Image Helpers
+// MARK: - Scroll Content
+
+private struct SmartPlaylistScrollContent: View {
+    let preset: SmartPlaylist
+    let items: [MediaItem]
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                SmartPlaylistPresetHeader(preset: preset, items: items)
+                    .padding(.bottom, 20)
+
+                SmartPlaylistActionButtons(items: items)
+                    .padding(.horizontal)
+                    .padding(.bottom, 16)
+
+                Divider()
+                    .padding(.horizontal)
+
+                SmartPlaylistTrackList(items: items)
+            }
+            .padding(.bottom, 32)
+        }
+    }
+}
+
+// MARK: - Preset Header
+
+private struct SmartPlaylistPresetHeader: View {
+    let preset: SmartPlaylist
+    let items: [MediaItem]
+
+    private var totalDuration: TimeInterval? {
+        let sum = items.compactMap(\.runtime).reduce(0, +)
+        return sum > 0 ? sum : nil
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            SmartPlaylistHeaderIcon(preset: preset)
+                .frame(width: 160, height: 160)
+                .shadow(
+                    color: preset.gradientColors.first?.opacity(0.4) ?? .clear, radius: 16, y: 8)
+
+            VStack(spacing: 6) {
+                Text(preset.name)
+                    .font(.title2)
+                    .bold()
+                    .multilineTextAlignment(.center)
+
+                Text(preset.subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                SmartPlaylistTrackCountLabel(
+                    itemCount: items.count,
+                    totalDuration: totalDuration
+                )
+            }
+        }
+        .padding(.top, 16)
+        .padding(.horizontal)
+    }
+}
+
+// MARK: - Track Count Label
+
+private struct SmartPlaylistTrackCountLabel: View {
+    let itemCount: Int
+    let totalDuration: TimeInterval?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("\(itemCount) \(itemCount == 1 ? "track" : "tracks")")
+
+            if let totalDuration {
+                Text("·")
+                Text(TimeFormatting.longDuration(totalDuration))
+            }
+        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+    }
+}
+
+// MARK: - Action Buttons
+
+private struct SmartPlaylistActionButtons: View {
+    let items: [MediaItem]
+
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        PlayShuffleButtons(
+            isDisabled: items.isEmpty,
+            onPlay: { playAllTracks(startingAt: 0) },
+            onShuffle: { playShuffled() }
+        )
+    }
+
+    private func playAllTracks(startingAt index: Int) {
+        let tracks = items.map { $0.asTrack }
+        guard !tracks.isEmpty else { return }
+        appState.audioPlayer.play(tracks: tracks, startingAt: index)
+    }
+
+    private func playShuffled() {
+        let tracks = items.map { $0.asTrack }.shuffled()
+        guard !tracks.isEmpty else { return }
+        appState.audioPlayer.play(tracks: tracks, startingAt: 0)
+    }
+}
+
+// MARK: - Track List
+
+private struct SmartPlaylistTrackList: View {
+    let items: [MediaItem]
+
+    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(items.enumerated(), id: \.element.id) { index, item in
+                TrackRow(
+                    title: item.title,
+                    subtitle: item.artistName ?? item.albumName,
+                    imageURL: trackImageURL(for: item),
+                    duration: item.runtime,
+                    isCurrentTrack: isCurrentTrack(item),
+                    isPlaying: isCurrentTrack(item) && appState.audioPlayer.isPlaying,
+                    isFavorite: appState.userDataStore?.isFavorite(item.id, fallback: item.userData)
+                        ?? item.userData?.isFavorite ?? false,
+                    onTap: { playAllTracks(startingAt: index) }
+                )
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .mediaContextMenu(item: item)
+
+                if index < items.count - 1 {
+                    Divider()
+                        .padding(.leading, 68)
+                }
+            }
+        }
+        .padding(.top, 8)
+    }
 
     private func trackImageURL(for item: MediaItem) -> URL? {
         if let albumId = item.albumId {
@@ -222,6 +247,16 @@ struct SmartPlaylistDetailView: View {
         return authManager.provider.imageURL(
             for: item, type: .primary, maxSize: CGSize(width: 80, height: 80)
         )
+    }
+
+    private func playAllTracks(startingAt index: Int) {
+        let tracks = items.map { $0.asTrack }
+        guard !tracks.isEmpty else { return }
+        appState.audioPlayer.play(tracks: tracks, startingAt: index)
+    }
+
+    private func isCurrentTrack(_ item: MediaItem) -> Bool {
+        appState.audioPlayer.queue.currentTrack?.id.rawValue == item.id.rawValue
     }
 }
 
@@ -243,7 +278,7 @@ private struct SmartPlaylistHeaderIcon: View {
 
             // Ghosted decorative icon
             Image(systemName: preset.icon)
-                .font(.system(size: 100, weight: .black))
+                .font(.system(.largeTitle, weight: .black))
                 .foregroundStyle(.white.opacity(0.10))
                 .rotationEffect(.degrees(-12))
                 .offset(x: 24, y: 20)
@@ -258,7 +293,7 @@ private struct SmartPlaylistHeaderIcon: View {
 
             // Centered icon
             Image(systemName: preset.icon)
-                .font(.system(size: 48, weight: .semibold))
+                .font(.largeTitle.weight(.semibold))
                 .foregroundStyle(.white)
         }
         .clipShape(.rect(cornerRadius: 28))

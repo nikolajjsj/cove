@@ -13,7 +13,7 @@ struct EpisodeRow: View {
             HStack(alignment: .top, spacing: 12) {
                 // MARK: - Thumbnail
 
-                thumbnailView
+                EpisodeThumbnailView(thumbnailURL: thumbnailURL, progress: progress)
 
                 // MARK: - Episode Info
 
@@ -22,7 +22,8 @@ struct EpisodeRow: View {
                     HStack(spacing: 6) {
                         if let number = episode.episodeNumber {
                             Text("E\(number)")
-                                .font(.caption.weight(.bold))
+                                .font(.caption)
+                                .bold()
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -63,13 +64,18 @@ struct EpisodeRow: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Thumbnail View
+}
 
-    @ViewBuilder
-    private var thumbnailView: some View {
+// MARK: - Thumbnail View
+
+private struct EpisodeThumbnailView: View {
+    let thumbnailURL: URL?
+    let progress: Double?
+
+    var body: some View {
         ZStack(alignment: .bottom) {
             MediaImage.videoThumbnail(url: thumbnailURL)
-                .aspectRatio(16/9, contentMode: .fit)
+                .aspectRatio(16 / 9, contentMode: .fit)
 
             if let progress, progress > 0 {
                 VideoProgressOverlay(progress: progress)

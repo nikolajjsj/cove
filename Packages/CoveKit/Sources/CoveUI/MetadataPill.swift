@@ -101,41 +101,18 @@ extension MetadataPill {
 
     /// Creates a video resolution pill (e.g. "4K", "1080p").
     public static func resolution(width: Int) -> MetadataPill? {
-        let label: String
-        if width >= 3840 {
-            label = "4K"
-        } else if width >= 1920 {
-            label = "1080p"
-        } else if width >= 1280 {
-            label = "720p"
-        } else if width > 0 {
-            label = "SD"
-        } else {
-            return nil
-        }
+        guard let label = MediaStreamLabels.resolution(width: width) else { return nil }
         return MetadataPill(icon: "tv", label: label, tint: nil)
     }
 
     /// Creates an HDR pill when HDR content is detected.
     public static func hdr(videoRange: String?, videoRangeType: String?) -> MetadataPill? {
-        // Prefer the more specific videoRangeType
-        if let rangeType = videoRangeType?.lowercased() {
-            switch rangeType {
-            case "dovi", "dolbyvision":
-                return MetadataPill(icon: "sparkles", label: "Dolby Vision", tint: .purple)
-            case "hdr10plus":
-                return MetadataPill(icon: "sparkles", label: "HDR10+", tint: .orange)
-            case "hdr10":
-                return MetadataPill(icon: "sparkles", label: "HDR10", tint: .orange)
-            default:
-                break
-            }
-        }
-        // Fall back to videoRange
-        if let range = videoRange?.uppercased(), range == "HDR" {
-            return MetadataPill(icon: "sparkles", label: "HDR", tint: .orange)
-        }
-        return nil
+        guard
+            let label = MediaStreamLabels.hdr(
+                videoRange: videoRange, videoRangeType: videoRangeType)
+        else { return nil }
+        let tint: Color = label.contains("Dolby") ? .purple : .orange
+        return MetadataPill(icon: "sparkles", label: label, tint: tint)
     }
 
     /// Creates a video codec pill (e.g. "HEVC", "AV1", "H.264").
@@ -143,26 +120,7 @@ extension MetadataPill {
     /// Normalizes common codec identifiers into user-friendly labels.
     /// Returns `nil` when the codec string is `nil` or empty.
     public static func videoCodec(_ codec: String?) -> MetadataPill? {
-        guard let codec, !codec.isEmpty else { return nil }
-        let label: String
-        switch codec.lowercased() {
-        case "hevc", "h265", "h.265":
-            label = "HEVC"
-        case "h264", "h.264", "avc":
-            label = "H.264"
-        case "av1":
-            label = "AV1"
-        case "vp9":
-            label = "VP9"
-        case "vc1":
-            label = "VC-1"
-        case "mpeg2video", "mpeg2":
-            label = "MPEG-2"
-        case "mpeg4":
-            label = "MPEG-4"
-        default:
-            label = codec.uppercased()
-        }
+        guard let label = MediaStreamLabels.videoCodec(codec) else { return nil }
         return MetadataPill(icon: "film", label: label, tint: nil)
     }
 
@@ -171,36 +129,7 @@ extension MetadataPill {
     /// Normalizes common audio codec identifiers into user-friendly labels.
     /// Returns `nil` when the codec string is `nil` or empty.
     public static func audioCodec(_ codec: String?) -> MetadataPill? {
-        guard let codec, !codec.isEmpty else { return nil }
-        let label: String
-        switch codec.lowercased() {
-        case "truehd":
-            label = "TrueHD"
-        case "eac3":
-            label = "EAC-3"
-        case "ac3":
-            label = "AC-3"
-        case "dts":
-            label = "DTS"
-        case "dca":
-            label = "DTS"
-        case "dtshd":
-            label = "DTS-HD MA"
-        case "aac":
-            label = "AAC"
-        case "flac":
-            label = "FLAC"
-        case "opus":
-            label = "Opus"
-        case "vorbis":
-            label = "Vorbis"
-        case "mp3":
-            label = "MP3"
-        case "pcm_s16le", "pcm_s24le", "pcm":
-            label = "PCM"
-        default:
-            label = codec.uppercased()
-        }
+        guard let label = MediaStreamLabels.audioCodec(codec) else { return nil }
         return MetadataPill(icon: "waveform", label: label, tint: nil)
     }
 
@@ -208,30 +137,13 @@ extension MetadataPill {
     ///
     /// Returns `nil` when the bitrate is `nil`, zero, or negative.
     public static func bitrate(_ bitrate: Int?) -> MetadataPill? {
-        guard let bitrate, bitrate > 0 else { return nil }
-        let mbps = Double(bitrate) / 1_000_000.0
-        let label: String
-        if mbps >= 10 {
-            label = "\(Int(mbps)) Mbps"
-        } else if mbps >= 1 {
-            label = mbps.formatted(.number.precision(.fractionLength(1))) + " Mbps"
-        } else {
-            let kbps = bitrate / 1000
-            label = "\(kbps) kbps"
-        }
+        guard let label = MediaStreamLabels.bitrate(bitrate) else { return nil }
         return MetadataPill(icon: "speedometer", label: label, tint: nil)
     }
 
-    /// Creates an audio channels pill (e.g. "5.1", "7.1", "Stereo").
+    /// Creates an audio channels pill (e.g. "7.1 Surround", "5.1 Surround", "Stereo").
     public static func audioChannels(_ channels: Int) -> MetadataPill? {
-        let label: String
-        switch channels {
-        case 8: label = "7.1"
-        case 6: label = "5.1"
-        case 2: label = "Stereo"
-        case 1: label = "Mono"
-        default: return nil
-        }
+        guard let label = MediaStreamLabels.channels(channels) else { return nil }
         return MetadataPill(icon: "speaker.wave.2.fill", label: label, tint: nil)
     }
 

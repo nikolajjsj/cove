@@ -61,16 +61,16 @@ struct SettingsView: View {
 
             // MARK: - Libraries
 
-            Section("Libraries") {
-                if appState.libraries.isEmpty {
-                    Text("No libraries found")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(appState.libraries) { library in
-                        Label(library.name, systemImage: libraryIcon(for: library.collectionType))
-                    }
-                }
-            }
+//            Section("Libraries") {
+//                if appState.libraries.isEmpty {
+//                    Text("No libraries found")
+//                        .foregroundStyle(.secondary)
+//                } else {
+//                    ForEach(appState.libraries) { library in
+//                        Label(library.name, systemImage: libraryIcon(for: library.collectionType))
+//                    }
+//                }
+//            }
 
             // MARK: - Appearance
 
@@ -84,20 +84,20 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.menu)
 
-                Picker(selection: $accentColorName) {
-                    ForEach(accentColorOptions, id: \.value) { option in
-                        Label {
-                            Text(option.name)
-                        } icon: {
-                            Image(systemName: "circle.fill")
-                                .foregroundStyle(option.color)
-                        }
-                        .tag(option.value)
-                    }
-                } label: {
-                    Label("Accent Color", systemImage: "paintpalette")
-                }
-                .pickerStyle(.menu)
+//                Picker(selection: $accentColorName) {
+//                    ForEach(accentColorOptions, id: \.value) { option in
+//                        Label {
+//                            Text(option.name)
+//                        } icon: {
+//                            Image(systemName: "circle.fill")
+//                                .foregroundStyle(option.color)
+//                        }
+//                        .tag(option.value)
+//                    }
+//                } label: {
+//                    Label("Accent Color", systemImage: "paintpalette")
+//                }
+//                .pickerStyle(.menu)
 
                 Picker(selection: $gridDensity) {
                     ForEach(GridDensity.allCases, id: \.self) { density in
@@ -124,13 +124,8 @@ struct SettingsView: View {
                             Label("Manage Storage", systemImage: "internaldrive")
                             Spacer()
                             if totalDownloadSize > 0 {
-                                Text(
-                                    ByteCountFormatter.string(
-                                        fromByteCount: totalDownloadSize,
-                                        countStyle: .file
-                                    )
-                                )
-                                .foregroundStyle(.secondary)
+                                Text(totalDownloadSize.formatted(.byteCount(style: .file)))
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -221,7 +216,7 @@ struct SettingsView: View {
                         if speed == 1.0 {
                             Text("1× (Normal)").tag(speed)
                         } else {
-                            Text("\(speed, specifier: "%g")×").tag(speed)
+                            Text(speed.formatted(.number) + "×").tag(speed)
                         }
                     }
                 } label: {

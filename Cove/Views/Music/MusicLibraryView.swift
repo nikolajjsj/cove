@@ -181,20 +181,9 @@ private struct ArtistsShelfSection: View {
     var body: some View {
         if loader.isLoading || !loader.items.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Artists")
-                        .font(.title2)
-                        .bold()
-
-                    Spacer()
-
-                    NavigationLink(value: MusicBrowseRoute.allArtists(libraryId: library.id)) {
-                        Text("See All")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                    }
-                }
-                .padding(.horizontal)
+                MusicSectionHeader(
+                    title: "Artists",
+                    destination: MusicBrowseRoute.allArtists(libraryId: library.id))
 
                 if loader.isLoading {
                     ScrollView(.horizontal) {
@@ -259,20 +248,8 @@ private struct MusicGenresShelfSection: View {
     var body: some View {
         if loader.isLoading || !loader.items.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Genres")
-                        .font(.title2)
-                        .bold()
-
-                    Spacer()
-
-                    NavigationLink(value: MusicBrowseRoute.allGenres(libraryId: library.id)) {
-                        Text("See All")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                    }
-                }
-                .padding(.horizontal)
+                MusicSectionHeader(
+                    title: "Genres", destination: MusicBrowseRoute.allGenres(libraryId: library.id))
 
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 14) {
@@ -326,20 +303,7 @@ private struct PlaylistsShelfSection: View {
     var body: some View {
         if loader.isLoading || !loader.items.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Playlists")
-                        .font(.title2)
-                        .bold()
-
-                    Spacer()
-
-                    NavigationLink(value: MusicBrowseRoute.allPlaylists) {
-                        Text("See All")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                    }
-                }
-                .padding(.horizontal)
+                MusicSectionHeader(title: "Playlists", destination: MusicBrowseRoute.allPlaylists)
 
                 if loader.isLoading {
                     ScrollView(.horizontal) {
@@ -397,20 +361,8 @@ private struct AlbumsGridSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Albums")
-                    .font(.title2)
-                    .bold()
-
-                Spacer()
-
-                NavigationLink(value: MusicBrowseRoute.allAlbums(libraryId: library.id)) {
-                    Text("See All")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                }
-            }
-            .padding(.horizontal)
+            MusicSectionHeader(
+                title: "Albums", destination: MusicBrowseRoute.allAlbums(libraryId: library.id))
 
             if loader.isLoading {
                 LazyVGrid(columns: gridDensity.columns, spacing: gridDensity.gridSpacing) {
@@ -455,6 +407,29 @@ private struct AlbumsGridSection: View {
             type: .primary,
             maxSize: CGSize(width: 300, height: 300)
         )
+    }
+}
+
+// MARK: - Section Header
+
+/// A reusable header row that pairs a section title with a navigation link.
+private struct MusicSectionHeader<Destination: Hashable>: View {
+    let title: String
+    let destination: Destination
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.title2)
+                .bold()
+            Spacer()
+            NavigationLink(value: destination) {
+                Text("See All")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+        }
+        .padding(.horizontal)
     }
 }
 

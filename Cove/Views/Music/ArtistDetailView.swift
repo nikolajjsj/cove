@@ -28,8 +28,8 @@ struct ArtistDetailView: View {
             case .empty, .loaded:
                 ScrollView {
                     VStack(spacing: 24) {
-                        artistHeader
-                        albumsSection
+                        ArtistHeaderView(artistItem: artistItem, imageURL: artistImageURL)
+                        ArtistAlbumsSection(albums: loader.items)
                     }
                     .padding(.bottom, 32)
                 }
@@ -37,6 +37,11 @@ struct ArtistDetailView: View {
         }
         .navigationTitle(artistItem.title)
         .inlineNavigationTitle()
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                FavoriteToggle(itemId: artistItem.id, userData: artistItem.userData)
+            }
+        }
         .task {
             await loader.load {
                 try await authManager.provider.albums(artist: artistItem.id)
@@ -44,13 +49,28 @@ struct ArtistDetailView: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Image Helpers
 
-    private var artistHeader: some View {
+    private var artistImageURL: URL? {
+        authManager.provider.imageURL(
+            for: artistItem,
+            type: .primary,
+            maxSize: CGSize(width: 400, height: 400)
+        )
+    }
+}
+
+// MARK: - Artist Header View
+
+private struct ArtistHeaderView: View {
+    let artistItem: MediaItem
+    let imageURL: URL?
+
+    var body: some View {
         VStack(spacing: 16) {
             // Artist image (circular)
             MediaImage(
-                url: artistImageURL,
+                url: imageURL,
                 placeholderIcon: "music.mic",
                 placeholderIconFont: .system(size: 48),
                 cornerRadius: .infinity
@@ -76,12 +96,17 @@ struct ArtistDetailView: View {
         .padding(.top, 16)
         .padding(.horizontal)
     }
+}
 
-    // MARK: - Albums Section
+// MARK: - Artist Albums Section
 
-    @ViewBuilder
-    private var albumsSection: some View {
-        if loader.items.isEmpty {
+private struct ArtistAlbumsSection: View {
+    let albums: [Album]
+    @Environment(AuthManager.self) private var authManager
+    @Default(.gridDensity) private var gridDensity
+
+    var body: some View {
+        if albums.isEmpty {
             ContentUnavailableView(
                 "No Albums",
                 systemImage: "square.stack",
@@ -96,7 +121,7 @@ struct ArtistDetailView: View {
                     .padding(.horizontal)
 
                 LazyVGrid(columns: gridDensity.columns, spacing: gridDensity.gridSpacing) {
-                    ForEach(loader.items) { album in
+                    ForEach(albums) { album in
                         AlbumCard(
                             album: album,
                             subtitle: [album.year.map { String($0) }, album.genre]
@@ -109,16 +134,6 @@ struct ArtistDetailView: View {
                 .padding(.horizontal)
             }
         }
-    }
-
-    // MARK: - Image Helpers
-
-    private var artistImageURL: URL? {
-        authManager.provider.imageURL(
-            for: artistItem,
-            type: .primary,
-            maxSize: CGSize(width: 400, height: 400)
-        )
     }
 
     private func albumImageURL(for itemId: ItemID) -> URL? {

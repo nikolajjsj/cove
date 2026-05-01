@@ -11,15 +11,33 @@ struct GenreListView: View {
 
     var body: some View {
         Group {
-            mainContent
+            GenreListContent(loader: loader)
         }
         .task(id: library?.id) { await loadGenres() }
     }
 
-    // MARK: - Main Content
+    // MARK: - Data Loading
 
-    @ViewBuilder
-    private var mainContent: some View {
+    private func loadGenres() async {
+        guard let library else {
+            loader.fail("No music library available.")
+            return
+        }
+
+        let provider = authManager.provider
+
+        await loader.load {
+            try await provider.genres(in: library)
+        }
+    }
+}
+
+// MARK: - Main Content
+
+private struct GenreListContent: View {
+    let loader: CollectionLoader<MediaItem>
+
+    var body: some View {
         switch loader.phase {
         case .loading:
             ProgressView("Loading genres…")
@@ -43,21 +61,6 @@ struct GenreListView: View {
                 }
             }
             .listStyle(.plain)
-        }
-    }
-
-    // MARK: - Data Loading
-
-    private func loadGenres() async {
-        guard let library else {
-            loader.fail("No music library available.")
-            return
-        }
-
-        let provider = authManager.provider
-
-        await loader.load {
-            try await provider.genres(in: library)
         }
     }
 }

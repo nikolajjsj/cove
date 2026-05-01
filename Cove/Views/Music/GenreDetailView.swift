@@ -23,70 +23,13 @@ struct GenreDetailView: View {
     }
 
     var body: some View {
-        Group {
-            mainContent
-        }
+        GenreDetailContent(
+            loader: loader,
+            onItemAppeared: { loader.onItemAppeared($0) }
+        )
         .navigationTitle(genreItem.title)
         .largeNavigationTitle()
         .task(id: genreItem.id) { await loadFirstPage() }
-    }
-
-    // MARK: - Main Content
-
-    @ViewBuilder
-    private var mainContent: some View {
-        switch loader.phase {
-        case .loading:
-            ProgressView("Loading albums…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .failed(let message):
-            ContentUnavailableView(
-                "Unable to Load Albums",
-                systemImage: "exclamationmark.triangle",
-                description: Text(message)
-            )
-        case .empty:
-            ContentUnavailableView(
-                "No Albums",
-                systemImage: "square.stack",
-                description: Text("No albums found in this genre.")
-            )
-        case .loaded:
-            scrollContent
-        }
-    }
-
-    private var scrollContent: some View {
-        ScrollView {
-            LazyVGrid(
-                columns: gridDensity.columns,
-                spacing: gridDensity.gridSpacing
-            ) {
-                ForEach(loader.items) { album in
-                    AlbumCard(
-                        item: album, subtitle: album.genres?.first, imageURL: imageURL(for: album)
-                    )
-                    .onAppear { loader.onItemAppeared(album) }
-                }
-            }
-            .padding()
-
-            if loader.isLoadingMore {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .padding(.vertical, 16)
-                    Spacer()
-                }
-            }
-
-            if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
-                Text("\(loader.totalCount) \(loader.totalCount == 1 ? "album" : "albums")")
-                    .font(.footnote)
-                    .foregroundStyle(.tertiary)
-                    .padding(.bottom, 24)
-            }
-        }
     }
 
     // MARK: - Data Loading
@@ -115,6 +58,79 @@ struct GenreDetailView: View {
     }
 
     // MARK: - Helpers
+
+    private func imageURL(for item: MediaItem) -> URL? {
+        authManager.provider.imageURL(
+            for: item,
+            type: .primary,
+            maxSize: CGSize(width: 300, height: 300)
+        )
+    }
+}
+
+// MARK: - Genre Detail Content
+
+private struct GenreDetailContent: View {
+    let loader: PagedCollectionLoader<MediaItem>
+    let onItemAppeared: (MediaItem) -> Void
+
+    @Environment(AuthManager.self) private var authManager
+    @Default(.gridDensity) private var gridDensity
+
+    var body: some View {
+        switch loader.phase {
+        case .loading:
+            ProgressView("Loading albums…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let message):
+            ContentUnavailableView(
+                "Unable to Load Albums",
+                systemImage: "exclamationmark.triangle",
+                description: Text(message)
+            )
+        case .empty:
+            ContentUnavailableView(
+                "No Albums",
+                systemImage: "square.stack",
+                description: Text("No albums found in this genre.")
+            )
+        case .loaded:
+            ScrollView {
+                LazyVGrid(
+                    columns: gridDensity.columns,
+                    spacing: gridDensity.gridSpacing
+                ) {
+                    ForEach(loader.items) { album in
+                        AlbumCard(
+                            item: album,
+                            subtitle: album.genres?.first,
+                            imageURL: imageURL(for: album)
+                        )
+                        .onAppear { onItemAppeared(album) }
+                    }
+                }
+                .padding()
+
+                if loader.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding(.vertical, 16)
+                        Spacer()
+                    }
+                }
+
+                if !loader.items.isEmpty && !loader.hasMore && loader.totalCount > 0 {
+                    Text(
+                        "\(loader.totalCount) \(loader.totalCount == 1 ? "album" : "albums")"
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+                    .padding(.bottom, 24)
+                }
+            }
+        }
+    }
 
     private func imageURL(for item: MediaItem) -> URL? {
         authManager.provider.imageURL(

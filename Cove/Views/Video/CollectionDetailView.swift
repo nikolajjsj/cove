@@ -30,7 +30,12 @@ struct CollectionDetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // MARK: - Hero Backdrop
 
-                heroSection
+                CollectionHeroSection(
+                    item: item,
+                    backdropURL: backdropURL,
+                    primaryURL: primaryURL,
+                    itemCount: loader.items.count
+                )
 
                 // MARK: - Content beneath the hero
 
@@ -42,7 +47,7 @@ struct CollectionDetailView: View {
                     }
 
                     // Metadata pills
-                    metadataPills
+                    CollectionMetadataPills(pills: buildMetadataPills())
                         .padding(.horizontal)
 
                     // External Links
@@ -73,7 +78,7 @@ struct CollectionDetailView: View {
                     }
 
                     // Items in collection
-                    collectionItemsSection
+                    CollectionItemsSection(loader: loader)
                         .padding(.horizontal)
 
                     // Cast & Crew (horizontal scroll — no padding)
@@ -106,32 +111,7 @@ struct CollectionDetailView: View {
         }
     }
 
-    // MARK: - Hero Section
-
-    private var heroSection: some View {
-        HeroSection(imageURL: backdropURL, fallbackImageURL: primaryURL, aspectRatio: 16.0 / 9.0) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(item.title)
-                    .font(.system(.title, design: .default, weight: .bold))
-                    .foregroundStyle(.primary)
-
-                if !loader.items.isEmpty {
-                    Text(
-                        "\(loader.items.count) \(loader.items.count == 1 ? "item" : "items")"
-                    )
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    // MARK: - Metadata Pills
-
-    @ViewBuilder
-    private var metadataPills: some View {
-        MetadataPillsView(buildMetadataPills())
-    }
+    // MARK: - Metadata Pills (builder)
 
     private func buildMetadataPills() -> [MetadataPill] {
         var pills: [MetadataPill] = []
@@ -151,10 +131,51 @@ struct CollectionDetailView: View {
         return pills
     }
 
-    // MARK: - Collection Items Grid
+}
 
-    @ViewBuilder
-    private var collectionItemsSection: some View {
+// MARK: - Hero Section
+
+private struct CollectionHeroSection: View {
+    let item: MediaItem
+    let backdropURL: URL?
+    let primaryURL: URL?
+    let itemCount: Int
+
+    var body: some View {
+        HeroSection(imageURL: backdropURL, fallbackImageURL: primaryURL, aspectRatio: 16.0 / 9.0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item.title)
+                    .font(.system(.title, design: .default, weight: .bold))
+                    .foregroundStyle(.primary)
+
+                if itemCount > 0 {
+                    Text("\(itemCount) \(itemCount == 1 ? "item" : "items")")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Metadata Pills
+
+private struct CollectionMetadataPills: View {
+    let pills: [MetadataPill]
+
+    var body: some View {
+        MetadataPillsView(pills)
+    }
+}
+
+// MARK: - Collection Items Grid
+
+private struct CollectionItemsSection: View {
+    let loader: CollectionLoader<MediaItem>
+
+    @Default(.gridDensity) private var gridDensity
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("In This Collection")
                 .font(.title3.weight(.bold))
@@ -193,7 +214,9 @@ struct CollectionDetailView: View {
             }
         }
     }
+}
 
+extension CollectionDetailView {
     // MARK: - Image Helpers
 
     private var backdropURL: URL? {

@@ -30,8 +30,8 @@ struct PersonDetailView: View {
             case .empty, .loaded:
                 ScrollView {
                     VStack(spacing: 24) {
-                        personHeader
-                        filmographySection
+                        PersonHeaderView(person: person)
+                        PersonFilmographySection(items: loader.items)
                     }
                     .padding(.bottom, 32)
                 }
@@ -45,10 +45,14 @@ struct PersonDetailView: View {
             }
         }
     }
+}
 
-    // MARK: - Header
+// MARK: - Person Header
 
-    private var personHeader: some View {
+private struct PersonHeaderView: View {
+    let person: Person
+
+    var body: some View {
         VStack(spacing: 16) {
             MediaImage(
                 url: person.imageURL,
@@ -73,12 +77,15 @@ struct PersonDetailView: View {
         .padding(.top, 16)
         .padding(.horizontal)
     }
+}
 
-    // MARK: - Filmography
+// MARK: - Filmography Section
 
-    @ViewBuilder
-    private var filmographySection: some View {
-        if loader.items.isEmpty {
+private struct PersonFilmographySection: View {
+    let items: [MediaItem]
+
+    var body: some View {
+        if items.isEmpty {
             ContentUnavailableView(
                 "No Items",
                 systemImage: "film",
@@ -89,14 +96,41 @@ struct PersonDetailView: View {
             let grouped = groupedFilmography
             LazyVStack(alignment: .leading, spacing: 32) {
                 ForEach(grouped, id: \.category) { section in
-                    filmographySectionView(for: section)
+                    FilmographySectionView(section: section)
                 }
             }
         }
     }
 
-    @ViewBuilder
-    private func filmographySectionView(for section: FilmographySection) -> some View {
+    private var groupedFilmography: [FilmographySection] {
+        let grouped = Dictionary(grouping: items) {
+            FilmographyCategory(mediaType: $0.mediaType)
+        }
+
+        return FilmographyCategory.displayOrder.compactMap { category in
+            guard let items = grouped[category], !items.isEmpty else { return nil }
+
+            let sorted = items.sorted { lhs, rhs in
+                // Sort by year descending, then title ascending
+                let lhsYear = lhs.productionYear ?? 0
+                let rhsYear = rhs.productionYear ?? 0
+                if lhsYear != rhsYear { return lhsYear > rhsYear }
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+
+            return FilmographySection(category: category, items: sorted)
+        }
+    }
+}
+
+// MARK: - Filmography Section View
+
+private struct FilmographySectionView: View {
+    let section: FilmographySection
+
+    @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Section header
             HStack(spacing: 8) {
@@ -118,7 +152,7 @@ struct PersonDetailView: View {
             LazyVStack(spacing: 0) {
                 ForEach(section.items.enumerated(), id: \.element.id) { index, item in
                     NavigationLink(value: item) {
-                        filmographyRow(item: item)
+                        FilmographyRowView(item: item, imageURL: posterURL(for: item))
                     }
                     .buttonStyle(.plain)
 
@@ -134,44 +168,6 @@ struct PersonDetailView: View {
         }
     }
 
-    private func filmographyRow(item: MediaItem) -> some View {
-        MediaItemRow(
-            imageURL: posterURL(for: item),
-            title: item.title,
-            subtitle: subtitle(for: item),
-            mediaType: item.mediaType,
-            metadata: metadataParts(for: item)
-        ) {
-            RatingBadge(rating: item.communityRating)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
-
-    // MARK: - Grouping
-
-    private var groupedFilmography: [FilmographySection] {
-        let grouped = Dictionary(grouping: loader.items) {
-            FilmographyCategory(mediaType: $0.mediaType)
-        }
-
-        return FilmographyCategory.displayOrder.compactMap { category in
-            guard let items = grouped[category], !items.isEmpty else { return nil }
-
-            let sorted = items.sorted { lhs, rhs in
-                // Sort by year descending, then title ascending
-                let lhsYear = lhs.productionYear ?? 0
-                let rhsYear = rhs.productionYear ?? 0
-                if lhsYear != rhsYear { return lhsYear > rhsYear }
-                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
-            }
-
-            return FilmographySection(category: category, items: sorted)
-        }
-    }
-
-    // MARK: - Helpers
-
     private func posterURL(for item: MediaItem) -> URL? {
         authManager.provider.imageURL(
             for: item,
@@ -179,8 +175,29 @@ struct PersonDetailView: View {
             maxSize: CGSize(width: 150, height: 225)
         )
     }
+}
 
-    private func subtitle(for item: MediaItem) -> String? {
+// MARK: - Filmography Row
+
+private struct FilmographyRowView: View {
+    let item: MediaItem
+    let imageURL: URL?
+
+    var body: some View {
+        MediaItemRow(
+            imageURL: imageURL,
+            title: item.title,
+            subtitle: subtitle,
+            mediaType: item.mediaType,
+            metadata: metadataParts
+        ) {
+            RatingBadge(rating: item.communityRating)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private var subtitle: String? {
         switch item.mediaType {
         case .episode:
             var parts: [String] = []
@@ -205,7 +222,7 @@ struct PersonDetailView: View {
         }
     }
 
-    private func metadataParts(for item: MediaItem) -> [String] {
+    private var metadataParts: [String] {
         var parts: [String] = []
 
         if item.mediaType != .series, let year = item.productionYear {

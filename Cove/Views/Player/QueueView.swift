@@ -26,7 +26,7 @@ struct QueueView: View {
 
         Group {
             if queue.tracks.isEmpty {
-                emptyState
+                QueueEmptyState()
             } else {
                 queueContent(player: player, queue: queue)
             }
@@ -43,14 +43,6 @@ struct QueueView: View {
         } message: {
             Text("This will remove all upcoming tracks from the queue.")
         }
-    }
-
-    // MARK: - Empty State
-
-    private var emptyState: some View {
-        ContentUnavailableView(
-            "Queue Empty", systemImage: "music.note.list",
-            description: Text("Add some tracks to get started."))
     }
 
     // MARK: - Queue Content
@@ -316,9 +308,17 @@ struct QueueView: View {
     // MARK: - Helpers
 
     private func artworkURL(for track: Track) -> URL? {
-        let itemId = track.albumId ?? track.id
-        return authManager.provider.imageURL(
-            for: itemId, type: .primary, maxSize: CGSize(width: 96, height: 96))
+        return authManager.provider.artworkURL(for: track, maxSize: CGSize(width: 96, height: 96))
+    }
+}
+
+// MARK: - Empty State
+
+private struct QueueEmptyState: View {
+    var body: some View {
+        ContentUnavailableView(
+            "Queue Empty", systemImage: "music.note.list",
+            description: Text("Add some tracks to get started."))
     }
 }
 
