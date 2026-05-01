@@ -48,7 +48,7 @@ enum JellyfinMapper {
         }
 
         // Map image tags so we know which image types actually exist on the server
-        var mappedImageTags: [ImageType: String]? = nil
+        var mappedImageTags: [ImageType: String]?
         if let dtoTags = dto.imageTags {
             var tags = [ImageType: String]()
             for (key, value) in dtoTags {
@@ -114,7 +114,7 @@ enum JellyfinMapper {
 
         // Construct image URL: /Items/{personId}/Images/Primary
         var imageURL: URL? = nil
-        if dto.primaryImageTag != nil {
+        if let tag = dto.primaryImageTag {
             var components = URLComponents(
                 url: baseURL.appendingPathComponent("Items/\(id)/Images/Primary"),
                 resolvingAgainstBaseURL: false
@@ -122,10 +122,8 @@ enum JellyfinMapper {
             components?.queryItems = [
                 URLQueryItem(name: "maxWidth", value: "200"),
                 URLQueryItem(name: "maxHeight", value: "200"),
+                URLQueryItem(name: "tag", value: tag),
             ]
-            if let tag = dto.primaryImageTag {
-                components?.queryItems?.append(URLQueryItem(name: "tag", value: tag))
-            }
             imageURL = components?.url
         }
 
@@ -217,7 +215,7 @@ enum JellyfinMapper {
             id: ArtistID(id),
             name: name,
             overview: dto.overview,
-            sortName: dto.name,
+            sortName: dto.sortName ?? dto.name,
             albumCount: nil,
             userData: userData,
             genres: dto.genres
@@ -237,7 +235,6 @@ enum JellyfinMapper {
             artistId: artistId,
             artistName: dto.albumArtist,
             year: dto.productionYear,
-            genre: dto.genres?.first,
             trackCount: nil,
             duration: duration,
             userData: userData,

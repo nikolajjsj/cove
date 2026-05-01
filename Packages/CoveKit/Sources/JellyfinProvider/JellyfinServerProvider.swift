@@ -296,8 +296,25 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
     public func search(query: String, mediaTypes: [MediaType]) async throws -> SearchResults {
         let (client, userId) = try authenticatedClient()
+        let includeItemTypes =
+            mediaTypes.isEmpty
+            ? nil
+            : mediaTypes.compactMap { type -> String? in
+                switch type {
+                case .movie: return "Movie"
+                case .series: return "Series"
+                case .episode: return "Episode"
+                case .album: return "MusicAlbum"
+                case .artist: return "MusicArtist"
+                case .track: return "Audio"
+                case .playlist: return "Playlist"
+                case .collection: return "BoxSet"
+                default: return nil
+                }
+            }
         let result = try await client.getItems(
             userId: userId,
+            includeItemTypes: includeItemTypes,
             searchTerm: query
         )
         let items = (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
@@ -354,10 +371,10 @@ public final class JellyfinServerProvider: MediaServerProvider,
         let (client, userId) = try authenticatedClient()
         let result = try await client.getItems(
             userId: userId,
-            parentId: artist.rawValue,
             includeItemTypes: ["MusicAlbum"],
             sortBy: "ProductionYear,SortName",
-            sortOrder: "Descending"
+            sortOrder: "Descending",
+            albumArtistIds: [artist.rawValue]
         )
         return (result.items ?? []).compactMap { JellyfinMapper.mapAlbum($0) }
     }
@@ -1036,9 +1053,4 @@ private final class ProviderState: @unchecked Sendable {
             state.connection = nil
         }
     }
-}
-
-/// Placeholder error for not-yet-implemented methods.
-private struct NotImplementedError: Error, CustomStringConvertible {
-    var description: String { "This feature is not yet implemented" }
 }

@@ -37,6 +37,7 @@ public struct BaseItemDto: Codable, Sendable {
     public let studios: [StudioDto]?
     public let taglines: [String]?
     public let originalTitle: String?
+    public let sortName: String?
     public let endDate: String?
     public let mediaSources: [MediaSourceInfo]?
     public let chapters: [ChapterInfoDto]?
@@ -76,6 +77,7 @@ public struct BaseItemDto: Codable, Sendable {
         studios: [StudioDto]? = nil,
         taglines: [String]? = nil,
         originalTitle: String? = nil,
+        sortName: String? = nil,
         endDate: String? = nil,
         mediaSources: [MediaSourceInfo]? = nil,
         chapters: [ChapterInfoDto]? = nil
@@ -114,6 +116,7 @@ public struct BaseItemDto: Codable, Sendable {
         self.studios = studios
         self.taglines = taglines
         self.originalTitle = originalTitle
+        self.sortName = sortName
         self.endDate = endDate
         self.mediaSources = mediaSources
         self.chapters = chapters
@@ -154,6 +157,7 @@ public struct BaseItemDto: Codable, Sendable {
         case studios = "Studios"
         case taglines = "Taglines"
         case originalTitle = "OriginalTitle"
+        case sortName = "SortName"
         case endDate = "EndDate"
         case mediaSources = "MediaSources"
         case chapters = "Chapters"

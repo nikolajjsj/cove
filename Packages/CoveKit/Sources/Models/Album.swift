@@ -6,12 +6,14 @@ public struct Album: Identifiable, Codable, Hashable, Sendable {
     public let artistId: ArtistID?
     public let artistName: String?
     public let year: Int?
-    public let genre: String?
+    public let genres: [String]?
+    public let dateAdded: Date?
     public let trackCount: Int?
     public let duration: TimeInterval?
     public let userData: UserData?
-    public let genres: [String]?
-    public let dateAdded: Date?
+
+    /// Convenience accessor for the first genre. Equivalent to `genres?.first`.
+    public var genre: String? { genres?.first }
 
     public init(
         id: AlbumID,
@@ -19,7 +21,6 @@ public struct Album: Identifiable, Codable, Hashable, Sendable {
         artistId: ArtistID? = nil,
         artistName: String? = nil,
         year: Int? = nil,
-        genre: String? = nil,
         trackCount: Int? = nil,
         duration: TimeInterval? = nil,
         userData: UserData? = nil,
@@ -31,7 +32,6 @@ public struct Album: Identifiable, Codable, Hashable, Sendable {
         self.artistId = artistId
         self.artistName = artistName
         self.year = year
-        self.genre = genre
         self.trackCount = trackCount
         self.duration = duration
         self.userData = userData

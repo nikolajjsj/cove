@@ -63,7 +63,7 @@ public final class JellyfinAPIClient: Sendable {
     /// Discover server info (pre-authentication).
     /// `GET /System/Info/Public`
     public func getPublicSystemInfo() async throws -> PublicSystemInfo {
-        let url = baseURL.appendingPathComponent("System/Info/Public")
+        let url = baseURL.appending(path: "System/Info/Public")
         logger.debug("Fetching public system info from \(url.absoluteString)")
         return try await httpClient.request(
             url: url,
@@ -79,7 +79,7 @@ public final class JellyfinAPIClient: Sendable {
     public func authenticateByName(username: String, password: String) async throws
         -> AuthenticationResult
     {
-        let url = baseURL.appendingPathComponent("Users/AuthenticateByName")
+        let url = baseURL.appending(path: "Users/AuthenticateByName")
         let body = AuthenticateByNameRequest(username: username, password: password)
         logger.debug("Authenticating user '\(username)' at \(url.absoluteString)")
 
@@ -109,7 +109,7 @@ public final class JellyfinAPIClient: Sendable {
     /// List virtual folders (libraries).
     /// `GET /Library/VirtualFolders`
     public func getVirtualFolders() async throws -> [VirtualFolderInfo] {
-        let url = baseURL.appendingPathComponent("Library/VirtualFolders")
+        let url = baseURL.appending(path: "Library/VirtualFolders")
         logger.debug("Fetching virtual folders")
         return try await httpClient.request(
             url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 30))
@@ -119,7 +119,7 @@ public final class JellyfinAPIClient: Sendable {
     /// Unlike `getVirtualFolders`, this endpoint works for non-admin users too.
     /// `GET /Users/{userId}/Views`
     public func getUserViews(userId: String) async throws -> ItemsResult {
-        let url = baseURL.appendingPathComponent("Users/\(userId)/Views")
+        let url = baseURL.appending(path: "Users/\(userId)/Views")
         logger.debug("Fetching user views for user \(userId)")
         return try await httpClient.request(
             url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 30))
@@ -149,9 +149,10 @@ public final class JellyfinAPIClient: Sendable {
         personIds: [String]? = nil,
         years: [Int]? = nil,
         minCommunityRating: Double? = nil,
+        albumArtistIds: [String]? = nil,
         cacheMaxAge: TimeInterval = 30
     ) async throws -> ItemsResult {
-        let url = baseURL.appendingPathComponent("Users/\(userId)/Items")
+        let url = baseURL.appending(path: "Users/\(userId)/Items")
 
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "Recursive", value: recursive ? "true" : "false"),
@@ -195,6 +196,10 @@ public final class JellyfinAPIClient: Sendable {
             queryItems.append(
                 URLQueryItem(name: "MinCommunityRating", value: minCommunityRating.formatted()))
         }
+        if let albumArtistIds, !albumArtistIds.isEmpty {
+            queryItems.append(
+                URLQueryItem(name: "AlbumArtistIds", value: albumArtistIds.joined(separator: ",")))
+        }
 
         logger.debug(
             "Fetching \(includeItemTypes?.joined(separator: ", ") ?? "items") for user \(userId)")
@@ -206,7 +211,7 @@ public final class JellyfinAPIClient: Sendable {
     /// Get a single item's full details.
     /// `GET /Users/{userId}/Items/{itemId}`
     public func getItem(userId: String, itemId: String) async throws -> BaseItemDto {
-        let url = baseURL.appendingPathComponent("Users/\(userId)/Items/\(itemId)")
+        let url = baseURL.appending(path: "Users/\(userId)/Items/\(itemId)")
         let fields = [
             "Overview", "Genres", "DateCreated", "UserData", "CommunityRating", "OfficialRating",
             "ProductionYear", "People", "RemoteTrailers", "ProviderIds", "Studios", "Taglines",
@@ -227,7 +232,7 @@ public final class JellyfinAPIClient: Sendable {
         tag: String? = nil
     ) -> URL? {
         var urlComponents = URLComponents(
-            url: baseURL.appendingPathComponent("Items/\(itemId)/Images/\(imageType)"),
+            url: baseURL.appending(path: "Items/\(itemId)/Images/\(imageType)"),
             resolvingAgainstBaseURL: false)
         var queryItems: [URLQueryItem] = []
         if let maxWidth {
@@ -248,7 +253,7 @@ public final class JellyfinAPIClient: Sendable {
         tag: String,
         maxWidth: Int = 400
     ) -> URL {
-        var url = baseURL.appendingPathComponent("Items/\(itemId)/Images/Chapter/\(chapterIndex)")
+        var url = baseURL.appending(path: "Items/\(itemId)/Images/Chapter/\(chapterIndex)")
         url.append(queryItems: [
             URLQueryItem(name: "tag", value: tag),
             URLQueryItem(name: "maxWidth", value: String(maxWidth)),
@@ -270,7 +275,7 @@ public final class JellyfinAPIClient: Sendable {
         startIndex: Int? = nil,
         searchTerm: String? = nil
     ) async throws -> ItemsResult {
-        let url = baseURL.appendingPathComponent("Artists/AlbumArtists")
+        let url = baseURL.appending(path: "Artists/AlbumArtists")
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "UserId", value: userId),
             URLQueryItem(name: "Fields", value: "Overview,Genres,DateCreated,UserData,SortName"),
@@ -302,7 +307,7 @@ public final class JellyfinAPIClient: Sendable {
         startIndex: Int? = nil,
         searchTerm: String? = nil
     ) async throws -> ItemsResult {
-        let url = baseURL.appendingPathComponent("Artists")
+        let url = baseURL.appending(path: "Artists")
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "UserId", value: userId),
             URLQueryItem(name: "Fields", value: "Overview,Genres,DateCreated,UserData,SortName"),
@@ -362,7 +367,7 @@ public final class JellyfinAPIClient: Sendable {
         guard let currentUserId = userId else { return nil }
         guard let token = accessToken else { return nil }
         var urlComponents = URLComponents(
-            url: baseURL.appendingPathComponent("Audio/\(itemId)/universal"),
+            url: baseURL.appending(path: "Audio/\(itemId)/universal"),
             resolvingAgainstBaseURL: false)
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "UserId", value: currentUserId),
@@ -388,13 +393,13 @@ public final class JellyfinAPIClient: Sendable {
         positionTicks: Int64,
         mediaSourceId: String? = nil
     ) async throws {
-        let url = baseURL.appendingPathComponent("Sessions/Playing")
+        let url = baseURL.appending(path: "Sessions/Playing")
         let body = PlaybackStartInfo(
             itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId)
         logger.debug("Reporting playback start for item \(itemId)")
         try await httpClient.request(
             url: url, method: .post, headers: authHeaders, body: body,
-            cachePolicy: .cacheFirst(maxAge: 30))
+            cachePolicy: .networkOnly)
     }
 
     /// Report playback progress.
@@ -405,14 +410,14 @@ public final class JellyfinAPIClient: Sendable {
         isPaused: Bool,
         mediaSourceId: String? = nil
     ) async throws {
-        let url = baseURL.appendingPathComponent("Sessions/Playing/Progress")
+        let url = baseURL.appending(path: "Sessions/Playing/Progress")
         let body = PlaybackProgressInfo(
             itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId,
             isPaused: isPaused)
         logger.debug("Reporting playback progress for item \(itemId)")
         try await httpClient.request(
             url: url, method: .post, headers: authHeaders, body: body,
-            cachePolicy: .cacheFirst(maxAge: 30))
+            cachePolicy: .networkOnly)
     }
 
     /// Report playback stopped.
@@ -422,13 +427,13 @@ public final class JellyfinAPIClient: Sendable {
         positionTicks: Int64,
         mediaSourceId: String? = nil
     ) async throws {
-        let url = baseURL.appendingPathComponent("Sessions/Playing/Stopped")
+        let url = baseURL.appending(path: "Sessions/Playing/Stopped")
         let body = PlaybackStopInfo(
             itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId)
         logger.debug("Reporting playback stopped for item \(itemId)")
         try await httpClient.request(
             url: url, method: .post, headers: authHeaders, body: body,
-            cachePolicy: .cacheFirst(maxAge: 30))
+            cachePolicy: .networkOnly)
     }
 
     // MARK: - Video Playback Info
@@ -440,7 +445,7 @@ public final class JellyfinAPIClient: Sendable {
         itemId: String,
         profile: DeviceProfile? = nil
     ) async throws -> PlaybackInfoResponse {
-        let url = baseURL.appendingPathComponent("Items/\(itemId)/PlaybackInfo")
+        let url = baseURL.appending(path: "Items/\(itemId)/PlaybackInfo")
         let body = PlaybackInfoRequest(
             userId: userId,
             deviceProfile: profile,
@@ -464,7 +469,7 @@ public final class JellyfinAPIClient: Sendable {
         itemId: String,
         profile: DeviceProfile
     ) async throws -> PlaybackInfoResponse {
-        let url = baseURL.appendingPathComponent("Items/\(itemId)/PlaybackInfo")
+        let url = baseURL.appending(path: "Items/\(itemId)/PlaybackInfo")
         let body = PlaybackInfoRequest(
             userId: userId,
             deviceProfile: profile,
@@ -489,7 +494,7 @@ public final class JellyfinAPIClient: Sendable {
     ) -> URL? {
         guard let token = accessToken else { return nil }
         var urlComponents = URLComponents(
-            url: baseURL.appendingPathComponent("Videos/\(itemId)/stream"),
+            url: baseURL.appending(path: "Videos/\(itemId)/stream"),
             resolvingAgainstBaseURL: false)
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "static", value: staticStream ? "true" : "false"),
@@ -524,8 +529,9 @@ public final class JellyfinAPIClient: Sendable {
     ) -> URL? {
         guard let token = accessToken else { return nil }
         var urlComponents = URLComponents(
-            url: baseURL.appendingPathComponent(
-                "Videos/\(itemId)/\(mediaSourceId)/Subtitles/\(subtitleIndex)/Stream.\(format)"),
+            url: baseURL.appending(
+                path:
+                    "Videos/\(itemId)/\(mediaSourceId)/Subtitles/\(subtitleIndex)/Stream.\(format)"),
             resolvingAgainstBaseURL: false)
         urlComponents?.queryItems = [URLQueryItem(name: "api_key", value: token)]
         return urlComponents?.url
@@ -547,13 +553,7 @@ public final class JellyfinAPIClient: Sendable {
         isForced: Bool = false,
         data: Data
     ) async throws {
-        guard
-            let url = URL(
-                string: "Videos/\(itemId)/Subtitles",
-                relativeTo: baseURL.appendingPathComponent("/"))
-        else {
-            throw AppError.serverError(statusCode: 0, message: "Invalid URL")
-        }
+        let url = baseURL.appending(path: "Videos/\(itemId)/Subtitles")
 
         let base64Data = data.base64EncodedString()
         let body = UploadSubtitleRequest(
@@ -566,7 +566,7 @@ public final class JellyfinAPIClient: Sendable {
         let bodyData = try Self.pascalCaseEncoder.encode(body)
 
         try await httpClient.request(
-            url: url.absoluteURL,
+            url: url,
             method: .post,
             headers: authHeaders,
             rawBody: bodyData
@@ -580,7 +580,7 @@ public final class JellyfinAPIClient: Sendable {
     public func downloadURL(itemId: String) -> URL? {
         guard let token = accessToken else { return nil }
         var urlComponents = URLComponents(
-            url: baseURL.appendingPathComponent("Items/\(itemId)/Download"),
+            url: baseURL.appending(path: "Items/\(itemId)/Download"),
             resolvingAgainstBaseURL: false)
         urlComponents?.queryItems = [
             URLQueryItem(name: "api_key", value: token)
@@ -599,7 +599,7 @@ public final class JellyfinAPIClient: Sendable {
     ) -> URL? {
         guard let token = accessToken else { return nil }
         var urlComponents = URLComponents(
-            url: baseURL.appendingPathComponent("Videos/\(itemId)/stream"),
+            url: baseURL.appending(path: "Videos/\(itemId)/stream"),
             resolvingAgainstBaseURL: false)
         urlComponents?.queryItems = [
             URLQueryItem(name: "static", value: "false"),
@@ -623,7 +623,7 @@ public final class JellyfinAPIClient: Sendable {
             "People",
         ]
     ) async throws -> ItemsResult {
-        let url = baseURL.appendingPathComponent("Items/\(itemId)/Similar")
+        let url = baseURL.appending(path: "Items/\(itemId)/Similar")
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "UserId", value: userId),
             URLQueryItem(name: "Fields", value: fields.joined(separator: ",")),
@@ -651,7 +651,7 @@ public final class JellyfinAPIClient: Sendable {
             "ProductionYear",
         ]
     ) async throws -> ItemsResult {
-        let url = baseURL.appendingPathComponent("Users/\(userId)/Suggestions")
+        let url = baseURL.appending(path: "Users/\(userId)/Suggestions")
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "Fields", value: fields.joined(separator: ","))
         ]
@@ -679,7 +679,7 @@ public final class JellyfinAPIClient: Sendable {
         itemId: String,
         userId: String
     ) async throws -> [BaseItemDto] {
-        let url = baseURL.appendingPathComponent("Users/\(userId)/Items/\(itemId)/SpecialFeatures")
+        let url = baseURL.appending(path: "Users/\(userId)/Items/\(itemId)/SpecialFeatures")
         logger.debug("Fetching special features for \(itemId)")
         return try await httpClient.request(
             url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 120))
@@ -693,7 +693,7 @@ public final class JellyfinAPIClient: Sendable {
         itemId: String,
         userId: String
     ) async throws -> [BaseItemDto] {
-        let url = baseURL.appendingPathComponent("Users/\(userId)/Items/\(itemId)/LocalTrailers")
+        let url = baseURL.appending(path: "Users/\(userId)/Items/\(itemId)/LocalTrailers")
         logger.debug("Fetching local trailers for \(itemId)")
         return try await httpClient.request(
             url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 120))
@@ -704,7 +704,7 @@ public final class JellyfinAPIClient: Sendable {
     /// Get seasons for a series.
     /// `GET /Shows/{seriesId}/Seasons`
     public func getSeasons(seriesId: String, userId: String) async throws -> ItemsResult {
-        let url = baseURL.appendingPathComponent("Shows/\(seriesId)/Seasons")
+        let url = baseURL.appending(path: "Shows/\(seriesId)/Seasons")
         let queryItems: [URLQueryItem] = [
             URLQueryItem(name: "UserId", value: userId),
             URLQueryItem(name: "Fields", value: "Overview,UserData,ChildCount"),
@@ -723,7 +723,7 @@ public final class JellyfinAPIClient: Sendable {
     ) async throws
         -> ItemsResult
     {
-        let url = baseURL.appendingPathComponent("Shows/\(seriesId)/Episodes")
+        let url = baseURL.appending(path: "Shows/\(seriesId)/Episodes")
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "UserId", value: userId),
             URLQueryItem(name: "Fields", value: "Overview,UserData,DateCreated,MediaSources"),
@@ -748,7 +748,7 @@ public final class JellyfinAPIClient: Sendable {
     public func getNextUp(userId: String, seriesId: String? = nil, limit: Int = 20) async throws
         -> ItemsResult
     {
-        let url = baseURL.appendingPathComponent("Shows/NextUp")
+        let url = baseURL.appending(path: "Shows/NextUp")
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "UserId", value: userId),
             URLQueryItem(name: "Fields", value: "Overview,UserData,DateCreated"),
@@ -768,7 +768,7 @@ public final class JellyfinAPIClient: Sendable {
     public func getResumeItems(userId: String, mediaTypes: [String]? = nil, limit: Int = 12)
         async throws -> ItemsResult
     {
-        let url = baseURL.appendingPathComponent("Users/\(userId)/Items/Resume")
+        let url = baseURL.appending(path: "Users/\(userId)/Items/Resume")
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "Fields", value: "Overview,UserData,DateCreated"),
             URLQueryItem(name: "Limit", value: String(limit)),
@@ -788,7 +788,7 @@ public final class JellyfinAPIClient: Sendable {
     /// Fetch lyrics for a track.
     /// Returns the raw lyrics response from `/Audio/{itemId}/Lyrics`.
     public func getLyrics(itemId: String) async throws -> LyricsResponse {
-        let url = baseURL.appendingPathComponent("Audio/\(itemId)/Lyrics")
+        let url = baseURL.appending(path: "Audio/\(itemId)/Lyrics")
         logger.debug("Fetching lyrics for item \(itemId)")
         return try await httpClient.request(
             url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 120))
@@ -796,7 +796,7 @@ public final class JellyfinAPIClient: Sendable {
 
     /// Mark an item as a favorite.
     public func addFavorite(userId: String, itemId: String) async throws {
-        let url = baseURL.appendingPathComponent("Users/\(userId)/FavoriteItems/\(itemId)")
+        let url = baseURL.appending(path: "Users/\(userId)/FavoriteItems/\(itemId)")
         logger.debug("Adding favorite for item \(itemId)")
         try await httpClient.request(
             url: url, method: .post, headers: authHeaders, cachePolicy: .networkOnly)
@@ -806,7 +806,7 @@ public final class JellyfinAPIClient: Sendable {
 
     /// Remove an item from favorites.
     public func removeFavorite(userId: String, itemId: String) async throws {
-        let url = baseURL.appendingPathComponent("Users/\(userId)/FavoriteItems/\(itemId)")
+        let url = baseURL.appending(path: "Users/\(userId)/FavoriteItems/\(itemId)")
         logger.debug("Removing favorite for item \(itemId)")
         try await httpClient.request(
             url: url, method: .delete, headers: authHeaders, cachePolicy: .networkOnly)
@@ -818,7 +818,7 @@ public final class JellyfinAPIClient: Sendable {
 
     /// Mark an item as played.
     public func markPlayed(userId: String, itemId: String) async throws {
-        let url = baseURL.appendingPathComponent("Users/\(userId)/PlayedItems/\(itemId)")
+        let url = baseURL.appending(path: "Users/\(userId)/PlayedItems/\(itemId)")
         logger.debug("Marking item \(itemId) as played")
         try await httpClient.request(
             url: url, method: .post, headers: authHeaders, cachePolicy: .networkOnly)
@@ -830,7 +830,7 @@ public final class JellyfinAPIClient: Sendable {
 
     /// Mark an item as unplayed.
     public func markUnplayed(userId: String, itemId: String) async throws {
-        let url = baseURL.appendingPathComponent("Users/\(userId)/PlayedItems/\(itemId)")
+        let url = baseURL.appending(path: "Users/\(userId)/PlayedItems/\(itemId)")
         logger.debug("Marking item \(itemId) as unplayed")
         try await httpClient.request(
             url: url, method: .delete, headers: authHeaders, cachePolicy: .networkOnly)
@@ -846,7 +846,7 @@ public final class JellyfinAPIClient: Sendable {
         userId: String,
         limit: Int = 50
     ) async throws -> ItemsResult {
-        let url = baseURL.appendingPathComponent("Items/\(itemId)/InstantMix")
+        let url = baseURL.appending(path: "Items/\(itemId)/InstantMix")
         let queryItems = [
             URLQueryItem(name: "UserId", value: userId),
             URLQueryItem(name: "Limit", value: String(limit)),
@@ -867,7 +867,7 @@ public final class JellyfinAPIClient: Sendable {
         name: String,
         trackIds: [String] = []
     ) async throws -> CreatePlaylistResponse {
-        let url = baseURL.appendingPathComponent("Playlists")
+        let url = baseURL.appending(path: "Playlists")
         let body = CreatePlaylistRequest(
             name: name,
             userId: userId,
@@ -886,7 +886,7 @@ public final class JellyfinAPIClient: Sendable {
         playlistId: String,
         trackIds: [String]
     ) async throws {
-        let url = baseURL.appendingPathComponent("Playlists/\(playlistId)/Items")
+        let url = baseURL.appending(path: "Playlists/\(playlistId)/Items")
         let queryItems = [
             URLQueryItem(name: "Ids", value: trackIds.joined(separator: ","))
         ]
@@ -902,7 +902,7 @@ public final class JellyfinAPIClient: Sendable {
         playlistId: String,
         entryIds: [String]
     ) async throws {
-        let url = baseURL.appendingPathComponent("Playlists/\(playlistId)/Items")
+        let url = baseURL.appending(path: "Playlists/\(playlistId)/Items")
         let queryItems = [
             URLQueryItem(name: "EntryIds", value: entryIds.joined(separator: ","))
         ]
@@ -918,7 +918,7 @@ public final class JellyfinAPIClient: Sendable {
         playlistId: String,
         userId: String
     ) async throws -> ItemsResult {
-        let url = baseURL.appendingPathComponent("Playlists/\(playlistId)/Items")
+        let url = baseURL.appending(path: "Playlists/\(playlistId)/Items")
         let queryItems = [
             URLQueryItem(name: "UserId", value: userId),
             URLQueryItem(
@@ -932,7 +932,7 @@ public final class JellyfinAPIClient: Sendable {
 
     /// Update an item (e.g., rename a playlist).
     public func updateItem(itemId: String, name: String) async throws {
-        let url = baseURL.appendingPathComponent("Items/\(itemId)")
+        let url = baseURL.appending(path: "Items/\(itemId)")
         let body = UpdateItemRequest(name: name)
         logger.debug("Updating item \(itemId) name to '\(name)'")
         try await httpClient.request(
@@ -943,7 +943,7 @@ public final class JellyfinAPIClient: Sendable {
 
     /// Delete an item (e.g., delete a playlist).
     public func deleteItem(itemId: String) async throws {
-        let url = baseURL.appendingPathComponent("Items/\(itemId)")
+        let url = baseURL.appending(path: "Items/\(itemId)")
         logger.debug("Deleting item \(itemId)")
         try await httpClient.request(
             url: url, method: .delete, headers: authHeaders, cachePolicy: .networkOnly)
@@ -958,7 +958,7 @@ public final class JellyfinAPIClient: Sendable {
         itemId: String,
         includeSegmentTypes: [String] = ["Intro", "Outro", "Recap", "Commercial", "Preview"]
     ) async throws -> MediaSegmentQueryResult {
-        let url = baseURL.appendingPathComponent("MediaSegments/\(itemId)")
+        let url = baseURL.appending(path: "MediaSegments/\(itemId)")
         let queryItems = [
             URLQueryItem(
                 name: "IncludeSegmentTypes", value: includeSegmentTypes.joined(separator: ","))
@@ -975,7 +975,7 @@ public final class JellyfinAPIClient: Sendable {
     public func getIntroSkipperSegments(itemId: String) async throws -> [String:
         IntroSkipperSegment]
     {
-        let url = baseURL.appendingPathComponent("Episode/\(itemId)/IntroSkipperSegments")
+        let url = baseURL.appending(path: "Episode/\(itemId)/IntroSkipperSegments")
         logger.debug("Fetching Intro Skipper segments for item \(itemId)")
 
         // Fetch raw data first so we can log it for diagnostics
@@ -995,7 +995,7 @@ public final class JellyfinAPIClient: Sendable {
     /// Fetch intro timestamps from the older Intro Skipper plugin endpoint.
     /// `GET /Episode/{itemId}/IntroTimestamps`
     public func getIntroTimestamps(itemId: String) async throws -> IntroSkipperSegment {
-        let url = baseURL.appendingPathComponent("Episode/\(itemId)/IntroTimestamps")
+        let url = baseURL.appending(path: "Episode/\(itemId)/IntroTimestamps")
         logger.debug("Fetching Intro Timestamps for item \(itemId)")
 
         let data: Data = try await httpClient.requestData(

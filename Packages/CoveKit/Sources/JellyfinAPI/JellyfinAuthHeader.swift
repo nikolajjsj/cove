@@ -12,7 +12,7 @@ public enum JellyfinAuthHeader {
         #elseif os(tvOS)
             "Apple TV"
         #elseif os(macOS)
-            Host.current().localizedName ?? "Mac"
+            ProcessInfo.processInfo.hostName
         #else
             "Apple Device"
         #endif
