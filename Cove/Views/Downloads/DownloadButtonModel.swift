@@ -73,25 +73,24 @@ final class DownloadButtonModel {
     }
 
     func startDownload() async {
-        isProcessing = true
-        defer { isProcessing = false }
-
         do {
-            if let onDownload {
-                try await onDownload()
-                await refreshState()
-            } else {
-                let url = try await downloadURLResolver()
-                let result = try await downloadManager.enqueueDownload(
-                    itemId: item.id,
-                    serverId: serverId,
-                    title: item.title,
-                    mediaType: item.mediaType,
-                    remoteURL: url,
-                    parentId: nil,
-                    artworkURL: nil
-                )
-                downloadItem = result
+            try await withProcessing {
+                if let onDownload {
+                    try await onDownload()
+                    await refreshState()
+                } else {
+                    let url = try await downloadURLResolver()
+                    let result = try await downloadManager.enqueueDownload(
+                        itemId: item.id,
+                        serverId: serverId,
+                        title: item.title,
+                        mediaType: item.mediaType,
+                        remoteURL: url,
+                        parentId: nil,
+                        artworkURL: nil
+                    )
+                    downloadItem = result
+                }
             }
         } catch {
             setError("Failed to start download: \(error.localizedDescription)")
@@ -100,12 +99,11 @@ final class DownloadButtonModel {
 
     func pauseDownload() async {
         guard let id = downloadItem?.id else { return }
-        isProcessing = true
-        defer { isProcessing = false }
-
         do {
-            try await downloadManager.pauseDownload(id: id)
-            await refreshState()
+            try await withProcessing {
+                try await downloadManager.pauseDownload(id: id)
+                await refreshState()
+            }
         } catch {
             setError("Failed to pause: \(error.localizedDescription)")
         }
@@ -113,12 +111,11 @@ final class DownloadButtonModel {
 
     func resumeDownload() async {
         guard let id = downloadItem?.id else { return }
-        isProcessing = true
-        defer { isProcessing = false }
-
         do {
-            try await downloadManager.resumeDownload(id: id)
-            await refreshState()
+            try await withProcessing {
+                try await downloadManager.resumeDownload(id: id)
+                await refreshState()
+            }
         } catch {
             setError("Failed to resume: \(error.localizedDescription)")
         }
@@ -126,12 +123,11 @@ final class DownloadButtonModel {
 
     func retryDownload() async {
         guard let id = downloadItem?.id else { return }
-        isProcessing = true
-        defer { isProcessing = false }
-
         do {
-            try await downloadManager.retryDownload(id: id)
-            await refreshState()
+            try await withProcessing {
+                try await downloadManager.retryDownload(id: id)
+                await refreshState()
+            }
         } catch {
             setError("Failed to retry: \(error.localizedDescription)")
         }
@@ -139,15 +135,22 @@ final class DownloadButtonModel {
 
     func removeDownload() async {
         guard let id = downloadItem?.id else { return }
-        isProcessing = true
-        defer { isProcessing = false }
-
         do {
-            try await downloadManager.deleteDownload(id: id)
-            downloadItem = nil
+            try await withProcessing {
+                try await downloadManager.deleteDownload(id: id)
+                downloadItem = nil
+            }
         } catch {
             setError("Failed to remove: \(error.localizedDescription)")
         }
+    }
+
+    /// Runs `work` between setting `isProcessing = true` and `false`.
+    /// Errors are propagated to the caller.
+    private func withProcessing<T>(_ work: () async throws -> T) async rethrows -> T {
+        isProcessing = true
+        defer { isProcessing = false }
+        return try await work()
     }
 
     private func setError(_ message: String) {

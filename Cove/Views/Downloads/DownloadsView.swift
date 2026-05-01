@@ -26,7 +26,7 @@ struct DownloadsView: View {
                     ProgressView("Loading downloads…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if viewModel.isEmpty {
-                    emptyState
+                    DownloadsEmptyState()
                 } else {
                     downloadsContent(viewModel)
                 }
@@ -76,7 +76,11 @@ struct DownloadsView: View {
         } message: {
             Text("All downloaded media will be removed from your device. This cannot be undone.")
         }
-        .alert("Delete Download?", isPresented: showDeleteItemBinding) {
+        .alert(
+            "Delete Download?",
+            isPresented: Binding(
+                get: { itemToDelete != nil }, set: { if !$0 { itemToDelete = nil } })
+        ) {
             Button("Cancel", role: .cancel) { itemToDelete = nil }
             Button("Delete", role: .destructive) {
                 if let item = itemToDelete {
@@ -91,7 +95,8 @@ struct DownloadsView: View {
         }
         .confirmationDialog(
             groupToDelete.map { "Remove \($0.title)?" } ?? "Remove?",
-            isPresented: showDeleteGroupBinding,
+            isPresented: Binding(
+                get: { groupToDelete != nil }, set: { if !$0 { groupToDelete = nil } }),
             titleVisibility: .visible
         ) {
             Button("Remove", role: .destructive) {
@@ -103,14 +108,15 @@ struct DownloadsView: View {
             Button("Cancel", role: .cancel) { groupToDelete = nil }
         } message: {
             if let group = groupToDelete {
-                let sizeStr = ByteCountFormatter.string(
-                    fromByteCount: group.size, countStyle: .file)
-                Text("All \(group.count) items (\(sizeStr)) will be removed from your device.")
+                Text(
+                    "All \(group.count) items (\(group.size.formatted(.byteCount(style: .file)))) will be removed from your device."
+                )
             }
         }
         .confirmationDialog(
             seriesToDelete.map { "Remove \($0.title)?" } ?? "Remove?",
-            isPresented: showDeleteSeriesBinding,
+            isPresented: Binding(
+                get: { seriesToDelete != nil }, set: { if !$0 { seriesToDelete = nil } }),
             titleVisibility: .visible
         ) {
             Button("Remove All Episodes", role: .destructive) {
@@ -122,16 +128,15 @@ struct DownloadsView: View {
             Button("Cancel", role: .cancel) { seriesToDelete = nil }
         } message: {
             if let series = seriesToDelete {
-                let sizeStr = ByteCountFormatter.string(
-                    fromByteCount: series.size, countStyle: .file)
                 Text(
-                    "All \(series.count) episode\(series.count == 1 ? "" : "s") (\(sizeStr)) will be removed from your device."
+                    "All \(series.count) episode\(series.count == 1 ? "" : "s") (\(series.size.formatted(.byteCount(style: .file)))) will be removed from your device."
                 )
             }
         }
         .confirmationDialog(
             albumToDelete.map { "Remove \($0.title)?" } ?? "Remove?",
-            isPresented: showDeleteAlbumBinding,
+            isPresented: Binding(
+                get: { albumToDelete != nil }, set: { if !$0 { albumToDelete = nil } }),
             titleVisibility: .visible
         ) {
             Button("Remove All Tracks", role: .destructive) {
@@ -143,10 +148,8 @@ struct DownloadsView: View {
             Button("Cancel", role: .cancel) { albumToDelete = nil }
         } message: {
             if let album = albumToDelete {
-                let sizeStr = ByteCountFormatter.string(
-                    fromByteCount: album.size, countStyle: .file)
                 Text(
-                    "All \(album.count) track\(album.count == 1 ? "" : "s") (\(sizeStr)) will be removed from your device."
+                    "All \(album.count) track\(album.count == 1 ? "" : "s") (\(album.size.formatted(.byteCount(style: .file)))) will be removed from your device."
                 )
             }
         }
@@ -178,16 +181,6 @@ struct DownloadsView: View {
         .onDisappear {
             viewModel?.stopObserving()
         }
-    }
-
-    // MARK: - Empty State
-
-    private var emptyState: some View {
-        ContentUnavailableView(
-            "No Downloads",
-            systemImage: "arrow.down.circle",
-            description: Text("Download music, movies, and episodes to enjoy offline.")
-        )
     }
 
     // MARK: - Main Content
@@ -299,9 +292,9 @@ struct DownloadsView: View {
                         Button(role: .destructive) {
                             itemToDelete = item
                         } label: {
-                            let size = ByteCountFormatter.string(
-                                fromByteCount: item.totalBytes, countStyle: .file)
-                            Label("Remove Download (\(size))", systemImage: "trash")
+                            Label(
+                                "Remove Download (\(item.totalBytes.formatted(.byteCount(style: .file))))",
+                                systemImage: "trash")
                         }
                     }
                 }
@@ -547,32 +540,16 @@ struct DownloadsView: View {
     }
 
     // MARK: - Bindings
+}
 
-    private var showDeleteItemBinding: Binding<Bool> {
-        Binding(
-            get: { itemToDelete != nil },
-            set: { if !$0 { itemToDelete = nil } }
-        )
-    }
+// MARK: - Empty State
 
-    private var showDeleteGroupBinding: Binding<Bool> {
-        Binding(
-            get: { groupToDelete != nil },
-            set: { if !$0 { groupToDelete = nil } }
-        )
-    }
-
-    private var showDeleteSeriesBinding: Binding<Bool> {
-        Binding(
-            get: { seriesToDelete != nil },
-            set: { if !$0 { seriesToDelete = nil } }
-        )
-    }
-
-    private var showDeleteAlbumBinding: Binding<Bool> {
-        Binding(
-            get: { albumToDelete != nil },
-            set: { if !$0 { albumToDelete = nil } }
+private struct DownloadsEmptyState: View {
+    var body: some View {
+        ContentUnavailableView(
+            "No Downloads",
+            systemImage: "arrow.down.circle",
+            description: Text("Download music, movies, and episodes to enjoy offline.")
         )
     }
 }

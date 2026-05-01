@@ -44,7 +44,7 @@ struct DownloadButton: View {
         Button {
             Task { await model.handleTap() }
         } label: {
-            buttonLabel
+            DownloadButtonLabel(state: model.state, progress: model.progress)
         }
         .disabled(model.isProcessing)
         .confirmationDialog(
@@ -79,11 +79,17 @@ struct DownloadButton: View {
         }
     }
 
-    // MARK: - Button Label
+}
 
-    @ViewBuilder
-    private var buttonLabel: some View {
-        switch model.state {
+// MARK: - Download Button Label
+
+/// The icon that reflects the current download state.
+private struct DownloadButtonLabel: View {
+    let state: DownloadState?
+    let progress: Double
+
+    var body: some View {
+        switch state {
         case .none:
             // Not downloaded — show download arrow
             Image(systemName: "arrow.down.circle")
@@ -105,7 +111,7 @@ struct DownloadButton: View {
                     .stroke(.quaternary, lineWidth: 2.5)
 
                 Circle()
-                    .trim(from: 0, to: model.progress)
+                    .trim(from: 0, to: progress)
                     .stroke(.tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
 
