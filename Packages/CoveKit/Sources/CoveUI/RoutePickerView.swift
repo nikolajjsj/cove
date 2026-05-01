@@ -13,7 +13,7 @@
         public func makeUIView(context: Context) -> AVRoutePickerView {
             let picker = AVRoutePickerView()
             picker.prioritizesVideoDevices = false
-            picker.tintColor = .label
+            picker.tintColor = .secondaryLabel
             picker.activeTintColor = .tintColor
             return picker
         }
