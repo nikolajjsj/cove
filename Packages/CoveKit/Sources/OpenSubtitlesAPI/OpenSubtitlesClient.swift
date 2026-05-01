@@ -8,6 +8,7 @@ public final class OpenSubtitlesClient: Sendable {
     private let apiKey: String?
     private let session: URLSession
     private let userAgent = "Cove v1.0"
+    private let decoder = JSONDecoder()
 
     public init(apiKey: String? = nil, session: URLSession = .shared) {
         self.apiKey = apiKey
@@ -61,7 +62,6 @@ public final class OpenSubtitlesClient: Sendable {
         let (data, response) = try await performRequest(request)
         try validateResponse(response)
 
-        let decoder = JSONDecoder()
         return try decoder.decode(SubtitleSearchResponse.self, from: data)
     }
 
@@ -88,7 +88,6 @@ public final class OpenSubtitlesClient: Sendable {
         let (data, response) = try await performRequest(request)
         try validateResponse(response)
 
-        let decoder = JSONDecoder()
         return try decoder.decode(SubtitleDownloadResponse.self, from: data)
     }
 
