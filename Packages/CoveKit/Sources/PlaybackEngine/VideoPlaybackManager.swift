@@ -582,41 +582,45 @@ public final class VideoPlaybackManager {
     private func discoverMediaSelectionTracks(_ playerItem: AVPlayerItem) {
         let asset = playerItem.asset
 
-        // Store the legible selection group for reference, but keep the
-        // authoritative subtitle list from the server metadata.  AVPlayer
-        // often discovers only a subset (e.g. HLS-embedded tracks) which
-        // would hide external/sidecar subtitles the server knows about.
-        if let legibleGroup = asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
-            self.legibleSelectionGroup = legibleGroup
-            logger.info(
-                "Discovered legible group with \(legibleGroup.options.count) option(s) from AVAsset (keeping server subtitle list)"
-            )
-        }
+        Task { [weak self] in
+            guard let self else { return }
 
-        // Discover audio tracks
-        if let audibleGroup = asset.mediaSelectionGroup(forMediaCharacteristic: .audible) {
-            self.audibleSelectionGroup = audibleGroup
-
-            let discovered = audibleGroup.options.enumerated().map { index, option in
-                AudioTrack(
-                    id: index,
-                    title: option.displayName,
-                    language: option.locale?.languageCode,
-                    codec: nil,
-                    channels: nil,
-                    isDefault: option == audibleGroup.defaultOption
+            // Store the legible selection group for reference, but keep the
+            // authoritative subtitle list from the server metadata.  AVPlayer
+            // often discovers only a subset (e.g. HLS-embedded tracks) which
+            // would hide external/sidecar subtitles the server knows about.
+            if let legibleGroup = try? await asset.loadMediaSelectionGroup(for: .legible) {
+                self.legibleSelectionGroup = legibleGroup
+                self.logger.info(
+                    "Discovered legible group with \(legibleGroup.options.count) option(s) from AVAsset (keeping server subtitle list)"
                 )
             }
 
-            if !discovered.isEmpty {
-                audioTracks = discovered
+            // Discover audio tracks
+            if let audibleGroup = try? await asset.loadMediaSelectionGroup(for: .audible) {
+                self.audibleSelectionGroup = audibleGroup
 
-                // Set the currently selected audio track to the default
-                if let defaultIdx = discovered.firstIndex(where: { $0.isDefault }) {
-                    selectedAudioTrackIndex = defaultIdx
+                let discovered = audibleGroup.options.enumerated().map { index, option in
+                    AudioTrack(
+                        id: index,
+                        title: option.displayName,
+                        language: option.locale?.language.languageCode?.identifier,
+                        codec: nil,
+                        channels: nil,
+                        isDefault: option == audibleGroup.defaultOption
+                    )
                 }
 
-                logger.info("Discovered \(discovered.count) audio track(s) from AVAsset")
+                if !discovered.isEmpty {
+                    self.audioTracks = discovered
+
+                    // Set the currently selected audio track to the default
+                    if let defaultIdx = discovered.firstIndex(where: { $0.isDefault }) {
+                        self.selectedAudioTrackIndex = defaultIdx
+                    }
+
+                    self.logger.info("Discovered \(discovered.count) audio track(s) from AVAsset")
+                }
             }
         }
     }
@@ -888,7 +892,7 @@ public final class VideoPlaybackManager {
                 let size = image.size
             #endif
 
-            let artwork = MPMediaItemArtwork(image: image)
+            let artwork = MPMediaItemArtwork(boundsSize: size) { _ in image }
             guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
             info[MPMediaItemPropertyArtwork] = artwork
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info

@@ -73,7 +73,7 @@ public final class AudioPlaybackManager {
     @ObservationIgnored private var sleepTimerTask: Task<Void, Never>?
 
     /// Task listening for audio session interruption notifications.
-    @ObservationIgnored private nonisolated(unsafe) var interruptionTask: Task<Void, Never>?
+    @ObservationIgnored private var interruptionTask: Task<Void, Never>?
 
     /// Task that periodically reports playback progress to the server.
     @ObservationIgnored private var progressReportTask: Task<Void, Never>?
@@ -252,7 +252,7 @@ public final class AudioPlaybackManager {
         switch mode {
         case .minutes(let minutes):
             sleepTimerEndDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
-            sleepTimerTask = Task { [weak self] in
+            sleepTimerTask = Task { @MainActor [weak self] in
                 while let self, let endDate = self.sleepTimerEndDate {
                     guard !Task.isCancelled else { return }
                     if Date.now >= endDate {
@@ -375,43 +375,54 @@ public final class AudioPlaybackManager {
 
     private func setupPlayerCallbacks() {
         playerBackend.onTimeUpdate = { [weak self] time in
-            guard let self else { return }
-            guard time.isFinite, time >= 0 else { return }
-            self.currentTime = time
-            if let backendDuration = self.playerBackend.currentItemDuration {
-                self.duration = backendDuration
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard time.isFinite, time >= 0 else { return }
+                self.currentTime = time
+                if let backendDuration = self.playerBackend.currentItemDuration {
+                    self.duration = backendDuration
+                }
+                self.nowPlaying.updatePlaybackState(
+                    isPlaying: self.isPlaying,
+                    currentTime: self.currentTime,
+                    duration: self.duration
+                )
+                self.checkListenedThreshold()
             }
-            self.nowPlaying.updatePlaybackState(
-                isPlaying: self.isPlaying,
-                currentTime: self.currentTime,
-                duration: self.duration
-            )
-            self.checkListenedThreshold()
         }
 
         playerBackend.onPlayingChanged = { [weak self] playing in
-            guard let self, self.isPlaying != playing else { return }
-            self.isPlaying = playing
+            Task { @MainActor [weak self] in
+                guard let self, self.isPlaying != playing else { return }
+                self.isPlaying = playing
+            }
         }
 
         playerBackend.onItemDidFinish = { [weak self] token in
-            self?.handleTrackEnd(for: token)
+            Task { @MainActor [weak self] in
+                self?.handleTrackEnd(for: token)
+            }
         }
     }
 
     // MARK: - Remote Command Handlers
 
     private func setupRemoteCommandHandlers() {
-        nowPlaying.onPlay = { [weak self] in self?.resume() }
-        nowPlaying.onPause = { [weak self] in self?.pause() }
-        nowPlaying.onNext = { [weak self] in self?.next() }
-        nowPlaying.onPrevious = { [weak self] in self?.previous() }
-        nowPlaying.onTogglePlayPause = { [weak self] in self?.togglePlayPause() }
-        nowPlaying.onSeek = { [weak self] time in self?.seek(to: time) }
+        nowPlaying.onPlay = { [weak self] in Task { @MainActor [weak self] in self?.resume() } }
+        nowPlaying.onPause = { [weak self] in Task { @MainActor [weak self] in self?.pause() } }
+        nowPlaying.onNext = { [weak self] in Task { @MainActor [weak self] in self?.next() } }
+        nowPlaying.onPrevious = { [weak self] in Task { @MainActor [weak self] in self?.previous() }
+        }
+        nowPlaying.onTogglePlayPause = { [weak self] in
+            Task { @MainActor [weak self] in self?.togglePlayPause() }
+        }
+        nowPlaying.onSeek = { [weak self] time in
+            Task { @MainActor [weak self] in self?.seek(to: time) }
+        }
         nowPlaying.onToggleFavorite = { [weak self] in
-            guard let self, let track = self.queue.currentTrack else { return }
-            Task { [weak self] in
-                await self?.onToggleFavorite?(track)
+            Task { @MainActor [weak self] in
+                guard let self, let track = self.queue.currentTrack else { return }
+                await self.onToggleFavorite?(track)
             }
         }
     }
@@ -572,7 +583,7 @@ public final class AudioPlaybackManager {
     /// Start the periodic progress reporting timer (~every 10 seconds).
     private func startProgressReporting() {
         stopProgressReporting()
-        progressReportTask = Task { [weak self] in
+        progressReportTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(10))
                 guard !Task.isCancelled else { break }
