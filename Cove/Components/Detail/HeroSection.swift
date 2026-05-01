@@ -41,27 +41,33 @@ struct HeroSection<Overlay: View>: View {
     var body: some View {
         Color.clear
             .aspectRatio(aspectRatio, contentMode: .fit)
-            .overlay { heroImage }
+            .overlay { HeroImageView(imageURL: imageURL, fallbackImageURL: fallbackImageURL) }
             .clipped()
-            .overlay(alignment: .bottom) { gradientScrim }
+            .overlay(alignment: .bottom) { HeroGradientScrim() }
             .overlay(alignment: .bottomLeading) {
                 overlay()
                     .padding(.horizontal)
                     .padding(.bottom, 4)
             }
     }
+}
 
-    // MARK: - Subviews
+// MARK: - Subviews
 
-    @ViewBuilder
-    private var heroImage: some View {
+/// Loads the hero image, falling back through `fallbackImageURL` and then
+/// a gradient placeholder when neither URL resolves to an image.
+private struct HeroImageView: View {
+    let imageURL: URL?
+    let fallbackImageURL: URL?
+
+    var body: some View {
         LazyImage(url: imageURL) { state in
             if let image = state.image {
                 image
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else if state.isLoading {
-                loadingPlaceholder
+                HeroLoadingPlaceholder()
             } else if let fallbackImageURL {
                 // Primary failed — try the fallback URL (e.g. primary poster).
                 LazyImage(url: fallbackImageURL) { primaryState in
@@ -70,16 +76,20 @@ struct HeroSection<Overlay: View>: View {
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                     } else {
-                        fallbackGradient
+                        MediaHeroFallbackGradient()
                     }
                 }
             } else {
-                fallbackGradient
+                MediaHeroFallbackGradient()
             }
         }
     }
+}
 
-    private var loadingPlaceholder: some View {
+/// A black rectangle with a centered activity indicator shown while the hero
+/// image is being fetched.
+private struct HeroLoadingPlaceholder: View {
+    var body: some View {
         Rectangle()
             .fill(.black)
             .overlay {
@@ -87,8 +97,12 @@ struct HeroSection<Overlay: View>: View {
                     .tint(.white)
             }
     }
+}
 
-    private var gradientScrim: some View {
+/// A bottom-to-top gradient that fades the hero image into the system background,
+/// giving overlaid text a consistent readable surface.
+private struct HeroGradientScrim: View {
+    var body: some View {
         LinearGradient(
             stops: [
                 .init(color: .clear, location: 0),
@@ -100,8 +114,13 @@ struct HeroSection<Overlay: View>: View {
             endPoint: .bottom
         )
     }
+}
 
-    private var fallbackGradient: some View {
+/// A decorative gradient shown when no image is available for the hero area.
+///
+/// Shared between ``HeroSection`` and ``CompositeHeroSection``.
+struct MediaHeroFallbackGradient: View {
+    var body: some View {
         LinearGradient(
             colors: [
                 .blue.opacity(0.3),
