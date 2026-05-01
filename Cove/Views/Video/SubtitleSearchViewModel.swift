@@ -363,7 +363,7 @@ final class SubtitleSearchViewModel {
         case .noResults:
             .noResults
         case .invalidResponse:
-            .networkError(description: error.localizedDescription ?? "Unknown error")
+            .networkError(description: error.localizedDescription)
         case .networkError(let description):
             .networkError(description: description)
         case .downloadFailed:
