@@ -148,10 +148,6 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
                             .padding(.horizontal)
                     }
                 }
-                .animation(.easeIn(duration: 0.3), value: displayItem.providerIds?.hasAny)
-                .animation(.easeIn(duration: 0.3), value: displayItem.mediaStreams?.isEmpty)
-                .animation(.easeIn(duration: 0.3), value: displayItem.genres)
-                .animation(.easeIn(duration: 0.3), value: displayItem.studios)
             }
             .padding(.top, 16)
             .padding(.bottom, 8)
