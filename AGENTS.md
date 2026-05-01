@@ -79,6 +79,10 @@ If SwiftData is configured to use CloudKit:
 - If the project uses Localizable.xcstrings, prefer to add user-facing strings using symbol keys (e.g. helloWorld) in the string catalog with `extractionState` set to "manual", accessing them via generated symbols such as  `Text(.helloWorld)`. Offer to translate new keys into all languages supported by the project.
 
 
+## App-specific patterns
+
+- **User data (favorites, played state, play counts)** must always be read through `UserDataStore`, never directly from a model's `userData` property. `UserDataStore` holds live optimistic overrides that may differ from the stale server value stored on the model. Use `appState.userDataStore?.isFavorite(item.id, fallback: item.userData) ?? item.userData?.isFavorite ?? false` (or the equivalent `isPlayed` variant). Never write `item.userData?.isFavorite ?? false` at a call site.
+
 ## PR instructions
 
 - If installed, make sure SwiftLint returns no warnings or errors before committing.

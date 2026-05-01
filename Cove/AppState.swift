@@ -156,8 +156,13 @@ final class AppState {
                     return mediaFile
                 }
             }
-            // Fall back to remote stream
-            return provider.audioStreamURL(for: track)
+            // Determine quality based on network type (expensive = cellular)
+            let quality: AudioStreamingQuality =
+                networkMonitor.isExpensive
+                ? Defaults[.audioQualityCellular]
+                : Defaults[.audioQualityWifi]
+            // Fall back to remote stream with the selected quality
+            return provider.audioStreamURL(for: track, maxBitRate: quality.maxBitRate)
         }
 
         audioPlayer.artworkURLResolver = { track in

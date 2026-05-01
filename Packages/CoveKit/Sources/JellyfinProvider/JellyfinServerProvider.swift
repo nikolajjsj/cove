@@ -477,8 +477,16 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - Audio Streaming
 
     /// Build a universal audio stream URL for a track.
-    public func audioStreamURL(for track: Track) -> URL? {
+    ///
+    /// - Parameters:
+    ///   - track: The track to stream.
+    ///   - maxBitRate: An optional bitrate cap in bits per second. When `nil` the
+    ///     API client's default (140 Mbps) is used, which effectively means direct play.
+    public func audioStreamURL(for track: Track, maxBitRate: Int? = nil) -> URL? {
         guard let client = state.client else { return nil }
+        if let maxBitRate {
+            return client.audioStreamURL(itemId: track.id.rawValue, maxStreamingBitrate: maxBitRate)
+        }
         return client.audioStreamURL(itemId: track.id.rawValue)
     }
 

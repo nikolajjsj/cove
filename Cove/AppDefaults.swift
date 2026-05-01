@@ -10,6 +10,15 @@ extension Defaults.Keys {
     /// When `false` (the default), downloads only proceed on WiFi.
     static let downloadOverCellular = Key<Bool>("downloadOverCellular", default: false)
 
+    // MARK: - Audio Playback
+
+    /// Preferred audio streaming quality when on Wi-Fi.
+    static let audioQualityWifi = Key<AudioStreamingQuality>("audioQualityWifi", default: .auto)
+
+    /// Preferred audio streaming quality when on a cellular (expensive) connection.
+    static let audioQualityCellular = Key<AudioStreamingQuality>(
+        "audioQualityCellular", default: .medium)
+
     // MARK: - Video Playback
 
     /// Default playback speed (1.0 = normal). Persisted across sessions.
@@ -101,6 +110,7 @@ extension Defaults.Keys {
 
 // MARK: - Defaults Conformance
 
+extension AudioStreamingQuality: Defaults.Serializable {}
 extension StreamingQuality: Defaults.Serializable {}
 extension GridDensity: Defaults.Serializable {}
 extension LibraryLayoutMode: Defaults.Serializable {}
