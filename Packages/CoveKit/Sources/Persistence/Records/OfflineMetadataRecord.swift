@@ -14,17 +14,32 @@ struct OfflineMetadataRecord: Codable, Sendable {
     var metadataJSON: Data
     var updatedAt: Date
 
+    // MARK: - Shared codec instances
+
+    private static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
+
+    private static let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+
     /// Convert from a domain model by encoding the full metadata as JSON.
-    init(from metadata: OfflineMediaMetadata) {
+    /// Throws if the model cannot be encoded.
+    init(from metadata: OfflineMediaMetadata) throws {
         self.itemId = metadata.itemId
         self.serverId = metadata.serverId
         self.mediaType = metadata.mediaType
 
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        // Force-try is acceptable here: OfflineMediaMetadata is always encodable.
-        // swiftlint:disable:next force_try
-        self.metadataJSON = try! encoder.encode(metadata)
+        do {
+            self.metadataJSON = try OfflineMetadataRecord.encoder.encode(metadata)
+        } catch {
+            throw error
+        }
 
         self.updatedAt = Date()
     }
@@ -32,9 +47,8 @@ struct OfflineMetadataRecord: Codable, Sendable {
     /// Convert back to the domain model by decoding the JSON blob.
     /// Returns `nil` if the stored JSON is corrupt or incompatible.
     func toOfflineMediaMetadata() -> OfflineMediaMetadata? {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(OfflineMediaMetadata.self, from: metadataJSON)
+        return try? OfflineMetadataRecord.decoder.decode(
+            OfflineMediaMetadata.self, from: metadataJSON)
     }
 }
 

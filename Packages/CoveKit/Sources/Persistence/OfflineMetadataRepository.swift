@@ -20,7 +20,7 @@ public final class OfflineMetadataRepository: Sendable {
 
     /// Save or update offline metadata for an item.
     public func save(_ metadata: OfflineMediaMetadata) async throws {
-        let record = OfflineMetadataRecord(from: metadata)
+        let record = try OfflineMetadataRecord(from: metadata)
         try await dbWriter.write { db in
             // Use INSERT OR REPLACE since composite PK (itemId, serverId)
             try record.save(db)

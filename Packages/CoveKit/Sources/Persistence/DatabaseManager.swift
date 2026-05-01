@@ -17,9 +17,9 @@ public final class DatabaseManager: Sendable {
         logger.info("Opening database at \(path)")
 
         // Ensure the directory exists
-        let directory = (path as NSString).deletingLastPathComponent
+        let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
         try FileManager.default.createDirectory(
-            atPath: directory, withIntermediateDirectories: true)
+            at: directory, withIntermediateDirectories: true)
 
         var config = Configuration()
         config.foreignKeysEnabled = true
@@ -191,11 +191,17 @@ public final class DatabaseManager: Sendable {
 
     /// The default database path in Application Support.
     public static var defaultPath: String {
-        let appSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask
-        ).first!
-        let dbDirectory = appSupport.appendingPathComponent(
-            AppConstants.bundleIdentifier, isDirectory: true)
-        return dbDirectory.appendingPathComponent("cove.db").path
+        guard
+            let appSupport = FileManager.default.urls(
+                for: .applicationSupportDirectory, in: .userDomainMask
+            ).first
+        else {
+            return URL.temporaryDirectory
+                .appending(path: "cove.db")
+                .path(percentEncoded: false)
+        }
+        let dbDirectory = appSupport.appending(
+            path: AppConstants.bundleIdentifier, directoryHint: .isDirectory)
+        return dbDirectory.appending(path: "cove.db").path(percentEncoded: false)
     }
 }
