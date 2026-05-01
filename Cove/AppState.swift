@@ -137,7 +137,7 @@ final class AppState {
         let networkMonitor = self.networkMonitor
         let userDataStore = self.userDataStore
 
-        audioPlayer.streamURLResolver = { track in
+        audioPlayer.streamURLResolver = { (track: Track) -> URL? in
             // Try local file first (sync check via DownloadStorage)
             if let connection {
                 let storage = DownloadStorage.shared

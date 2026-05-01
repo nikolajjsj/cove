@@ -1,3 +1,4 @@
+import CoveUI
 import Models
 import PlaybackEngine
 import SwiftUI
@@ -17,6 +18,10 @@ struct PlayerBottomToolbar: View {
             toggleButton(label: "Queue", icon: "list.bullet", activePage: .queue)
             Spacer()
             SleepTimerButton()
+            Spacer()
+            RoutePickerView()
+                .frame(width: 24, height: 24)
+                .accessibilityLabel("Audio Output")
             Spacer()
             Button("Dismiss player", systemImage: "chevron.down") {
                 dismiss()
@@ -88,4 +93,3 @@ private struct SleepTimerButton: View {
         .buttonStyle(.plain)
     }
 }
-
