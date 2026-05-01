@@ -359,6 +359,7 @@ enum JellyfinMapper {
                 height: dto.height,
                 channels: dto.channels,
                 bitrate: dto.bitRate,
+                sampleRate: dto.sampleRate,
                 videoRange: dto.videoRange,
                 videoRangeType: dto.videoRangeType
             )

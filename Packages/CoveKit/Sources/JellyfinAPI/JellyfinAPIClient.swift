@@ -139,8 +139,8 @@ public final class JellyfinAPIClient: Sendable {
         startIndex: Int? = nil,
         recursive: Bool = true,
         fields: [String] = [
-            "Overview", "Genres", "DateCreated", "UserData", "CommunityRating", "OfficialRating",
-            "ProductionYear",
+            "Overview", "Genres", "DateCreated", "UserData", "CommunityRating",
+            "OfficialRating", "ProductionYear", "MediaSources",
         ],
         searchTerm: String? = nil,
         isFavorite: Bool? = nil,

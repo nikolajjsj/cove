@@ -22,6 +22,7 @@ struct PlayerTrackInfoRow: View {
     @Environment(AuthManager.self) private var authManager
     @Environment(\.dismiss) private var dismiss
     @State private var showPlaylistPicker = false
+    @State private var showTrackInfo = false
 
     var body: some View {
         HStack(alignment: .center, spacing: showThumbnail ? 14 : 0) {
@@ -107,6 +108,12 @@ struct PlayerTrackInfoRow: View {
                         Label("Go to Artist", systemImage: "music.mic")
                     }
                 }
+
+                Divider()
+
+                Button("Track Info", systemImage: "info.circle") {
+                    showTrackInfo = true
+                }
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
                     .font(.title3)
@@ -120,6 +127,9 @@ struct PlayerTrackInfoRow: View {
         .padding(.vertical, showThumbnail ? 14 : 0)
         .sheet(isPresented: $showPlaylistPicker) {
             PlaylistPickerSheet(trackIds: [track.id])
+        }
+        .sheet(isPresented: $showTrackInfo) {
+            TrackInfoSheet(track: track)
         }
     }
 
@@ -158,4 +168,3 @@ private struct FavoriteButton: View {
         }
     }
 }
-

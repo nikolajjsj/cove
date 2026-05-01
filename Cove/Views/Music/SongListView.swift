@@ -116,14 +116,22 @@ struct SongListView: View {
     // MARK: - Playback
 
     private func playFromIndex(_ index: Int) {
-        let tracks = loader.items.map { item in
-            Track(
+        let tracks = loader.items.map { item -> Track in
+            let audioStream = item.mediaStreams?.first(where: { $0.type == .audio })
+            return Track(
                 id: TrackID(item.id.rawValue),
                 title: item.title,
                 albumId: item.albumId.map { AlbumID($0.rawValue) },
                 albumName: item.albumName,
                 artistName: item.artistName,
+                trackNumber: item.indexNumber,
+                discNumber: item.parentIndexNumber,
                 duration: item.runtime,
+                codec: audioStream?.codec,
+                bitRate: audioStream?.bitrate,
+                sampleRate: audioStream?.sampleRate,
+                channelCount: audioStream?.channels,
+                genres: item.genres,
                 userData: item.userData
             )
         }
