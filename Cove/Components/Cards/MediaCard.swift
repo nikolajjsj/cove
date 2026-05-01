@@ -285,7 +285,7 @@ private struct MediaCardLandscapeLayout: View {
                         coordinator: coordinator,
                         provider: provider
                     )
-                    .font(.system(size: 36))
+                    .font(.largeTitle)
                     .shadow(color: .black.opacity(0.4), radius: 6)
                 }
             }
