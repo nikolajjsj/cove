@@ -189,6 +189,40 @@ final class AppState {
             )
         }
 
+        // MARK: Favourite state for the lock screen heart
+
+        audioPlayer.favoriteStateProvider = { [weak self] track in
+            guard let self else { return track.userData?.isFavorite ?? false }
+            let itemId = ItemID(track.id.rawValue)
+            return self.userDataStore?.isFavorite(itemId, fallback: track.userData)
+                ?? track.userData?.isFavorite ?? false
+        }
+
+        audioPlayer.onToggleFavorite = { [weak self] track in
+            guard let self else { return }
+            let itemId = ItemID(track.id.rawValue)
+            do {
+                guard
+                    let newValue = try await self.userDataStore?.toggleFavorite(
+                        itemId: itemId,
+                        current: track.userData
+                    )
+                else { return }
+                // Keep the lock screen heart in sync after the toggle.
+                self.audioPlayer.updateFavoriteState(isFavorite: newValue)
+                ToastManager.shared.show(
+                    newValue ? "Added to Favorites" : "Removed from Favorites",
+                    icon: newValue ? "heart.fill" : "heart"
+                )
+            } catch {
+                ToastManager.shared.show(
+                    "Couldn't update favorite",
+                    icon: "exclamationmark.triangle",
+                    style: .error
+                )
+            }
+        }
+
         // MARK: Playback Reporting
 
         audioPlayer.onPlaybackStart = { track, position in
@@ -292,6 +326,12 @@ final class AppState {
                 newValue ? "Added to Favorites" : "Removed from Favorites",
                 icon: newValue ? "heart.fill" : "heart"
             )
+            // If the toggled item is the currently playing track, sync the lock screen heart.
+            if let currentTrack = audioPlayer.queue.currentTrack,
+                ItemID(currentTrack.id.rawValue) == itemId
+            {
+                audioPlayer.updateFavoriteState(isFavorite: newValue)
+            }
         } catch {
             ToastManager.shared.show(
                 "Couldn't update favorite", icon: "exclamationmark.triangle", style: .error)

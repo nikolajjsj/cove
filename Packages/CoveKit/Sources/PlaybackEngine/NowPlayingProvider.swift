@@ -31,6 +31,9 @@ public protocol NowPlayingProvider: AnyObject {
     /// Called when the user toggles play/pause (e.g. via AirPods double-tap).
     var onTogglePlayPause: (@MainActor () -> Void)? { get set }
 
+    /// Called when the user taps the favourite (heart) button on the lock screen.
+    var onToggleFavorite: (@MainActor () -> Void)? { get set }
+
     // MARK: - Lifecycle
 
     /// Register remote-command targets. Call once during setup.
@@ -65,4 +68,8 @@ public protocol NowPlayingProvider: AnyObject {
         currentTime: TimeInterval,
         duration: TimeInterval
     )
+
+    /// Update the active state of the favourite (heart) button on the lock screen.
+    /// Call this whenever the favourite state of the current track changes.
+    func updateFavoriteState(isFavorite: Bool)
 }

@@ -22,6 +22,7 @@ final class NowPlayingService: NowPlayingProvider {
     var onPrevious: (@MainActor () -> Void)?
     var onSeek: (@MainActor (TimeInterval) -> Void)?
     var onTogglePlayPause: (@MainActor () -> Void)?
+    var onToggleFavorite: (@MainActor () -> Void)?
 
     /// Stored command targets for cleanup.
     private var commandTargets: [Any] = []
@@ -100,6 +101,16 @@ final class NowPlayingService: NowPlayingProvider {
                 return .success
             }
         )
+
+        center.likeCommand.isEnabled = true
+        commandTargets.append(
+            center.likeCommand.addTarget { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.onToggleFavorite?()
+                }
+                return .success
+            }
+        )
     }
 
     /// Remove all remote command targets and clear now playing info.
@@ -111,6 +122,9 @@ final class NowPlayingService: NowPlayingProvider {
         center.nextTrackCommand.removeTarget(nil)
         center.previousTrackCommand.removeTarget(nil)
         center.changePlaybackPositionCommand.removeTarget(nil)
+        center.likeCommand.removeTarget(nil)
+        center.likeCommand.isEnabled = false
+        center.likeCommand.isActive = false
         commandTargets.removeAll()
 
         infoCenter.nowPlayingInfo = nil
@@ -158,6 +172,11 @@ final class NowPlayingService: NowPlayingProvider {
         if let artworkURL {
             loadArtwork(from: artworkURL, forTrackID: track.id)
         }
+    }
+
+    /// Update the active state of the favourite (heart) button on the lock screen.
+    func updateFavoriteState(isFavorite: Bool) {
+        commandCenter.likeCommand.isActive = isFavorite
     }
 
     /// Update only the playback state (elapsed time, rate, duration) in the existing now playing info.

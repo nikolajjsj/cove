@@ -31,6 +31,16 @@ public final class AudioPlaybackManager {
     /// Closure that provides artwork URL for a track. Set by the app layer.
     public var artworkURLResolver: (@Sendable (Track) -> URL?)?
 
+    /// Closure that returns the current favourite state for a track.
+    /// Called whenever the Now Playing info is refreshed so the lock screen
+    /// heart reflects the live `UserDataStore` value. Set by the app layer.
+    public var favoriteStateProvider: (@MainActor @Sendable (Track) -> Bool)?
+
+    /// Called when the user taps the heart button on the lock screen.
+    /// The app layer uses this to toggle the favourite via `UserDataStore`
+    /// and then call `updateFavoriteState(_:)` with the new value.
+    public var onToggleFavorite: (@MainActor (Track) async -> Void)?
+
     // MARK: - Playback Reporting Callbacks
 
     /// Called when a track starts playing. The app layer uses this for server reporting.
@@ -269,6 +279,13 @@ public final class AudioPlaybackManager {
         sleepTimerEndDate = nil
     }
 
+    /// Propagate a favourite-state change to the lock screen heart button.
+    /// Call this after any in-app or lock-screen favourite toggle so the
+    /// `MPRemoteCommandCenter.likeCommand.isActive` stays in sync.
+    public func updateFavoriteState(isFavorite: Bool) {
+        nowPlaying.updateFavoriteState(isFavorite: isFavorite)
+    }
+
     /// Stop playback entirely and clear the queue.
     public func stop() {
         let stoppingTrack = queue.currentTrack
@@ -391,6 +408,12 @@ public final class AudioPlaybackManager {
         nowPlaying.onPrevious = { [weak self] in self?.previous() }
         nowPlaying.onTogglePlayPause = { [weak self] in self?.togglePlayPause() }
         nowPlaying.onSeek = { [weak self] time in self?.seek(to: time) }
+        nowPlaying.onToggleFavorite = { [weak self] in
+            guard let self, let track = self.queue.currentTrack else { return }
+            Task { [weak self] in
+                await self?.onToggleFavorite?(track)
+            }
+        }
     }
 
     // MARK: - Stream URL Resolution
@@ -528,6 +551,9 @@ public final class AudioPlaybackManager {
             duration: duration,
             artworkURL: artworkURL
         )
+        // Sync the lock screen heart with the current favourite state.
+        let isFav = favoriteStateProvider?(track) ?? false
+        nowPlaying.updateFavoriteState(isFavorite: isFav)
     }
 
     /// Update duration from the backend, falling back to track metadata.
