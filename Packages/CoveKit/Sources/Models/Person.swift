@@ -3,9 +3,9 @@ import Foundation
 /// A person associated with a media item (actor, director, writer, etc.).
 public struct Person: Identifiable, Hashable, Codable, Sendable {
     public var uniqueID: String {
-        "\(id)-\(role)"
+        "\(id)-\(role ?? name)"
     }
-    
+
     public let id: ItemID
     public let name: String
     public let role: String?
