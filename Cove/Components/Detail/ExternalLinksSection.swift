@@ -13,9 +13,8 @@ struct ExternalLinksSection: View {
 
     var body: some View {
         let links = buildLinks()
-        let trailers = buildTrailerLinks()
 
-        if !links.isEmpty || !trailers.isEmpty {
+        if !links.isEmpty {
             FlowLayout(spacing: 8) {
                 ForEach(links, id: \.label) { link in
                     Button {
@@ -27,20 +26,6 @@ struct ExternalLinksSection: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
                             .background(link.tint.opacity(0.15), in: .capsule)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                ForEach(trailers, id: \.label) { trailer in
-                    Button {
-                        openURL(trailer.url)
-                    } label: {
-                        Label(trailer.label, systemImage: "film")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.orange)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Color.orange.opacity(0.15), in: .capsule)
                     }
                     .buttonStyle(.plain)
                 }
@@ -58,60 +43,59 @@ struct ExternalLinksSection: View {
     }
 
     private func buildLinks() -> [ExternalLink] {
-        guard let providerIds else { return [] }
         var links: [ExternalLink] = []
 
-        if let url = providerIds.imdbURL {
-            links.append(
-                ExternalLink(
-                    label: "IMDb",
-                    icon: "arrow.up.forward",
-                    url: url,
-                    tint: .yellow
-                ))
-        }
-
-        if let url = providerIds.tmdbURL(for: mediaType) {
-            links.append(
-                ExternalLink(
-                    label: "TMDB",
-                    icon: "arrow.up.forward",
-                    url: url,
-                    tint: .cyan
-                ))
-        }
-
-        if let url = providerIds.tvdbURL {
-            if mediaType == .series {
+        if let providerIds {
+            if let url = providerIds.imdbURL {
                 links.append(
                     ExternalLink(
-                        label: "TVDB",
+                        label: "IMDb",
                         icon: "arrow.up.forward",
                         url: url,
-                        tint: .green
+                        tint: .yellow
                     ))
+            }
+
+            if let url = providerIds.tmdbURL(for: mediaType) {
+                links.append(
+                    ExternalLink(
+                        label: "TMDB",
+                        icon: "arrow.up.forward",
+                        url: url,
+                        tint: .cyan
+                    ))
+            }
+
+            if let url = providerIds.tvdbURL {
+                if mediaType == .series {
+                    links.append(
+                        ExternalLink(
+                            label: "TVDB",
+                            icon: "arrow.up.forward",
+                            url: url,
+                            tint: .green
+                        ))
+                }
+            }
+        }
+
+        if trailerURLs.count == 1 {
+            links.append(
+                ExternalLink(label: "TRAILER", icon: "film", url: trailerURLs[0], tint: .orange)
+            )
+        } else {
+            for (index, url) in trailerURLs.enumerated() {
+                links.append(
+                    ExternalLink(
+                        label: "TRAILER \(index + 1)",
+                        icon: "film",
+                        url: url,
+                        tint: .orange
+                    )
+                )
             }
         }
 
         return links
-    }
-
-    // MARK: - Trailer Links
-
-    private struct TrailerLink {
-        let label: String
-        let url: URL
-    }
-
-    private func buildTrailerLinks() -> [TrailerLink] {
-        guard !trailerURLs.isEmpty else { return [] }
-
-        if trailerURLs.count == 1 {
-            return [TrailerLink(label: "TRAILER", url: trailerURLs[0])]
-        }
-
-        return trailerURLs.enumerated().map { index, url in
-            TrailerLink(label: "TRAILER \(index + 1)", url: url)
-        }
     }
 }
