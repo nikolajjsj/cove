@@ -38,7 +38,6 @@ struct PagedMediaGridView<Card: View>: View {
     let imageSize: CGSize
     @ViewBuilder let card: (MediaItem, URL?) -> Card
 
-    @Default(.gridDensity) private var gridDensity
     @Environment(AuthManager.self) private var authManager
     @State private var loader = PagedCollectionLoader<MediaItem>()
 
@@ -72,17 +71,59 @@ struct PagedMediaGridView<Card: View>: View {
 
     var body: some View {
         Group {
-            mainContent
+            PagedMediaGridContent(
+                loader: loader,
+                emptyTitle: emptyTitle,
+                emptyIcon: emptyIcon,
+                emptyMessage: emptyMessage,
+                entityName: entityName,
+                imageSize: imageSize,
+                card: card
+            )
         }
         .task(id: "\(library?.id.rawValue ?? "")-\(sortField)-\(sortOrder)-\(isFavoriteFilter)") {
             await loadFirstPage()
         }
     }
 
-    // MARK: - Main Content
+    // MARK: - Data Loading
 
-    @ViewBuilder
-    private var mainContent: some View {
+    private func loadFirstPage() async {
+        guard let library else {
+            loader.reset()
+            return
+        }
+
+        let provider = authManager.provider
+
+        await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
+            let sort = SortOptions(field: sortField, order: sortOrder)
+            let filter = FilterOptions(
+                isFavorite: isFavoriteFilter ? true : Optional<Bool>.none,
+                limit: limit,
+                startIndex: startIndex,
+                includeItemTypes: [itemType]
+            )
+            let result = try await provider.pagedItems(
+                in: library, sort: sort, filter: filter
+            )
+            return .init(items: result.items, totalCount: result.totalCount)
+        }
+    }
+}
+
+// MARK: - Main Content
+
+private struct PagedMediaGridContent<Card: View>: View {
+    let loader: PagedCollectionLoader<MediaItem>
+    let emptyTitle: String
+    let emptyIcon: String
+    let emptyMessage: String
+    let entityName: String
+    let imageSize: CGSize
+    let card: (MediaItem, URL?) -> Card
+
+    var body: some View {
         switch loader.phase {
         case .loading:
             ProgressView("Loading \(entityName)s…")
@@ -100,11 +141,28 @@ struct PagedMediaGridView<Card: View>: View {
                 description: Text(emptyMessage)
             )
         case .loaded:
-            scrollContent
+            PagedMediaGridScrollView(
+                loader: loader,
+                entityName: entityName,
+                imageSize: imageSize,
+                card: card
+            )
         }
     }
+}
 
-    private var scrollContent: some View {
+// MARK: - Scroll View
+
+private struct PagedMediaGridScrollView<Card: View>: View {
+    let loader: PagedCollectionLoader<MediaItem>
+    let entityName: String
+    let imageSize: CGSize
+    let card: (MediaItem, URL?) -> Card
+
+    @Default(.gridDensity) private var gridDensity
+    @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
         ScrollView {
             LazyVGrid(
                 columns: gridDensity.columns,
@@ -136,33 +194,6 @@ struct PagedMediaGridView<Card: View>: View {
             }
         }
     }
-
-    // MARK: - Data Loading
-
-    private func loadFirstPage() async {
-        guard let library else {
-            loader.reset()
-            return
-        }
-
-        let provider = authManager.provider
-
-        await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
-            let sort = SortOptions(field: sortField, order: sortOrder)
-            let filter = FilterOptions(
-                isFavorite: isFavoriteFilter ? true : Optional<Bool>.none,
-                limit: limit,
-                startIndex: startIndex,
-                includeItemTypes: [itemType]
-            )
-            let result = try await provider.pagedItems(
-                in: library, sort: sort, filter: filter
-            )
-            return .init(items: result.items, totalCount: result.totalCount)
-        }
-    }
-
-    // MARK: - Helpers
 
     private func imageURL(for item: MediaItem) -> URL? {
         authManager.provider.imageURL(
