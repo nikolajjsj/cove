@@ -36,16 +36,24 @@ struct AlbumCard: View {
 
     var body: some View {
         NavigationLink(value: item) {
-            cardContent
+            AlbumCardContent(imageURL: imageURL, title: item.title, subtitle: subtitle)
         }
         .buttonStyle(.plain)
         .mediaContextMenu(item: item)
     }
+}
 
-    private var cardContent: some View {
+// MARK: - Card Content
+
+private struct AlbumCardContent: View {
+    let imageURL: URL?
+    let title: String
+    let subtitle: String?
+
+    var body: some View {
         MediaCardContent(
             imageURL: imageURL,
-            title: item.title,
+            title: title,
             subtitle: subtitle,
             titleLineLimit: 2,
             reservesSpace: true

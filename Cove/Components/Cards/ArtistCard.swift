@@ -22,18 +22,25 @@ struct ArtistCard: View {
 
     var body: some View {
         NavigationLink(value: item) {
-            cardContent
+            ArtistCardContent(imageURL: imageURL, title: item.title)
         }
         .buttonStyle(.plain)
         .mediaContextMenu(item: item)
     }
+}
 
-    private var cardContent: some View {
+// MARK: - Card Content
+
+private struct ArtistCardContent: View {
+    let imageURL: URL?
+    let title: String
+
+    var body: some View {
         VStack(spacing: 8) {
             MediaImage.artwork(url: imageURL, cornerRadius: .infinity)
                 .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
 
-            Text(item.title)
+            Text(title)
                 .font(.caption)
                 .fontWeight(.medium)
                 .lineLimit(2, reservesSpace: true)
