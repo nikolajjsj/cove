@@ -191,20 +191,3 @@ struct MovieDetailView: View {
         )
     }
 }
-
-// MARK: - Last Played Label
-
-/// A subtle label showing when the user last watched this item.
-private struct LastPlayedLabel: View {
-    let date: Date
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "clock")
-                .font(.caption2)
-            Text("Last watched \(date.formatted(date: .abbreviated, time: .omitted))")
-                .font(.caption)
-        }
-        .foregroundStyle(.tertiary)
-    }
-}

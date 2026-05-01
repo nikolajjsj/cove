@@ -10,6 +10,7 @@ struct PlaylistListView: View {
     var isFavoriteFilter: Bool = false
 
     @Environment(AuthManager.self) private var authManager
+    @Environment(UserDataStore.self) private var userDataStore
     @State private var loader = CollectionLoader<Playlist>()
     @State private var showNewPlaylistAlert = false
     @State private var newPlaylistName = ""
@@ -17,7 +18,7 @@ struct PlaylistListView: View {
     private var sortedFilteredPlaylists: [Playlist] {
         var result = loader.items
         if isFavoriteFilter {
-            result = result.filter { $0.userData?.isFavorite == true }
+            result = result.filter { userDataStore.isFavorite($0.id, fallback: $0.userData) }
         }
         switch sortField {
         case .name:
@@ -79,16 +80,8 @@ struct PlaylistListView: View {
                         }
                         .playlistContextMenu(
                             playlist: playlist,
-                            onRenamed: {
-                                Task {
-                                    await loader.load { try await authManager.provider.playlists() }
-                                }
-                            },
-                            onDeleted: {
-                                Task {
-                                    await loader.load { try await authManager.provider.playlists() }
-                                }
-                            })
+                            onRenamed: reloadPlaylists,
+                            onDeleted: reloadPlaylists)
                     }
                     .listStyle(.plain)
                 }
@@ -122,6 +115,10 @@ struct PlaylistListView: View {
     }
 
     // MARK: - Data Loading
+
+    private func reloadPlaylists() {
+        Task { await loader.load { try await authManager.provider.playlists() } }
+    }
 
     private func createPlaylist() async {
         let name = newPlaylistName.trimmingCharacters(in: .whitespaces)

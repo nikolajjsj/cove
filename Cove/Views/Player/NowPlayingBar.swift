@@ -94,8 +94,6 @@ struct NowPlayingBar: View {
     }
 
     private func artworkURL(for track: Track) -> URL? {
-        let itemId = track.albumId ?? track.id
-        return authManager.provider.imageURL(
-            for: itemId, type: .primary, maxSize: CGSize(width: 96, height: 96))
+        return authManager.provider.artworkURL(for: track, maxSize: CGSize(width: 96, height: 96))
     }
 }

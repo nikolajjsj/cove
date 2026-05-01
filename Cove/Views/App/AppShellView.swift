@@ -60,7 +60,7 @@ private struct CompactTabShell: View {
         TabView(selection: $appState.selectedTab) {
             ForEach(AppTab.availableTabs(for: appState, layout: .compact), id: \.self) { tab in
                 Tab(tab.title, systemImage: tab.icon, value: tab) {
-                    NavigationStack(path: navigationPathBinding(for: tab)) {
+                    NavigationStack(path: navigationPathBinding(for: tab, appState: appState)) {
                         tab.destination(
                             appState: appState, downloadCoordinator: downloadCoordinator
                         )
@@ -75,14 +75,6 @@ private struct CompactTabShell: View {
                 NowPlayingBar(showFullPlayer: $showFullPlayer, track: track)
             }
         }
-    }
-
-    private func navigationPathBinding(for tab: AppTab) -> Binding<NavigationPath> {
-        @Bindable var appState = appState
-        return Binding(
-            get: { appState.navigationPaths[tab] ?? NavigationPath() },
-            set: { appState.navigationPaths[tab] = $0 }
-        )
     }
 }
 
@@ -109,7 +101,9 @@ private struct SidebarShell: View {
                 .navigationTitle("Cove")
             #endif
         } detail: {
-            NavigationStack(path: navigationPathBinding(for: appState.selectedTab)) {
+            NavigationStack(
+                path: navigationPathBinding(for: appState.selectedTab, appState: appState)
+            ) {
                 appState.selectedTab.destination(
                     appState: appState, downloadCoordinator: downloadCoordinator
                 )
@@ -134,14 +128,6 @@ private struct SidebarShell: View {
             }
         }
     }
-
-    private func navigationPathBinding(for tab: AppTab) -> Binding<NavigationPath> {
-        @Bindable var appState = appState
-        return Binding(
-            get: { appState.navigationPaths[tab] ?? NavigationPath() },
-            set: { appState.navigationPaths[tab] = $0 }
-        )
-    }
 }
 
 // MARK: - tvOS — Top Tab Bar
@@ -158,7 +144,7 @@ private struct SidebarShell: View {
             TabView(selection: $appState.selectedTab) {
                 ForEach(AppTab.availableTabs(for: appState, layout: .tv), id: \.self) { tab in
                     Tab(tab.title, systemImage: tab.icon, value: tab) {
-                        NavigationStack(path: navigationPathBinding(for: tab)) {
+                        NavigationStack(path: navigationPathBinding(for: tab, appState: appState)) {
                             tab.destination(
                                 appState: appState, downloadCoordinator: downloadCoordinator
                             )
@@ -169,13 +155,19 @@ private struct SidebarShell: View {
                 }
             }
         }
-
-        private func navigationPathBinding(for tab: AppTab) -> Binding<NavigationPath> {
-            @Bindable var appState = appState
-            return Binding(
-                get: { appState.navigationPaths[tab] ?? NavigationPath() },
-                set: { appState.navigationPaths[tab] = $0 }
-            )
-        }
     }
 #endif
+
+// MARK: - Navigation Path Binding Helper
+
+/// Creates a `Binding<NavigationPath>` for the given tab in the app state.
+private func navigationPathBinding(
+    for tab: AppTab,
+    appState: AppState
+) -> Binding<NavigationPath> {
+    @Bindable var appState = appState
+    return Binding(
+        get: { appState.navigationPaths[tab] ?? NavigationPath() },
+        set: { appState.navigationPaths[tab] = $0 }
+    )
+}

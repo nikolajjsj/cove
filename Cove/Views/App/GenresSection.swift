@@ -98,11 +98,9 @@ private struct GenresSectionShell<Content: View>: View {
 
 private struct GenresSectionHeader: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Genres")
-                .font(.title2)
-                .bold()
-        }
+        Text("Genres")
+            .font(.title2)
+            .bold()
     }
 }
 

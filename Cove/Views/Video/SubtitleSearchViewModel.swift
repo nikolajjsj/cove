@@ -263,7 +263,7 @@ final class SubtitleSearchViewModel {
 
     /// Extract subtitle format from a filename (defaults to "srt").
     private func subtitleFormat(from fileName: String) -> String {
-        let ext = (fileName as NSString).pathExtension.lowercased()
+        let ext = URL(fileURLWithPath: fileName).pathExtension.lowercased()
         return ext.isEmpty ? "srt" : ext
     }
 

@@ -20,10 +20,14 @@ extension MetadataPill {
     ///   - item: The navigation-provided item (always available).
     ///   - displayItem: The fully-fetched item with enriched data (people,
     ///     provider IDs, media streams). Falls back gracefully when fields are nil.
+    ///   - effectiveUserData: The effective user data resolved from `UserDataStore`,
+    ///     reflecting live optimistic overrides. Pass
+    ///     `userDataStore.userData(for: item.id, fallback: item.userData)`.
     /// - Returns: An ordered array of metadata pills.
     static func videoDetailPills(
         for item: MediaItem,
-        displayItem: MediaItem
+        displayItem: MediaItem,
+        effectiveUserData: UserData? = nil
     ) -> [MetadataPill] {
         var pills = ratingPills(
             communityRating: item.communityRating,
@@ -65,7 +69,7 @@ extension MetadataPill {
         }
 
         // User data pills
-        if let userData = item.userData {
+        if let userData = effectiveUserData {
             if userData.isPlayed {
                 pills.append(.played)
             }

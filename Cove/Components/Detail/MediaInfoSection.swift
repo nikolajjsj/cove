@@ -224,15 +224,16 @@ private struct TechnicalInfoCard: View {
     private func videoDetails(_ stream: MediaStream) -> String {
         var parts: [String] = []
 
-        if let res = resolutionLabel(width: stream.width ?? 0) {
+        if let res = MediaStreamLabels.resolution(width: stream.width ?? 0) {
             parts.append(res)
         }
 
-        if let codec = videoCodecLabel(stream.codec) {
+        if let codec = MediaStreamLabels.videoCodec(stream.codec) {
             parts.append(codec)
         }
 
-        if let hdr = hdrLabel(videoRange: stream.videoRange, videoRangeType: stream.videoRangeType)
+        if let hdr = MediaStreamLabels.hdr(
+            videoRange: stream.videoRange, videoRangeType: stream.videoRangeType)
         {
             parts.append(hdr)
         }
@@ -245,11 +246,11 @@ private struct TechnicalInfoCard: View {
     private func audioDetails(_ stream: MediaStream) -> String {
         var parts: [String] = []
 
-        if let channels = channelLabel(stream.channels ?? 0) {
+        if let channels = MediaStreamLabels.channels(stream.channels ?? 0) {
             parts.append(channels)
         }
 
-        if let codec = audioCodecLabel(stream.codec) {
+        if let codec = MediaStreamLabels.audioCodec(stream.codec) {
             parts.append(codec)
         }
 
@@ -266,84 +267,7 @@ private struct TechnicalInfoCard: View {
     // MARK: - Bitrate
 
     private func videoBitrate(_ stream: MediaStream) -> String? {
-        guard let bitrate = stream.bitrate, bitrate > 0 else { return nil }
-        let mbps = Double(bitrate) / 1_000_000.0
-        if mbps >= 10 {
-            return "\(Int(mbps)) Mbps"
-        } else if mbps >= 1 {
-            return mbps.formatted(.number.precision(.fractionLength(1))) + " Mbps"
-        } else {
-            let kbps = bitrate / 1000
-            return "\(kbps) kbps"
-        }
-    }
-
-    // MARK: - Formatting Helpers
-
-    private func resolutionLabel(width: Int) -> String? {
-        if width >= 3840 { return "4K" }
-        if width >= 1920 { return "1080p" }
-        if width >= 1280 { return "720p" }
-        if width > 0 { return "SD" }
-        return nil
-    }
-
-    private func hdrLabel(videoRange: String?, videoRangeType: String?) -> String? {
-        if let rangeType = videoRangeType?.lowercased() {
-            switch rangeType {
-            case "dovi", "dolbyvision": return "Dolby Vision"
-            case "hdr10plus": return "HDR10+"
-            case "hdr10": return "HDR10"
-            default: break
-            }
-        }
-        if let range = videoRange?.uppercased(), range == "HDR" {
-            return "HDR"
-        }
-        return nil
-    }
-
-    private func videoCodecLabel(_ codec: String?) -> String? {
-        guard let codec, !codec.isEmpty else { return nil }
-        switch codec.lowercased() {
-        case "hevc", "h265", "h.265": return "HEVC"
-        case "h264", "h.264", "avc": return "H.264"
-        case "av1": return "AV1"
-        case "vp9": return "VP9"
-        case "vc1": return "VC-1"
-        case "mpeg2video", "mpeg2": return "MPEG-2"
-        case "mpeg4": return "MPEG-4"
-        default: return codec.uppercased()
-        }
-    }
-
-    private func audioCodecLabel(_ codec: String?) -> String? {
-        guard let codec, !codec.isEmpty else { return nil }
-        switch codec.lowercased() {
-        case "truehd": return "TrueHD"
-        case "eac3": return "EAC-3"
-        case "ac3": return "AC-3"
-        case "dts": return "DTS"
-        case "dca": return "DTS"
-        case "dtshd": return "DTS-HD MA"
-        case "aac": return "AAC"
-        case "flac": return "FLAC"
-        case "opus": return "Opus"
-        case "vorbis": return "Vorbis"
-        case "mp3": return "MP3"
-        case "pcm_s16le", "pcm_s24le", "pcm": return "PCM"
-        default: return codec.uppercased()
-        }
-    }
-
-    private func channelLabel(_ channels: Int) -> String? {
-        switch channels {
-        case 8: return "7.1 Surround"
-        case 6: return "5.1 Surround"
-        case 2: return "Stereo"
-        case 1: return "Mono"
-        default: return nil
-        }
+        MediaStreamLabels.bitrate(stream.bitrate)
     }
 }
 

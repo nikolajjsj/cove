@@ -62,7 +62,7 @@ struct AudioPlayerView: View {
             PlayerControlsView()
             PlayerBottomToolbar(currentPage: $currentPage)
         }
-        .background(backgroundGradient)
+        .background(PlayerBackgroundGradient(dominantColor: dominantColor))
         .preferredColorScheme(.dark)
         .onChange(of: track.id) { _, _ in
             updateDominantColor(for: track)
@@ -120,29 +120,13 @@ struct AudioPlayerView: View {
         }
     }
 
-    // MARK: - Background Gradient
+    // MARK: - Dominant Color Extraction
 
-    @ViewBuilder
-    private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [
-                dominantColor.primary.opacity(0.7),
-                dominantColor.darkened.opacity(0.9),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.6), value: dominantColor.primary)
-        .overlay {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .ignoresSafeArea()
-                .opacity(0.3)
+    private func setFallbackColor() {
+        withAnimation(.easeInOut(duration: 0.6)) {
+            dominantColor = DominantColorExtractor.fallback
         }
     }
-
-    // MARK: - Dominant Color Extraction
 
     private func updateDominantColor(for track: Track) {
         let cacheKey = track.albumId?.rawValue ?? track.id.rawValue
@@ -164,9 +148,7 @@ struct AudioPlayerView: View {
         }
 
         guard let url = artworkURL(for: track) else {
-            withAnimation(.easeInOut(duration: 0.6)) {
-                dominantColor = DominantColorExtractor.fallback
-            }
+            setFallbackColor()
             return
         }
 
@@ -177,24 +159,18 @@ struct AudioPlayerView: View {
                 guard let uiImage = UIImage(data: data),
                     let cgImage = uiImage.cgImage
                 else {
-                    withAnimation(.easeInOut(duration: 0.6)) {
-                        dominantColor = DominantColorExtractor.fallback
-                    }
+                    setFallbackColor()
                     return
                 }
             #elseif canImport(AppKit)
                 guard let nsImage = NSImage(data: data),
                     let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
                 else {
-                    withAnimation(.easeInOut(duration: 0.6)) {
-                        dominantColor = DominantColorExtractor.fallback
-                    }
+                    setFallbackColor()
                     return
                 }
             #else
-                withAnimation(.easeInOut(duration: 0.6)) {
-                    dominantColor = DominantColorExtractor.fallback
-                }
+                setFallbackColor()
                 return
             #endif
 
@@ -206,18 +182,39 @@ struct AudioPlayerView: View {
                 }
             #endif
         } catch {
-            withAnimation(.easeInOut(duration: 0.6)) {
-                dominantColor = DominantColorExtractor.fallback
-            }
+            setFallbackColor()
         }
     }
 
     // MARK: - Helpers
 
     private func artworkURL(for track: Track) -> URL? {
-        let itemId = track.albumId ?? track.id
-        return authManager.provider.imageURL(
-            for: itemId, type: .primary, maxSize: CGSize(width: 600, height: 600))
+        return authManager.provider.artworkURL(for: track, maxSize: CGSize(width: 600, height: 600))
+    }
+}
+
+// MARK: - Background Gradient
+
+private struct PlayerBackgroundGradient: View {
+    let dominantColor: DominantColorExtractor.ExtractionResult
+
+    var body: some View {
+        LinearGradient(
+            colors: [
+                dominantColor.primary.opacity(0.7),
+                dominantColor.darkened.opacity(0.9),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.6), value: dominantColor.primary)
+        .overlay {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea()
+                .opacity(0.3)
+        }
     }
 }
 

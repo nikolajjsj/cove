@@ -220,7 +220,7 @@ private struct SubtitleResultRow: View {
                     }
 
                     if let fileName = result.attributes.files.first?.fileName {
-                        let ext = (fileName as NSString).pathExtension.uppercased()
+                        let ext = URL(fileURLWithPath: fileName).pathExtension.uppercased()
                         if !ext.isEmpty {
                             Text(ext)
                                 .font(.caption2)

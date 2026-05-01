@@ -23,10 +23,7 @@ public struct DownloadStorage: Sendable {
 
     /// Base downloads directory: `Library/Application Support/Downloads/`
     public var downloadsDirectory: URL {
-        let appSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask
-        ).first!
-        return appSupport.appendingPathComponent("Downloads", isDirectory: true)
+        URL.applicationSupportDirectory.appending(path: "Downloads", directoryHint: .isDirectory)
     }
 
     // MARK: - Path Helpers
@@ -34,14 +31,14 @@ public struct DownloadStorage: Sendable {
     /// Per-server, per-type directory: `Downloads/{serverId}/{mediaType}/{itemId}/`
     public func itemDirectory(serverId: String, mediaType: MediaType, itemId: ItemID) -> URL {
         downloadsDirectory
-            .appendingPathComponent(serverId, isDirectory: true)
-            .appendingPathComponent(mediaType.rawValue, isDirectory: true)
-            .appendingPathComponent(itemId.rawValue, isDirectory: true)
+            .appending(path: serverId, directoryHint: .isDirectory)
+            .appending(path: mediaType.rawValue, directoryHint: .isDirectory)
+            .appending(path: itemId.rawValue, directoryHint: .isDirectory)
     }
 
     /// Server-level directory: `Downloads/{serverId}/`
     public func serverDirectory(serverId: String) -> URL {
-        downloadsDirectory.appendingPathComponent(serverId, isDirectory: true)
+        downloadsDirectory.appending(path: serverId, directoryHint: .isDirectory)
     }
 
     /// Determines the file extension from an HTTP response.
@@ -79,7 +76,7 @@ public struct DownloadStorage: Sendable {
             mediaType: item.mediaType,
             itemId: item.itemId
         )
-        return dir.appendingPathComponent("media.\(ext)")
+        return dir.appending(path: "media.\(ext)")
     }
 
     /// Returns the relative path (from `downloadsDirectory`) for a given download item's media file.
@@ -91,7 +88,7 @@ public struct DownloadStorage: Sendable {
 
     /// Resolves a relative local file path back to an absolute URL.
     public func resolveAbsoluteURL(relativePath: String) -> URL {
-        downloadsDirectory.appendingPathComponent(relativePath)
+        downloadsDirectory.appending(path: relativePath)
     }
 
     // MARK: - Directory Operations
@@ -161,7 +158,7 @@ public struct DownloadStorage: Sendable {
     /// Layout: `Downloads/{serverId}/{mediaType}/{itemId}/primary.jpg`
     public func primaryImageURL(serverId: String, mediaType: MediaType, itemId: ItemID) -> URL {
         itemDirectory(serverId: serverId, mediaType: mediaType, itemId: itemId)
-            .appendingPathComponent("primary.jpg")
+            .appending(path: "primary.jpg")
     }
 
     /// Returns the URL where a backdrop image should be stored for an item.
@@ -169,7 +166,7 @@ public struct DownloadStorage: Sendable {
     /// Layout: `Downloads/{serverId}/{mediaType}/{itemId}/backdrop.jpg`
     public func backdropImageURL(serverId: String, mediaType: MediaType, itemId: ItemID) -> URL {
         itemDirectory(serverId: serverId, mediaType: mediaType, itemId: itemId)
-            .appendingPathComponent("backdrop.jpg")
+            .appending(path: "backdrop.jpg")
     }
 
     /// Returns the URL where a subtitle file should be stored.
@@ -186,7 +183,7 @@ public struct DownloadStorage: Sendable {
         let lang = language ?? "und"
         let filename = "sub_\(index)_\(lang).\(format)"
         return itemDirectory(serverId: serverId, mediaType: mediaType, itemId: itemId)
-            .appendingPathComponent(filename)
+            .appending(path: filename)
     }
 
     /// Returns the relative path (from `downloadsDirectory`) for a primary image.
@@ -361,7 +358,7 @@ public struct DownloadStorage: Sendable {
     /// permanent storage, staged files remain as orphans. Call this on launch
     /// to reclaim the space.
     public func cleanupStagingDirectory() {
-        let stagingDir = downloadsDirectory.appendingPathComponent(".staging", isDirectory: true)
+        let stagingDir = downloadsDirectory.appending(path: ".staging", directoryHint: .isDirectory)
         let fm = FileManager.default
         guard fm.fileExists(atPath: stagingDir.path) else { return }
         do {
@@ -386,9 +383,9 @@ public struct DownloadStorage: Sendable {
     ) throws {
         let dir =
             downloadsDirectory
-            .appendingPathComponent(serverId, isDirectory: true)
-            .appendingPathComponent(mediaType, isDirectory: true)
-            .appendingPathComponent(itemId, isDirectory: true)
+            .appending(path: serverId, directoryHint: .isDirectory)
+            .appending(path: mediaType, directoryHint: .isDirectory)
+            .appending(path: itemId, directoryHint: .isDirectory)
         let fm = FileManager.default
         if fm.fileExists(atPath: dir.path) {
             try fm.removeItem(at: dir)
