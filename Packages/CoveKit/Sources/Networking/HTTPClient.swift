@@ -251,7 +251,8 @@ public final class HTTPClient: Sendable {
             }
             return data
         case 401:
-            throw AppError.authExpired(serverName: url.host ?? url.absoluteString)
+            throw AppError.authExpired(
+                serverName: url.host(percentEncoded: false) ?? url.absoluteString)
         case 403:
             throw AppError.authFailed(reason: "Access denied")
         case 404:
