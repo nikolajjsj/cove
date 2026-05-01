@@ -26,7 +26,7 @@ public final class AudioPlaybackManager {
     }
 
     /// Closure that resolves a Track to a streaming URL. Set by the app layer.
-    public var streamURLResolver: (@Sendable (Track) async -> URL?)?
+    public var streamURLResolver: (@Sendable (Track) -> URL?)?
 
     /// Closure that provides artwork URL for a track. Set by the app layer.
     public var artworkURLResolver: (@Sendable (Track) -> URL?)?
