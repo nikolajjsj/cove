@@ -144,6 +144,14 @@ final class NowPlayingService: NowPlayingProvider {
             info[MPMediaItemPropertyAlbumTitle] = albumName
         }
 
+        if let trackNumber = track.trackNumber {
+            info[MPMediaItemPropertyAlbumTrackNumber] = trackNumber
+        }
+
+        if let discNumber = track.discNumber {
+            info[MPMediaItemPropertyDiscNumber] = discNumber
+        }
+
         infoCenter.nowPlayingInfo = info
 
         // Load artwork asynchronously
