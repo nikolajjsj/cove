@@ -153,17 +153,7 @@ private struct RecentlyPlayedSongsSection: View {
     }
 
     private func playSong(at index: Int) {
-        let tracks = loader.items.map { item in
-            Track(
-                id: TrackID(item.id.rawValue),
-                title: item.title,
-                albumId: item.albumId.map { AlbumID($0.rawValue) },
-                albumName: item.albumName,
-                artistName: item.artistName,
-                duration: item.runtime,
-                userData: item.userData
-            )
-        }
+        let tracks = loader.items.map { $0.asTrack }
         guard !tracks.isEmpty else { return }
         appState.audioPlayer.play(tracks: tracks, startingAt: index)
     }

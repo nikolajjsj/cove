@@ -3,18 +3,28 @@ import Models
 // MARK: - MediaItem ↔ Track Conversion
 
 extension MediaItem {
-    /// Lightweight conversion to a `Track` for audio queue operations.
+    /// Convert a `MediaItem` to a `Track` for audio queue operations.
     ///
-    /// Populated from the fields that `MediaItem` carries for audio items.
-    /// Used internally by the context menu for Play Next / Play Later actions.
+    /// Extracts all available metadata — track/disc numbers, audio stream
+    /// codec/bitRate/sampleRate/channelCount — so the player queue and
+    /// Track Info sheet always have complete data regardless of which
+    /// view initiated playback.
     var asTrack: Track {
-        Track(
+        let audioStream = mediaStreams?.first(where: { $0.type == .audio })
+        return Track(
             id: TrackID(id.rawValue),
             title: title,
             albumId: albumId.map { AlbumID($0.rawValue) },
             albumName: albumName,
             artistName: artistName,
+            trackNumber: indexNumber,
+            discNumber: parentIndexNumber,
             duration: runtime,
+            codec: audioStream?.codec,
+            bitRate: audioStream?.bitrate,
+            sampleRate: audioStream?.sampleRate,
+            channelCount: audioStream?.channels,
+            genres: genres,
             userData: userData
         )
     }

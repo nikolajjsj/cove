@@ -166,6 +166,8 @@ struct PlaylistDetailView: View {
                     duration: track.duration,
                     isCurrentTrack: isCurrentTrack(track),
                     isPlaying: isCurrentTrack(track) && appState.audioPlayer.isPlaying,
+                    isFavorite: appState.userDataStore?.isFavorite(
+                        track.id, fallback: track.userData) ?? track.userData?.isFavorite ?? false,
                     onTap: { playAllTracks(startingAt: index) }
                 )
                 .padding(.horizontal)

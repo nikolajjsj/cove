@@ -37,6 +37,7 @@ struct TrackRow: View {
     let duration: TimeInterval?
     let isCurrentTrack: Bool
     let isPlaying: Bool
+    var isFavorite: Bool = false
     let onTap: () -> Void
 
     var body: some View {
@@ -64,6 +65,12 @@ struct TrackRow: View {
                 if isCurrentTrack {
                     Image(systemName: isPlaying ? "speaker.wave.2.fill" : "speaker.fill")
                         .foregroundStyle(Color.accentColor)
+                        .font(.caption)
+                }
+
+                if isFavorite {
+                    Image(systemName: "heart.fill")
+                        .foregroundStyle(.pink)
                         .font(.caption)
                 }
 

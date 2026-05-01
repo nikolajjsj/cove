@@ -219,10 +219,15 @@ struct AlbumDetailView: View {
 
                     ForEach(discTracks.enumerated(), id: \.element.id) { localIndex, track in
                         let globalIndex = globalTrackIndex(for: track)
+                        let isFav =
+                            appState.userDataStore?.isFavorite(
+                                track.id, fallback: track.userData
+                            ) ?? track.userData?.isFavorite ?? false
                         let row = AlbumTrackRow(
                             track: track,
                             isCurrentTrack: isCurrentTrack(track),
-                            isPlaying: isCurrentTrack(track) && appState.audioPlayer.isPlaying
+                            isPlaying: isCurrentTrack(track) && appState.audioPlayer.isPlaying,
+                            isFavorite: isFav
                         ) {
                             playAllTracks(startingAt: globalIndex)
                         }
@@ -488,6 +493,7 @@ private struct AlbumTrackRow: View {
     let track: Track
     let isCurrentTrack: Bool
     let isPlaying: Bool
+    var isFavorite: Bool = false
     let onTap: () -> Void
 
     var body: some View {
@@ -523,6 +529,12 @@ private struct AlbumTrackRow: View {
                 }
 
                 Spacer(minLength: 0)
+
+                if isFavorite {
+                    Image(systemName: "heart.fill")
+                        .foregroundStyle(.pink)
+                        .font(.caption)
+                }
 
                 // Duration
                 if let duration = track.duration, duration > 0 {

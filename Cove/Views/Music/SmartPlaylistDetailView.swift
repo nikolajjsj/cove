@@ -142,6 +142,8 @@ struct SmartPlaylistDetailView: View {
                     duration: item.runtime,
                     isCurrentTrack: isCurrentTrack(item),
                     isPlaying: isCurrentTrack(item) && appState.audioPlayer.isPlaying,
+                    isFavorite: appState.userDataStore?.isFavorite(item.id, fallback: item.userData)
+                        ?? item.userData?.isFavorite ?? false,
                     onTap: { playAllTracks(startingAt: index) }
                 )
                 .padding(.horizontal)
@@ -160,53 +162,15 @@ struct SmartPlaylistDetailView: View {
     // MARK: - Playback
 
     private func playAllTracks(startingAt index: Int) {
-        let tracks = items.map { item -> Track in
-            let audioStream = item.mediaStreams?.first(where: { $0.type == .audio })
-            return Track(
-                id: TrackID(item.id.rawValue),
-                title: item.title,
-                albumId: item.albumId.map { AlbumID($0.rawValue) },
-                albumName: item.albumName,
-                artistName: item.artistName,
-                trackNumber: item.indexNumber,
-                discNumber: item.parentIndexNumber,
-                duration: item.runtime,
-                codec: audioStream?.codec,
-                bitRate: audioStream?.bitrate,
-                sampleRate: audioStream?.sampleRate,
-                channelCount: audioStream?.channels,
-                genres: item.genres,
-                userData: item.userData
-            )
-        }
+        let tracks = items.map { $0.asTrack }
         guard !tracks.isEmpty else { return }
         appState.audioPlayer.play(tracks: tracks, startingAt: index)
     }
 
     private func playShuffled() {
-        let tracks = items.map { item -> Track in
-            let audioStream = item.mediaStreams?.first(where: { $0.type == .audio })
-            return Track(
-                id: TrackID(item.id.rawValue),
-                title: item.title,
-                albumId: item.albumId.map { AlbumID($0.rawValue) },
-                albumName: item.albumName,
-                artistName: item.artistName,
-                trackNumber: item.indexNumber,
-                discNumber: item.parentIndexNumber,
-                duration: item.runtime,
-                codec: audioStream?.codec,
-                bitRate: audioStream?.bitrate,
-                sampleRate: audioStream?.sampleRate,
-                channelCount: audioStream?.channels,
-                genres: item.genres,
-                userData: item.userData
-            )
-        }
+        let tracks = items.map { $0.asTrack }.shuffled()
         guard !tracks.isEmpty else { return }
-        var shuffled = tracks
-        shuffled.shuffle()
-        appState.audioPlayer.play(tracks: shuffled, startingAt: 0)
+        appState.audioPlayer.play(tracks: tracks, startingAt: 0)
     }
 
     private func isCurrentTrack(_ item: MediaItem) -> Bool {
