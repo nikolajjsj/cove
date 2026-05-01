@@ -93,13 +93,19 @@ private struct ProgressFillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(.white)
-            .background { progressBackground }
+            .background { ProgressFillBackground(progress: progress) }
             .opacity(configuration.isPressed ? 0.75 : 1.0)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 
-    @ViewBuilder
-    private var progressBackground: some View {
+}
+
+// MARK: - Progress Fill Background
+
+private struct ProgressFillBackground: View {
+    let progress: Double?
+
+    var body: some View {
         if let progress {
             ZStack(alignment: .leading) {
                 // Muted base spanning the full width (unwatched portion)
@@ -110,11 +116,11 @@ private struct ProgressFillButtonStyle: ButtonStyle {
                 // Uses a fractional width so the fill's edges always
                 // conform to the rounded rectangle rather than producing
                 // a sharp vertical cut (which scaleEffect caused).
-                GeometryReader { geo in
-                    Color.accentColor
-                        .frame(width: geo.size.width * max(progress, 0.0))
-                        .animation(.easeInOut(duration: 0.4), value: progress)
-                }
+                Color.accentColor
+                    .containerRelativeFrame(.horizontal) { size, _ in
+                        size * max(progress, 0.0)
+                    }
+                    .animation(.easeInOut(duration: 0.4), value: progress)
             }
             .clipShape(.rect(cornerRadius: 10))
         } else {

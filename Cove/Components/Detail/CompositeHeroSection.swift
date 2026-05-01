@@ -63,28 +63,38 @@ struct CompositeHeroSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Landscape backdrop with gradient scrim
-            backdropSection
+            Color.clear
+                .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                .overlay { CompositeBackdropImageView(backdropURL: backdropURL) }
+                .clipped()
+                .overlay(alignment: .bottom) { CompositeGradientScrim() }
 
             // Poster + title row, pulled up to overlap the backdrop
-            posterTitleRow
-                .padding(.top, -overlapHeight)
+            CompositePosterTitleRow(
+                posterURL: posterURL,
+                isPlayed: isPlayed,
+                posterWidth: posterWidth,
+                title: title,
+                originalTitle: originalTitle,
+                subtitleParts: subtitleParts,
+                tagline: tagline,
+                isFavorite: isFavorite
+            )
+            .padding(.top, -overlapHeight)
         }
         // Add bottom space so content below isn't clipped by the overlap
         .padding(.bottom, 4)
     }
+}
 
-    // MARK: - Backdrop
+// MARK: - Backdrop
 
-    private var backdropSection: some View {
-        Color.clear
-            .aspectRatio(16.0 / 9.0, contentMode: .fit)
-            .overlay { backdropImage }
-            .clipped()
-            .overlay(alignment: .bottom) { gradientScrim }
-    }
+/// Loads the backdrop image with a loading placeholder and ``MediaHeroFallbackGradient``
+/// when no image is available.
+private struct CompositeBackdropImageView: View {
+    let backdropURL: URL?
 
-    @ViewBuilder
-    private var backdropImage: some View {
+    var body: some View {
         LazyImage(url: backdropURL) { state in
             if let image = state.image {
                 image
@@ -98,12 +108,15 @@ struct CompositeHeroSection: View {
                             .tint(.white)
                     }
             } else {
-                fallbackGradient
+                MediaHeroFallbackGradient()
             }
         }
     }
+}
 
-    private var gradientScrim: some View {
+/// A bottom-to-top gradient that fades the backdrop into the system background.
+private struct CompositeGradientScrim: View {
+    var body: some View {
         LinearGradient(
             stops: [
                 .init(color: .clear, location: 0),
@@ -116,34 +129,48 @@ struct CompositeHeroSection: View {
             endPoint: .bottom
         )
     }
+}
 
-    private var fallbackGradient: some View {
-        LinearGradient(
-            colors: [
-                .blue.opacity(0.3),
-                .purple.opacity(0.2),
-                .black.opacity(0.8),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
+// MARK: - Poster + Title Row
 
-    // MARK: - Poster + Title Row
+/// The horizontal stack that positions the floating poster card alongside the
+/// title / metadata column, offset upwards to overlap the backdrop.
+private struct CompositePosterTitleRow: View {
+    let posterURL: URL?
+    let isPlayed: Bool
+    let posterWidth: CGFloat
+    let title: String
+    let originalTitle: String?
+    let subtitleParts: [String]
+    let tagline: String?
+    let isFavorite: Bool
 
-    private var posterTitleRow: some View {
+    var body: some View {
         HStack(alignment: .bottom, spacing: 16) {
-            posterCard
+            CompositePosterCard(posterURL: posterURL, isPlayed: isPlayed, posterWidth: posterWidth)
 
-            titleColumn
-                .padding(.bottom, 4)
+            CompositeTitleColumn(
+                title: title,
+                originalTitle: originalTitle,
+                subtitleParts: subtitleParts,
+                tagline: tagline,
+                isFavorite: isFavorite
+            )
+            .padding(.bottom, 4)
         }
         .padding(.horizontal)
     }
+}
 
-    // MARK: - Poster Card
+// MARK: - Poster Card
 
-    private var posterCard: some View {
+/// The floating poster artwork with an optional ``WatchedBadge``.
+private struct CompositePosterCard: View {
+    let posterURL: URL?
+    let isPlayed: Bool
+    let posterWidth: CGFloat
+
+    var body: some View {
         ZStack(alignment: .topTrailing) {
             MediaImage.poster(
                 url: posterURL,
@@ -159,10 +186,19 @@ struct CompositeHeroSection: View {
         .frame(width: posterWidth)
         .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
     }
+}
 
-    // MARK: - Title Column
+// MARK: - Title Column
 
-    private var titleColumn: some View {
+/// The vertical stack of title, original title, subtitle parts, and tagline.
+private struct CompositeTitleColumn: View {
+    let title: String
+    let originalTitle: String?
+    let subtitleParts: [String]
+    let tagline: String?
+    let isFavorite: Bool
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(title)
