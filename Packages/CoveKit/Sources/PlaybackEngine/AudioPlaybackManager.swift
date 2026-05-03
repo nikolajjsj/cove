@@ -66,6 +66,14 @@ public final class AudioPlaybackManager {
     /// Maps backend item tokens to their corresponding Track for identification.
     @ObservationIgnored private var tokenToTrack: [AnyHashable: Track] = [:]
 
+    /// The token of the item we are actively waiting to finish playing.
+    ///
+    /// Only this token should trigger queue advancement in `handleTrackEnd`.
+    /// Preloaded items that fire `onItemDidFinish` before becoming the current
+    /// track are ignored. Updated by `rebuildPlayerQueue` (rebuild path) and
+    /// by the gapless branch of `handleTrackEnd` (gapless transition path).
+    @ObservationIgnored private var currentTrackToken: AnyHashable?
+
     /// Whether playback was active before an audio session interruption began.
     @ObservationIgnored private var wasPlayingBeforeInterruption: Bool = false
 
@@ -294,6 +302,7 @@ public final class AudioPlaybackManager {
         playerBackend.pause()
         playerBackend.clearQueue()
         tokenToTrack.removeAll()
+        currentTrackToken = nil
         stopProgressReporting()
 
         // Report stopped for the track that was playing.
@@ -444,12 +453,14 @@ public final class AudioPlaybackManager {
     private func rebuildPlayerQueue() {
         playerBackend.clearQueue()
         tokenToTrack.removeAll()
+        currentTrackToken = nil
 
         guard let currentTrack = queue.currentTrack else { return }
 
         if let url = resolveStreamURL(for: currentTrack) {
             let token = playerBackend.enqueue(url: url)
             tokenToTrack[token] = currentTrack
+            currentTrackToken = token
         } else {
             logger.error("Failed to resolve stream URL for current track: \(currentTrack.title)")
         }
@@ -483,10 +494,21 @@ public final class AudioPlaybackManager {
 
     /// Handle the end of a track, advancing the queue or repeating as needed.
     private func handleTrackEnd(for token: AnyHashable) {
-        // Verify this token belongs to us
+        // Verify this token belongs to us.
         let finishedTrack = tokenToTrack[token]
         guard finishedTrack != nil else { return }
         tokenToTrack.removeValue(forKey: token)
+
+        // Only advance the queue for the token we are actively waiting on.
+        // A preloaded item that fired onItemDidFinish before becoming current
+        // (e.g. because it failed to load and AVQueuePlayer silently skipped it)
+        // must not trigger queue advancement.
+        guard token == currentTrackToken else {
+            logger.warning(
+                "Ignoring premature end for '\(finishedTrack?.title ?? "unknown")' — not the active track"
+            )
+            return
+        }
 
         logger.debug("Track ended, handling advancement")
 
@@ -497,7 +519,7 @@ public final class AudioPlaybackManager {
             reportStopped(track: track, position: trackDuration)
         }
 
-        // Check if sleep timer should stop playback at end of track
+        // Check if sleep timer should stop playback at end of track.
         if sleepTimerMode == .endOfTrack {
             cancelSleepTimer()
             isPlaying = false
@@ -509,9 +531,9 @@ public final class AudioPlaybackManager {
             return
         }
 
-        // Repeat-one: replay the same track by rebuilding
+        // Repeat-one: replay the same track by rebuilding.
         if queue.repeatMode == .one {
-            rebuildPlayerQueue()
+            rebuildPlayerQueue()  // sets currentTrackToken internally
             playerBackend.play()
             isPlaying = true
             currentTime = 0
@@ -520,9 +542,9 @@ public final class AudioPlaybackManager {
             return
         }
 
-        // Advance the queue model
+        // Advance the queue model by one position.
         guard queue.advance() != nil else {
-            // Reached the end of the queue without repeat
+            // Reached the end of the queue without repeat.
             logger.info("Reached end of queue")
             isPlaying = false
             currentTime = 0
@@ -532,13 +554,33 @@ public final class AudioPlaybackManager {
             return
         }
 
-        // Check if the backend already has the next track loaded (gapless transition)
-        if let currentToken = playerBackend.currentItemToken, tokenToTrack[currentToken] != nil {
-            // Gapless transition occurred — just preload more tracks
+        // Check if the backend already has the next track loaded (gapless transition).
+        if let currentToken = playerBackend.currentItemToken,
+            let backendTrack = tokenToTrack[currentToken]
+        {
+            // Gapless transition occurred. If AVQueuePlayer silently skipped one or
+            // more failed preloaded items, the backend may now be further ahead than
+            // the single step we just advanced. Fast-forward the queue model to match.
+            var catchUpSteps = 0
+            while let modelTrack = queue.currentTrack,
+                modelTrack.id != backendTrack.id,
+                catchUpSteps < queue.tracks.count
+            {
+                guard queue.advance() != nil else { break }
+                catchUpSteps += 1
+            }
+            if catchUpSteps > 0 {
+                logger.warning(
+                    "Queue model caught up \(catchUpSteps) skipped track(s) to match backend")
+            }
+
+            // Record which token we now expect to fire next.
+            currentTrackToken = currentToken
             preloadNextTracks()
         } else {
-            // Backend doesn't have the next track (e.g., repeat-all wrap-around)
-            rebuildPlayerQueue()
+            // Backend does not have the next track preloaded (e.g. repeat-all
+            // wrap-around, or all preloaded items failed).
+            rebuildPlayerQueue()  // sets currentTrackToken internally
             playerBackend.play()
         }
 

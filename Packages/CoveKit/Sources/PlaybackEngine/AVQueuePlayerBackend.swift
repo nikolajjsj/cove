@@ -25,6 +25,9 @@ public final class AVQueuePlayerBackend: AudioPlayerBackend {
     /// Async task listening for `AVPlayerItemDidPlayToEndTime` notifications.
     @ObservationIgnored private nonisolated(unsafe) var endOfItemTask: Task<Void, Never>?
 
+    /// Async task listening for `AVPlayerItemFailedToPlayToEndTime` notifications.
+    @ObservationIgnored private nonisolated(unsafe) var failedItemTask: Task<Void, Never>?
+
     // MARK: - Token Tracking
 
     /// Maps each `AVPlayerItem` to the opaque token returned by `enqueue(url:)`.
@@ -53,6 +56,7 @@ public final class AVQueuePlayerBackend: AudioPlayerBackend {
         }
         rateObservation?.invalidate()
         endOfItemTask?.cancel()
+        failedItemTask?.cancel()
     }
 
     // MARK: - AudioPlayerBackend — Playback Control
@@ -133,21 +137,38 @@ public final class AVQueuePlayerBackend: AudioPlayerBackend {
         }
     }
 
-    /// Listens for `AVPlayerItemDidPlayToEndTime` notifications to detect when
-    /// an enqueued item finishes playing. Resolves the item to its token and
-    /// fires ``onItemDidFinish``.
+    /// Listens for item-end notifications and forwards them to `onItemDidFinish`.
+    ///
+    /// Two parallel tasks cover both termination paths:
+    /// - `AVPlayerItemDidPlayToEndTime` — item played to its natural end.
+    /// - `AVPlayerItemFailedToPlayToEndTime` — item failed to load or stream
+    ///   (network error, auth expiry, server error, etc.).
+    ///
+    /// Both tasks run on the `@MainActor` (inherited from the `@MainActor`-isolated
+    /// `init` that creates them), so all `itemToToken` and `onItemDidFinish` accesses
+    /// are correctly actor-isolated.
     private func setupEndOfItemObserver() {
         endOfItemTask = Task { [weak self] in
-            let notifications = NotificationCenter.default.notifications(
+            for await notification in NotificationCenter.default.notifications(
                 named: .AVPlayerItemDidPlayToEndTime
-            )
-            for await notification in notifications {
+            ) {
                 guard let self else { break }
                 guard let finishedItem = notification.object as? AVPlayerItem,
                     let token = self.itemToToken[finishedItem]
-                else {
-                    continue
-                }
+                else { continue }
+                self.itemToToken.removeValue(forKey: finishedItem)
+                self.onItemDidFinish?(token)
+            }
+        }
+
+        failedItemTask = Task { [weak self] in
+            for await notification in NotificationCenter.default.notifications(
+                named: .AVPlayerItemFailedToPlayToEndTime
+            ) {
+                guard let self else { break }
+                guard let finishedItem = notification.object as? AVPlayerItem,
+                    let token = self.itemToToken[finishedItem]
+                else { continue }
                 self.itemToToken.removeValue(forKey: finishedItem)
                 self.onItemDidFinish?(token)
             }
