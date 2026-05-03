@@ -129,6 +129,7 @@ struct SeriesDetailView: View {
                                 episodesError: episodesError,
                                 episodes: episodes,
                                 isOffline: isOffline,
+                                isFirstSeason: seasons.first?.id == selectedSeason?.id,
                                 offlineEpisodeDownloads: offlineEpisodeDownloads,
                                 seriesId: item.id,
                                 seriesName: item.title,
@@ -146,7 +147,6 @@ struct SeriesDetailView: View {
                                     }
                                 },
                                 onRequestDelete: { dl in episodeToDelete = dl },
-                                isFirstSeason: seasons.first?.id == selectedSeason?.id,
                                 onMarkPreviousWatched: { episode in
                                     Task { await markEpisodesBeforePlayed(episode) }
                                 }
@@ -605,6 +605,10 @@ private struct EpisodeListSection: View {
     let episodesError: String?
     let episodes: [Episode]
     let isOffline: Bool
+    /// `true` when the currently displayed season is the earliest season in the series.
+    /// Suppresses the context menu button for the first episode of the first season
+    /// where there is nothing earlier to mark.
+    let isFirstSeason: Bool
     let offlineEpisodeDownloads: [DownloadItem]
     let seriesId: ItemID
     let seriesName: String
@@ -613,10 +617,6 @@ private struct EpisodeListSection: View {
     let onPlay: (Episode) -> Void
     let onRequestDelete: (DownloadItem) -> Void
     let onMarkPreviousWatched: ((Episode) -> Void)?
-    /// `true` when the currently displayed season is the earliest season in the series.
-    /// Suppresses the context menu button for the first episode of the first season
-    /// where there is nothing earlier to mark.
-    let isFirstSeason: Bool
 
     @Environment(AppState.self) private var appState
 
