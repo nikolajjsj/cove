@@ -183,12 +183,15 @@ private struct FilmographyRowView: View {
     let item: MediaItem
     let imageURL: URL?
 
+    @Environment(UserDataStore.self) private var userDataStore
+
     var body: some View {
         MediaItemRow(
             imageURL: imageURL,
             title: item.title,
             subtitle: subtitle,
             mediaType: item.mediaType,
+            isPlayed: userDataStore.isPlayed(item.id, fallback: item.userData),
             metadata: metadataParts
         ) {
             RatingBadge(rating: item.communityRating)

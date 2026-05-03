@@ -6,6 +6,7 @@ import SwiftUI
 struct SearchResultRow: View {
     let item: MediaItem
     @Environment(AuthManager.self) private var authManager
+    @Environment(UserDataStore.self) private var userDataStore
 
     var body: some View {
         MediaItemRow(
@@ -13,6 +14,7 @@ struct SearchResultRow: View {
             title: item.title,
             subtitle: subtitle,
             mediaType: item.mediaType,
+            isPlayed: userDataStore.isPlayed(item.id, fallback: item.userData),
             thumbnailWidth: 50
         )
     }

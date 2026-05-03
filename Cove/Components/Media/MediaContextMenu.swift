@@ -29,6 +29,10 @@ struct MediaContextMenuModifier: ViewModifier {
     /// Enables the "Go to Artist" action for songs.
     let artistId: ArtistID?
 
+    /// When non-nil, a "Mark Previous Episodes as Watched" button is shown in
+    /// the episode context menu. The closure is called when the user taps it.
+    let onMarkPreviousWatched: (() -> Void)?
+
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
     /// Track IDs to add to a playlist. Non-nil triggers the sheet.
@@ -97,6 +101,12 @@ struct MediaContextMenuModifier: ViewModifier {
         Divider()
 
         PlayedToggle(itemId: item.id, userData: item.userData)
+
+        if let onMarkPreviousWatched {
+            Button(action: onMarkPreviousWatched) {
+                Label("Mark Previous as Watched", systemImage: "eye.circle")
+            }
+        }
 
         if let seriesId = item.seriesId {
             Button {
@@ -314,7 +324,7 @@ extension View {
     /// movies/episodes get video playback actions, albums/tracks get audio
     /// queue actions, and everything gets a favorite toggle.
     func mediaContextMenu(item: MediaItem) -> some View {
-        modifier(MediaContextMenuModifier(item: item, artistId: nil))
+        modifier(MediaContextMenuModifier(item: item, artistId: nil, onMarkPreviousWatched: nil))
     }
 
     /// Attaches a context menu for a `Track`, preserving the artist ID
@@ -329,7 +339,9 @@ extension View {
             albumName: track.albumName,
             albumId: track.albumId.map { ItemID($0.rawValue) }
         )
-        return modifier(MediaContextMenuModifier(item: item, artistId: track.artistId))
+        return modifier(
+            MediaContextMenuModifier(
+                item: item, artistId: track.artistId, onMarkPreviousWatched: nil))
     }
 
     /// Attaches a context menu for an `Episode`, using the provided series
@@ -337,7 +349,8 @@ extension View {
     func mediaContextMenu(
         episode: Episode,
         seriesId: ItemID? = nil,
-        seriesName: String? = nil
+        seriesName: String? = nil,
+        onMarkPreviousWatched: (() -> Void)? = nil
     ) -> some View {
         let item = MediaItem(
             id: ItemID(episode.id.rawValue),
@@ -351,6 +364,8 @@ extension View {
             indexNumber: episode.episodeNumber,
             parentIndexNumber: episode.seasonNumber
         )
-        return modifier(MediaContextMenuModifier(item: item, artistId: nil))
+        return modifier(
+            MediaContextMenuModifier(
+                item: item, artistId: nil, onMarkPreviousWatched: onMarkPreviousWatched))
     }
 }

@@ -145,7 +145,10 @@ struct SeriesDetailView: View {
                                         )
                                     }
                                 },
-                                onRequestDelete: { dl in episodeToDelete = dl }
+                                onRequestDelete: { dl in episodeToDelete = dl },
+                                onMarkPreviousWatched: { episode in
+                                    Task { await markEpisodesBeforePlayed(episode) }
+                                }
                             )
                             .padding(.top, 8)
                         }
@@ -195,9 +198,6 @@ struct SeriesDetailView: View {
                 Menu {
                     if !isOffline {
                         FavoriteToggle(itemId: item.id, userData: item.userData)
-                        PlayedToggle(itemId: item.id, userData: item.userData)
-
-                        Divider()
 
                         Button {
                             markSeriesWatchedValue = true
@@ -611,6 +611,7 @@ private struct EpisodeListSection: View {
     let progress: (Episode) -> Double?
     let onPlay: (Episode) -> Void
     let onRequestDelete: (DownloadItem) -> Void
+    let onMarkPreviousWatched: ((Episode) -> Void)?
 
     @Environment(AppState.self) private var appState
 
@@ -671,7 +672,9 @@ private struct EpisodeListSection: View {
                         row.mediaContextMenu(
                             episode: episode,
                             seriesId: seriesId,
-                            seriesName: seriesName
+                            seriesName: seriesName,
+                            onMarkPreviousWatched: index > 0
+                                ? { onMarkPreviousWatched?(episode) } : nil
                         )
                     }
 
@@ -822,6 +825,39 @@ extension SeriesDetailView {
         } catch {
             ToastManager.shared.show(
                 "Couldn't update series", icon: "exclamationmark.triangle", style: .error)
+        }
+    }
+
+    /// Marks all episodes in the currently-loaded season that come *before*
+    /// the given episode as watched.
+    ///
+    /// Iterates the loaded `episodes` array in order and calls `setPlayed`
+    /// for each one whose index is lower than the target episode. Invalidates
+    /// `UserDataStore` overrides after the batch so the UI refreshes.
+    private func markEpisodesBeforePlayed(_ episode: Episode) async {
+        guard let targetIndex = episodes.firstIndex(where: { $0.id == episode.id }),
+            targetIndex > 0
+        else { return }
+
+        let previousEpisodes = Array(episodes[0..<targetIndex])
+
+        do {
+            for ep in previousEpisodes {
+                try await authManager.provider.setPlayed(itemId: ep.id, isPlayed: true)
+                appState.userDataStore?.invalidate(ep.id)
+            }
+
+            if let selectedSeason {
+                await loadEpisodes(for: selectedSeason)
+            }
+
+            ToastManager.shared.show("Previous episodes marked as watched", icon: "eye.fill")
+        } catch {
+            ToastManager.shared.show(
+                "Couldn't update watched status",
+                icon: "exclamationmark.triangle",
+                style: .error
+            )
         }
     }
 }

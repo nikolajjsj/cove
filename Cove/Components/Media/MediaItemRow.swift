@@ -46,6 +46,9 @@ struct MediaItemRow<Trailing: View>: View {
     /// Optional metadata strings displayed as dot-separated text below the subtitle.
     var metadata: [String] = []
 
+    /// Whether the item has been played. When `true`, a watched badge is overlaid on the thumbnail.
+    var isPlayed: Bool = false
+
     /// The width of the thumbnail. Height is derived from aspect ratio.
     var thumbnailWidth: CGFloat = 56
 
@@ -53,7 +56,7 @@ struct MediaItemRow<Trailing: View>: View {
     @ViewBuilder var trailing: () -> Trailing
 
     // MARK: - Body
-    
+
     var aspectRatio: Double {
         if mediaType.isMusic {
             return 1.0
@@ -66,18 +69,24 @@ struct MediaItemRow<Trailing: View>: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Poster thumbnail
-            MediaImage.poster(
-                url: imageURL,
-                aspectRatio: aspectRatio,
-                icon: mediaType.placeholderIcon,
-                cornerRadius: 6
-            )
-            .frame(
-                width: thumbnailWidth,
-                height: mediaType.isMusic ? thumbnailWidth : thumbnailWidth * 1.5
-            )
-            .clipped()
+            // Poster thumbnail with optional watched badge
+            ZStack(alignment: .topTrailing) {
+                MediaImage.poster(
+                    url: imageURL,
+                    aspectRatio: aspectRatio,
+                    icon: mediaType.placeholderIcon,
+                    cornerRadius: 6
+                )
+                .frame(
+                    width: thumbnailWidth,
+                    height: mediaType.isMusic ? thumbnailWidth : thumbnailWidth * 1.5
+                )
+                .clipped()
+
+                if isPlayed && !mediaType.isMusic {
+                    WatchedBadge(font: .caption2)
+                }
+            }
 
             // Text content
             VStack(alignment: .leading, spacing: 4) {
@@ -122,6 +131,7 @@ extension MediaItemRow where Trailing == EmptyView {
         subtitle: String?,
         mediaType: MediaType,
         metadata: [String] = [],
+        isPlayed: Bool = false,
         thumbnailWidth: CGFloat = 56
     ) {
         self.imageURL = imageURL
@@ -129,6 +139,7 @@ extension MediaItemRow where Trailing == EmptyView {
         self.subtitle = subtitle
         self.mediaType = mediaType
         self.metadata = metadata
+        self.isPlayed = isPlayed
         self.thumbnailWidth = thumbnailWidth
         self.trailing = { EmptyView() }
     }

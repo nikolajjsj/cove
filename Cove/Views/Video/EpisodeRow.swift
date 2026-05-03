@@ -8,12 +8,18 @@ struct EpisodeRow: View {
     let progress: Double?  // 0.0–1.0
     let onPlay: () -> Void
 
+    @Environment(UserDataStore.self) private var userDataStore
+
     var body: some View {
         Button(action: onPlay) {
             HStack(alignment: .top, spacing: 12) {
                 // MARK: - Thumbnail
 
-                EpisodeThumbnailView(thumbnailURL: thumbnailURL, progress: progress)
+                EpisodeThumbnailView(
+                    thumbnailURL: thumbnailURL,
+                    progress: progress,
+                    isWatched: userDataStore.isPlayed(episode.id, fallback: episode.userData)
+                )
 
                 // MARK: - Episode Info
 
@@ -71,6 +77,7 @@ struct EpisodeRow: View {
 private struct EpisodeThumbnailView: View {
     let thumbnailURL: URL?
     let progress: Double?
+    let isWatched: Bool
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -79,6 +86,11 @@ private struct EpisodeThumbnailView: View {
 
             if let progress, progress > 0 {
                 VideoProgressOverlay(progress: progress)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if isWatched && !(progress != nil && progress! > 0) {
+                WatchedBadge(font: .caption)
             }
         }
     }
