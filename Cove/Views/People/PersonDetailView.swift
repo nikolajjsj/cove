@@ -191,8 +191,8 @@ private struct FilmographyRowView: View {
             title: item.title,
             subtitle: subtitle,
             mediaType: item.mediaType,
+            metadata: metadataParts,
             isPlayed: userDataStore.isPlayed(item.id, fallback: item.userData),
-            metadata: metadataParts
         ) {
             RatingBadge(rating: item.communityRating)
         }
