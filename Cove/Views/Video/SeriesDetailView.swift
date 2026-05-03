@@ -146,6 +146,7 @@ struct SeriesDetailView: View {
                                     }
                                 },
                                 onRequestDelete: { dl in episodeToDelete = dl },
+                                isFirstSeason: seasons.first?.id == selectedSeason?.id,
                                 onMarkPreviousWatched: { episode in
                                     Task { await markEpisodesBeforePlayed(episode) }
                                 }
@@ -612,6 +613,10 @@ private struct EpisodeListSection: View {
     let onPlay: (Episode) -> Void
     let onRequestDelete: (DownloadItem) -> Void
     let onMarkPreviousWatched: ((Episode) -> Void)?
+    /// `true` when the currently displayed season is the earliest season in the series.
+    /// Suppresses the context menu button for the first episode of the first season
+    /// where there is nothing earlier to mark.
+    let isFirstSeason: Bool
 
     @Environment(AppState.self) private var appState
 
@@ -673,7 +678,7 @@ private struct EpisodeListSection: View {
                             episode: episode,
                             seriesId: seriesId,
                             seriesName: seriesName,
-                            onMarkPreviousWatched: index > 0
+                            onMarkPreviousWatched: (index > 0 || !isFirstSeason)
                                 ? { onMarkPreviousWatched?(episode) } : nil
                         )
                     }
@@ -828,30 +833,63 @@ extension SeriesDetailView {
         }
     }
 
-    /// Marks all episodes in the currently-loaded season that come *before*
-    /// the given episode as watched.
+    /// Marks as watched every episode that aired before the given episode:
+    /// all episodes in every earlier season (via Jellyfin's recursive season-level
+    /// API), plus any earlier episodes in the same season.
     ///
-    /// Iterates the loaded `episodes` array in order and calls `setPlayed`
-    /// for each one whose index is lower than the target episode. Invalidates
-    /// `UserDataStore` overrides after the batch so the UI refreshes.
+    /// `seasons` is already sorted ascending by season number, so filtering by
+    /// `seasonNumber < episode.seasonNumber` gives us the full set of prior seasons.
+    /// Calling `setPlayed` on a season ID is a single server call that Jellyfin
+    /// applies recursively to every child episode — no need to fetch episode lists
+    /// for those seasons.
     private func markEpisodesBeforePlayed(_ episode: Episode) async {
-        guard let targetIndex = episodes.firstIndex(where: { $0.id == episode.id }),
-            targetIndex > 0
-        else { return }
+        guard let episodeSeasonNumber = episode.seasonNumber else { return }
 
-        let previousEpisodes = Array(episodes[0..<targetIndex])
+        // Seasons that come entirely before the episode's season.
+        let previousSeasons = seasons.filter { $0.seasonNumber < episodeSeasonNumber }
+
+        // Episodes in the current season that come before this episode.
+        let earlierInSeason: [Episode]
+        if let targetIndex = episodes.firstIndex(where: { $0.id == episode.id }),
+            targetIndex > 0
+        {
+            earlierInSeason = Array(episodes[0..<targetIndex])
+        } else {
+            earlierInSeason = []
+        }
+
+        guard !previousSeasons.isEmpty || !earlierInSeason.isEmpty else { return }
 
         do {
-            for ep in previousEpisodes {
+            // One recursive API call per prior season marks all its episodes.
+            for season in previousSeasons {
+                try await authManager.provider.setPlayed(itemId: season.id, isPlayed: true)
+                appState.userDataStore?.invalidate(season.id)
+            }
+
+            // Mark earlier episodes in the current season individually.
+            for ep in earlierInSeason {
                 try await authManager.provider.setPlayed(itemId: ep.id, isPlayed: true)
                 appState.userDataStore?.invalidate(ep.id)
             }
 
+            // Reload the current season so watched indicators update immediately.
             if let selectedSeason {
                 await loadEpisodes(for: selectedSeason)
             }
 
-            ToastManager.shared.show("Previous episodes marked as watched", icon: "eye.fill")
+            let message: String
+            if !previousSeasons.isEmpty && !earlierInSeason.isEmpty {
+                message = "Previous seasons and episodes marked as watched"
+            } else if !previousSeasons.isEmpty {
+                message =
+                    previousSeasons.count == 1
+                    ? "Previous season marked as watched"
+                    : "Previous seasons marked as watched"
+            } else {
+                message = "Previous episodes marked as watched"
+            }
+            ToastManager.shared.show(message, icon: "eye.fill")
         } catch {
             ToastManager.shared.show(
                 "Couldn't update watched status",
