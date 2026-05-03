@@ -12,11 +12,15 @@ import SwiftUI
 /// }
 /// ```
 struct WatchedBadge: View {
+    /// The SF Symbol font size for the badge icon. Defaults to `.callout`.
+    /// Pass `.caption` or `.caption2` for smaller thumbnail contexts.
+    var font: Font = .callout
+
     var body: some View {
         Image(systemName: "checkmark.circle.fill")
             .symbolRenderingMode(.palette)
             .foregroundStyle(.white, .green)
-            .font(.callout)
+            .font(font)
             .shadow(color: .black.opacity(0.35), radius: 2)
             .padding(6)
     }
