@@ -122,14 +122,24 @@ struct PlaylistDetailView: View {
 
     private func playAllTracks(startingAt index: Int) {
         guard !tracks.isEmpty else { return }
-        appState.audioPlayer.play(tracks: tracks, startingAt: index)
+        let context = PlayContext(
+            title: playlist.name,
+            type: .playlist,
+            id: ItemID(playlist.id.rawValue)
+        )
+        appState.audioPlayer.play(tracks: tracks, startingAt: index, context: context)
     }
 
     private func playShuffled() {
         guard !tracks.isEmpty else { return }
         var shuffled = tracks
         shuffled.shuffle()
-        appState.audioPlayer.play(tracks: shuffled, startingAt: 0)
+        let context = PlayContext(
+            title: playlist.name,
+            type: .playlist,
+            id: ItemID(playlist.id.rawValue)
+        )
+        appState.audioPlayer.play(tracks: shuffled, startingAt: 0, context: context)
     }
 
     private func isCurrentTrack(_ track: Track) -> Bool {
