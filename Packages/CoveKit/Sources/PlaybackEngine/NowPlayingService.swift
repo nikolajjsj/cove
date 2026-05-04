@@ -8,9 +8,15 @@ import Models
     import AppKit
 #endif
 
-/// Manages MPNowPlayingInfoCenter and MPRemoteCommandCenter for lock screen / Control Center integration.
+/// Manages `MPNowPlayingInfoCenter` and `MPRemoteCommandCenter` for lock screen
+/// and Control Center integration.
+///
+/// Registered command targets are tracked per-command so that ``teardown()`` can
+/// remove exactly the targets this service added, without disturbing any targets
+/// registered by other components (e.g. a future video player or a third-party SDK).
 @MainActor
 final class NowPlayingService: NowPlayingProvider {
+
     private var commandCenter: MPRemoteCommandCenter { MPRemoteCommandCenter.shared() }
     private var infoCenter: MPNowPlayingInfoCenter { MPNowPlayingInfoCenter.default() }
 
@@ -24,108 +30,76 @@ final class NowPlayingService: NowPlayingProvider {
     var onTogglePlayPause: (@MainActor () -> Void)?
     var onToggleFavorite: (@MainActor () -> Void)?
 
-    /// Stored command targets for cleanup.
-    private var commandTargets: [Any] = []
+    // MARK: - Private State
 
-    /// Tracks the current artwork request to avoid stale updates.
+    /// Stores each registered (command, target) pair so ``teardown()`` can
+    /// remove exactly our targets — not every target on the shared command center.
+    private var registeredTargets: [(command: MPRemoteCommand, target: Any)] = []
+
+    /// Tracks the track ID of the most-recently-requested artwork download,
+    /// allowing stale responses to be silently discarded when the track changes.
     private var currentArtworkTrackID: TrackID?
 
     // MARK: - Setup & Teardown
 
-    /// Register remote command targets for playback control.
+    /// Register remote-command targets for playback control.
+    ///
+    /// Calls ``teardown()`` first to ensure a clean slate if called more than once.
     func setup() {
         teardown()
 
         let center = commandCenter
 
-        center.playCommand.isEnabled = true
-        commandTargets.append(
-            center.playCommand.addTarget { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.onPlay?()
-                }
-                return .success
-            }
-        )
+        register(center.playCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.onPlay?() }
+            return .success
+        }
 
-        center.pauseCommand.isEnabled = true
-        commandTargets.append(
-            center.pauseCommand.addTarget { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.onPause?()
-                }
-                return .success
-            }
-        )
+        register(center.pauseCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.onPause?() }
+            return .success
+        }
 
-        center.togglePlayPauseCommand.isEnabled = true
-        commandTargets.append(
-            center.togglePlayPauseCommand.addTarget { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.onTogglePlayPause?()
-                }
-                return .success
-            }
-        )
+        register(center.togglePlayPauseCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.onTogglePlayPause?() }
+            return .success
+        }
 
-        center.nextTrackCommand.isEnabled = true
-        commandTargets.append(
-            center.nextTrackCommand.addTarget { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.onNext?()
-                }
-                return .success
-            }
-        )
+        register(center.nextTrackCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.onNext?() }
+            return .success
+        }
 
-        center.previousTrackCommand.isEnabled = true
-        commandTargets.append(
-            center.previousTrackCommand.addTarget { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.onPrevious?()
-                }
-                return .success
-            }
-        )
+        register(center.previousTrackCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.onPrevious?() }
+            return .success
+        }
 
-        center.changePlaybackPositionCommand.isEnabled = true
-        commandTargets.append(
-            center.changePlaybackPositionCommand.addTarget { [weak self] event in
-                guard let positionEvent = event as? MPChangePlaybackPositionCommandEvent else {
-                    return .commandFailed
-                }
-                let position = positionEvent.positionTime
-                Task { @MainActor [weak self] in
-                    self?.onSeek?(position)
-                }
-                return .success
+        register(center.changePlaybackPositionCommand) { [weak self] event in
+            guard let positionEvent = event as? MPChangePlaybackPositionCommandEvent else {
+                return .commandFailed
             }
-        )
+            let position = positionEvent.positionTime
+            Task { @MainActor [weak self] in self?.onSeek?(position) }
+            return .success
+        }
 
         center.likeCommand.isEnabled = true
-        commandTargets.append(
-            center.likeCommand.addTarget { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.onToggleFavorite?()
-                }
-                return .success
-            }
-        )
+        register(center.likeCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.onToggleFavorite?() }
+            return .success
+        }
     }
 
-    /// Remove all remote command targets and clear now playing info.
+    /// Remove all command targets registered by this service and clear now-playing info.
     func teardown() {
-        let center = commandCenter
-        center.playCommand.removeTarget(nil)
-        center.pauseCommand.removeTarget(nil)
-        center.togglePlayPauseCommand.removeTarget(nil)
-        center.nextTrackCommand.removeTarget(nil)
-        center.previousTrackCommand.removeTarget(nil)
-        center.changePlaybackPositionCommand.removeTarget(nil)
-        center.likeCommand.removeTarget(nil)
-        center.likeCommand.isEnabled = false
-        center.likeCommand.isActive = false
-        commandTargets.removeAll()
+        for (command, target) in registeredTargets {
+            command.removeTarget(target)
+        }
+        registeredTargets.removeAll()
+
+        commandCenter.likeCommand.isEnabled = false
+        commandCenter.likeCommand.isActive = false
 
         infoCenter.nowPlayingInfo = nil
         currentArtworkTrackID = nil
@@ -133,7 +107,7 @@ final class NowPlayingService: NowPlayingProvider {
 
     // MARK: - Now Playing Info
 
-    /// Update the full now playing info for a new track.
+    /// Update the full now-playing metadata for a new track.
     func updateNowPlaying(
         track: Track,
         isPlaying: Bool,
@@ -153,22 +127,18 @@ final class NowPlayingService: NowPlayingProvider {
         if let artistName = track.artistName {
             info[MPMediaItemPropertyArtist] = artistName
         }
-
         if let albumName = track.albumName {
             info[MPMediaItemPropertyAlbumTitle] = albumName
         }
-
         if let trackNumber = track.trackNumber {
             info[MPMediaItemPropertyAlbumTrackNumber] = trackNumber
         }
-
         if let discNumber = track.discNumber {
             info[MPMediaItemPropertyDiscNumber] = discNumber
         }
 
         infoCenter.nowPlayingInfo = info
 
-        // Load artwork asynchronously
         if let artworkURL {
             loadArtwork(from: artworkURL, forTrackID: track.id)
         }
@@ -179,7 +149,8 @@ final class NowPlayingService: NowPlayingProvider {
         commandCenter.likeCommand.isActive = isFavorite
     }
 
-    /// Update only the playback state (elapsed time, rate, duration) in the existing now playing info.
+    /// Update only the playback-state fields of the existing now-playing info
+    /// (elapsed time, playback rate, duration). Lightweight — called on a timer.
     func updatePlaybackState(isPlaying: Bool, currentTime: TimeInterval, duration: TimeInterval) {
         guard var info = infoCenter.nowPlayingInfo else { return }
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
@@ -188,15 +159,28 @@ final class NowPlayingService: NowPlayingProvider {
         infoCenter.nowPlayingInfo = info
     }
 
-    // MARK: - Private
+    // MARK: - Private Helpers
 
-    /// Download artwork from a URL and set it in the now playing info.
-    /// Checks `currentArtworkTrackID` to discard stale results if the track changed.
+    /// Register a handler on `command`, enable it, and record the (command, target) pair
+    /// for later clean removal in ``teardown()``.
+    private func register(
+        _ command: MPRemoteCommand,
+        handler: @escaping (MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus
+    ) {
+        command.isEnabled = true
+        let target = command.addTarget(handler: handler)
+        registeredTargets.append((command, target))
+    }
+
+    /// Download artwork from `url` and inject it into the now-playing info.
+    ///
+    /// Uses `currentArtworkTrackID` to silently discard stale results when the
+    /// track changes before the download completes.
     private func loadArtwork(from url: URL, forTrackID trackID: TrackID) {
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             guard let (data, _) = try? await URLSession.shared.data(from: url) else { return }
 
-            // Discard if the track changed while we were downloading
+            // Discard if the track changed while we were downloading.
             guard let self, self.currentArtworkTrackID == trackID else { return }
 
             #if os(iOS)

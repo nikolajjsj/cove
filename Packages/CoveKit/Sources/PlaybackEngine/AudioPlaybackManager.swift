@@ -108,11 +108,16 @@ public final class AudioPlaybackManager {
     // MARK: - Public API
 
     /// Start playing a list of tracks from a specific index.
-    public func play(tracks: [Track], startingAt index: Int = 0) {
+    ///
+    /// - Parameters:
+    ///   - tracks: The ordered list of tracks to load into the queue.
+    ///   - index: The zero-based index of the track to play first. Defaults to `0`.
+    ///   - context: Optional source context displayed in the queue as "Playing from …".
+    public func play(tracks: [Track], startingAt index: Int = 0, context: PlayContext? = nil) {
         // Report stopped for the previous track if one was playing.
         reportStoppedForCurrentTrack()
 
-        queue.load(tracks: tracks, startingAt: index)
+        queue.load(tracks: tracks, startingAt: index, context: context)
         listenedTrackIds.removeAll()
         rebuildPlayerQueue()
         playerBackend.play()
@@ -235,20 +240,19 @@ public final class AudioPlaybackManager {
 
     /// Seek to a specific position in the current track.
     public func seek(to time: TimeInterval) {
-        playerBackend.seek(to: time) { [weak self] finished in
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let finished = await self.playerBackend.seek(to: time)
             guard finished else { return }
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.currentTime = time
-                self.nowPlaying.updatePlaybackState(
-                    isPlaying: self.isPlaying,
-                    currentTime: self.currentTime,
-                    duration: self.duration
-                )
-                // Report progress at the new seek position.
-                self.reportProgress(isPaused: !self.isPlaying)
-                self.checkListenedThreshold()
-            }
+            self.currentTime = time
+            self.nowPlaying.updatePlaybackState(
+                isPlaying: self.isPlaying,
+                currentTime: self.currentTime,
+                duration: self.duration
+            )
+            // Report progress at the new seek position.
+            self.reportProgress(isPaused: !self.isPlaying)
+            self.checkListenedThreshold()
         }
     }
 

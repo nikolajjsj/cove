@@ -83,3 +83,23 @@ public protocol AudioPlayerBackend: AnyObject {
     /// - Parameter token: The token returned by ``enqueue(url:)`` for this item.
     var onItemDidFinish: (@MainActor (_ token: AnyHashable) -> Void)? { get set }
 }
+
+// MARK: - Default Async Implementation
+
+extension AudioPlayerBackend {
+    /// An async wrapper around ``seek(to:completion:)`` that suspends until
+    /// the seek completes or fails.
+    ///
+    /// Prefer this over the completion-handler variant in all `async` contexts.
+    ///
+    /// - Parameter seconds: The target playback position in seconds.
+    /// - Returns: `true` if the seek completed successfully, `false` if it was
+    ///   interrupted or the player failed.
+    func seek(to seconds: TimeInterval) async -> Bool {
+        await withCheckedContinuation { continuation in
+            seek(to: seconds) { finished in
+                continuation.resume(returning: finished)
+            }
+        }
+    }
+}
