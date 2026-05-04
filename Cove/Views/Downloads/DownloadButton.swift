@@ -94,14 +94,12 @@ private struct DownloadButtonLabel: View {
             // Not downloaded — show download arrow
             Image(systemName: "arrow.down.circle")
                 .font(.title2)
-                .foregroundStyle(.tint)
                 .symbolRenderingMode(.hierarchical)
 
         case .queued:
             // Queued — show clock with subtle animation
             Image(systemName: "clock.fill")
                 .font(.title2)
-                .foregroundStyle(.orange)
                 .symbolEffect(.pulse)
 
         case .downloading:
@@ -117,7 +115,6 @@ private struct DownloadButtonLabel: View {
 
                 Image(systemName: "stop.fill")
                     .font(.caption2)
-                    .foregroundStyle(.tint)
             }
             .frame(width: 26, height: 26)
 
@@ -125,19 +122,16 @@ private struct DownloadButtonLabel: View {
             // Paused — show resume indicator
             Image(systemName: "pause.circle.fill")
                 .font(.title2)
-                .foregroundStyle(.orange)
 
         case .completed:
             // Downloaded — green checkmark
             Image(systemName: "checkmark.circle.fill")
                 .font(.title2)
-                .foregroundStyle(.green)
 
         case .failed:
             // Failed — red error with retry affordance
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.title2)
-                .foregroundStyle(.red)
         }
     }
 }
