@@ -17,11 +17,11 @@ struct SkeletonCard: View {
             if isCircular {
                 Circle()
                     .fill(.quaternary)
-                    .aspectRatio(1, contentMode: .fill)
+                    .aspectRatio(1, contentMode: width != nil ? .fit : .fill)
             } else {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(.quaternary)
-                    .aspectRatio(aspectRatio, contentMode: .fill)
+                    .aspectRatio(aspectRatio, contentMode: width != nil ? .fit : .fill)
             }
 
             ForEach(0..<lineCount, id: \.self) { index in
@@ -33,7 +33,9 @@ struct SkeletonCard: View {
                     )
             }
         }
-        .frame(maxWidth: width ?? .infinity)
+        // Exact width in a rail/shelf (LazyHStack needs a concrete size to offer items).
+        // Unconstrained max-width in a grid (parent cell provides the width).
+        .frame(width: width)
     }
 
     /// Progressively shorter lines after the first.
