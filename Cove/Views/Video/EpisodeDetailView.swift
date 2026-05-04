@@ -29,6 +29,30 @@ struct EpisodeDetailView: View {
                 libraryId: tvShowsLibraryId,
                 header: {
                     VStack(alignment: .leading, spacing: 8) {
+                        // Series name — tappable breadcrumb to the parent show
+                        if let seriesName = item.seriesName,
+                            !seriesName.isEmpty,
+                            let seriesId = item.seriesId
+                        {
+                            NavigationLink(
+                                value: MediaItem(
+                                    id: seriesId,
+                                    title: seriesName,
+                                    mediaType: .series
+                                )
+                            ) {
+                                HStack(spacing: 4) {
+                                    Text(seriesName)
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(.secondary)
+                                    Image(systemName: "chevron.forward")
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+
                         PlayButton(item: item)
                         EndsAtLabel(item: item)
                     }
@@ -158,9 +182,7 @@ struct EpisodeDetailView: View {
     private var heroSubtitleParts: [String] {
         var parts: [String] = []
 
-        if let seriesName = item.seriesName, !seriesName.isEmpty {
-            parts.append(seriesName)
-        }
+        // Series name is shown as a tappable link in the header slot, not here.
 
         let seasonNumber = item.parentIndexNumber
         let episodeNumber = item.indexNumber
