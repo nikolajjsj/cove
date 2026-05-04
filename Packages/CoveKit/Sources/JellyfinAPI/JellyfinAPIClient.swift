@@ -150,6 +150,8 @@ public final class JellyfinAPIClient: Sendable {
         years: [Int]? = nil,
         minCommunityRating: Double? = nil,
         albumArtistIds: [String]? = nil,
+        artistIds: [String]? = nil,
+        studios: [String]? = nil,
         cacheMaxAge: TimeInterval = 30
     ) async throws -> ItemsResult {
         let url = baseURL.appending(path: "Users/\(userId)/Items")
@@ -199,6 +201,14 @@ public final class JellyfinAPIClient: Sendable {
         if let albumArtistIds, !albumArtistIds.isEmpty {
             queryItems.append(
                 URLQueryItem(name: "AlbumArtistIds", value: albumArtistIds.joined(separator: ",")))
+        }
+        if let artistIds, !artistIds.isEmpty {
+            queryItems.append(
+                URLQueryItem(name: "ArtistIds", value: artistIds.joined(separator: ",")))
+        }
+        if let studios, !studios.isEmpty {
+            queryItems.append(
+                URLQueryItem(name: "Studios", value: studios.joined(separator: "|")))
         }
 
         logger.debug(
@@ -347,6 +357,31 @@ public final class JellyfinAPIClient: Sendable {
         if let sortOrder { queryItems.append(URLQueryItem(name: "SortOrder", value: sortOrder)) }
         if let searchTerm { queryItems.append(URLQueryItem(name: "SearchTerm", value: searchTerm)) }
         logger.debug("Fetching genres")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
+            cachePolicy: .cacheFirst(maxAge: 300))
+    }
+
+    /// Fetch studios for a library.
+    /// `GET /Studios`
+    public func getStudios(
+        userId: String,
+        parentId: String? = nil,
+        sortBy: String? = "SortName",
+        sortOrder: String? = "Ascending",
+        searchTerm: String? = nil
+    ) async throws -> ItemsResult {
+        let url = baseURL.appending(path: "Studios")
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "UserId", value: userId),
+            URLQueryItem(name: "Fields", value: "Overview,DateCreated"),
+            URLQueryItem(name: "Recursive", value: "true"),
+        ]
+        if let parentId { queryItems.append(URLQueryItem(name: "ParentId", value: parentId)) }
+        if let sortBy { queryItems.append(URLQueryItem(name: "SortBy", value: sortBy)) }
+        if let sortOrder { queryItems.append(URLQueryItem(name: "SortOrder", value: sortOrder)) }
+        if let searchTerm { queryItems.append(URLQueryItem(name: "SearchTerm", value: searchTerm)) }
+        logger.debug("Fetching studios")
         return try await httpClient.request(
             url: url, method: .get, headers: authHeaders, queryItems: queryItems,
             cachePolicy: .cacheFirst(maxAge: 300))

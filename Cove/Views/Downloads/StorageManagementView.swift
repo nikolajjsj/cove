@@ -263,6 +263,7 @@ struct StorageManagementView: View {
         case .podcast: "Podcasts"
         case .collection: "Collections"
         case .genre: "Genres"
+        case .studio: "Studios"
         }
     }
 

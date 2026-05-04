@@ -171,6 +171,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
             genres: filter.genres,
             years: filter.years,
             minCommunityRating: filter.minCommunityRating,
+            studios: filter.studios,
             cacheMaxAge: cacheMaxAge
         )
         let items = (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
@@ -489,6 +490,34 @@ public final class JellyfinServerProvider: MediaServerProvider,
             limit: limit
         )
         return (result.items ?? []).compactMap { JellyfinMapper.mapTrack($0) }
+    }
+
+    /// Fetch the most-played tracks for an artist.
+    /// Uses `GET /Users/{userId}/Items?ArtistIds=&IncludeItemTypes=Audio&SortBy=PlayCount`
+    public func topTracks(artist: ArtistID, limit: Int = 5) async throws -> [Track] {
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getItems(
+            userId: userId,
+            includeItemTypes: ["Audio"],
+            sortBy: "PlayCount",
+            sortOrder: "Descending",
+            limit: limit,
+            artistIds: [artist.rawValue]
+        )
+        return (result.items ?? []).compactMap { JellyfinMapper.mapTrack($0) }
+    }
+
+    /// Fetch all studios for a given library.
+    public func studios(in library: MediaLibrary) async throws -> [MediaItem] {
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getStudios(
+            userId: userId,
+            parentId: library.id.rawValue
+        )
+        return (result.items ?? []).compactMap { dto -> MediaItem? in
+            guard let id = dto.id, let name = dto.name else { return nil }
+            return MediaItem(id: ItemID(id), title: name, mediaType: .studio)
+        }
     }
 
     // MARK: - Audio Streaming

@@ -1,3 +1,4 @@
+import CoveUI
 import Models
 import SwiftUI
 
@@ -144,8 +145,12 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
 
                     // Studios
                     if let studios = displayItem.studios, !studios.isEmpty {
-                        ChipFlowSection(title: "Studios", items: studios)
-                            .padding(.horizontal)
+                        TappableStudioChipFlowSection(
+                            title: "Studios",
+                            items: studios,
+                            libraryId: libraryId
+                        )
+                        .padding(.horizontal)
                     }
                 }
             }
@@ -154,6 +159,39 @@ struct VideoDetailScaffold<Header: View, Footer: View>: View {
 
             // MARK: - Footer slot (e.g. cast/crew, similar items, season picker)
             footer
+        }
+    }
+}
+
+// MARK: - Tappable Studio Chip Flow Section
+
+/// A chip flow where each chip navigates to a ``StudioRoute``.
+private struct TappableStudioChipFlowSection: View {
+    let title: String
+    let items: [String]
+    let libraryId: ItemID?
+
+    var body: some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.headline)
+                FlowLayout(spacing: 8) {
+                    ForEach(items, id: \.self) { item in
+                        NavigationLink(value: StudioRoute(studio: item, libraryId: libraryId)) {
+                            Text(item)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary))
+                                .contentShape(.rect(cornerRadius: 8))
+                                .hoverEffect(.highlight)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
         }
     }
 }

@@ -26,6 +26,9 @@ enum NavigationRouter {
             GenreDetailView(genreItem: item, library: nil)
         case .track:
             SongDetailView(item: item)
+        case .studio:
+            Text(item.title)
+                .navigationTitle(item.title)
         default:
             Text(item.title)
                 .navigationTitle(item.title)
@@ -92,6 +95,17 @@ enum NavigationRouter {
         VideoGenreDetailView(genreName: route.genre, library: library)
     }
 
+    /// Returns the detail view for a video studio route.
+    @ViewBuilder
+    static func destination(for route: StudioRoute, appState: AppState) -> some View {
+        let library =
+            appState.libraries.first { $0.id == route.libraryId }
+            ?? appState.libraries.first {
+                $0.collectionType == .movies || $0.collectionType == .tvshows
+            }
+        StudioDetailView(studioName: route.studio, library: library)
+    }
+
     /// Returns the detail view for a smart playlist preset.
     @ViewBuilder
     static func destination(for preset: SmartPlaylist, appState: AppState) -> some View {
@@ -126,6 +140,9 @@ private struct NavigationDestinations: ViewModifier {
                 NavigationRouter.destination(for: route, appState: appState)
             }
             .navigationDestination(for: VideoGenreRoute.self) { route in
+                NavigationRouter.destination(for: route, appState: appState)
+            }
+            .navigationDestination(for: StudioRoute.self) { route in
                 NavigationRouter.destination(for: route, appState: appState)
             }
             .navigationDestination(for: SmartPlaylist.self) { preset in

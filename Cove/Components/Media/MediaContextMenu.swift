@@ -77,7 +77,7 @@ struct MediaContextMenuModifier: ViewModifier {
             artistMenu
         case .track:
             trackMenu
-        case .collection, .season, .genre, .book, .podcast, .playlist:
+        case .collection, .season, .genre, .book, .podcast, .playlist, .studio:
             defaultMenu
         }
     }

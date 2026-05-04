@@ -20,6 +20,7 @@ extension MediaType {
         case .book: "book"
         case .podcast: "mic"
         case .genre: "guitars"
+        case .studio: "building.2"
         }
     }
 
@@ -54,6 +55,7 @@ extension MediaType {
         case .genre: "Genre"
         case .book: "Book"
         case .podcast: "Podcast"
+        case .studio: "Studio"
         }
     }
 }
