@@ -4,6 +4,7 @@ import JellyfinProvider
 import MediaServerKit
 import Models
 import NukeUI
+import PlaybackEngine
 import SwiftUI
 
 struct ArtistDetailView: View {
@@ -29,7 +30,22 @@ struct ArtistDetailView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         ArtistHeaderView(artistItem: artistItem, imageURL: artistImageURL)
+                        ArtistTopTracksSection(artistItem: artistItem)
                         ArtistAlbumsSection(albums: loader.items)
+                        ContentRail(
+                            title: "Similar Artists",
+                            skeleton: { SkeletonCard(width: 120, isCircular: true) }
+                        ) {
+                            try await authManager.provider.similarItems(for: artistItem, limit: nil)
+                        } card: { item in
+                            ArtistCard(
+                                item: item,
+                                imageURL: authManager.provider.imageURL(
+                                    for: item, type: .primary,
+                                    maxSize: CGSize(width: 240, height: 240))
+                            )
+                            .frame(width: 120)
+                        }
                     }
                     .padding(.bottom, 32)
                 }
@@ -65,6 +81,7 @@ struct ArtistDetailView: View {
 private struct ArtistHeaderView: View {
     let artistItem: MediaItem
     let imageURL: URL?
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         VStack(spacing: 16) {
@@ -85,16 +102,119 @@ private struct ArtistHeaderView: View {
 
             // Overview
             if let overview = artistItem.overview, !overview.isEmpty {
-                Text(overview)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(6)
+                ExpandableOverview(text: overview, font: .subheadline)
                     .padding(.horizontal)
             }
+
+            Button {
+                Task { await appState.startRadio(for: artistItem.id) }
+            } label: {
+                Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
+                    .font(.subheadline)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.bordered)
+            .tint(.secondary)
         }
         .padding(.top, 16)
         .padding(.horizontal)
+    }
+}
+
+// MARK: - Artist Top Tracks Section
+
+private struct ArtistTopTracksSection: View {
+    let artistItem: MediaItem
+    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
+    @State private var tracks: [Track] = []
+    @State private var isLoading = true
+
+    var body: some View {
+        Group {
+            if isLoading {
+                // Skeleton placeholders while loading
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Top Tracks")
+                        .font(.title2)
+                        .bold()
+                        .padding(.horizontal)
+                        .padding(.bottom, 12)
+
+                    ForEach(0..<5, id: \.self) { _ in
+                        HStack(spacing: 12) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(.quaternary)
+                                .frame(width: 44, height: 44)
+                            VStack(alignment: .leading, spacing: 4) {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(.quaternary)
+                                    .frame(width: 140, height: 14)
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(.quaternary)
+                                    .frame(width: 90, height: 11)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 10)
+                    }
+                }
+            } else if !tracks.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Top Tracks")
+                        .font(.title2)
+                        .bold()
+                        .padding(.horizontal)
+                        .padding(.bottom, 12)
+
+                    ForEach(tracks.enumerated(), id: \.element.id) { index, track in
+                        let isCurrentTrack = appState.audioPlayer.queue.currentTrack?.id == track.id
+                        let isPlaying = appState.audioPlayer.isPlaying
+
+                        TrackRow(
+                            title: track.title,
+                            subtitle: track.albumName,
+                            imageURL: imageURL(for: track),
+                            duration: track.duration,
+                            isCurrentTrack: isCurrentTrack,
+                            isPlaying: isCurrentTrack && isPlaying,
+                            isFavorite: appState.userDataStore?.isFavorite(
+                                track.id, fallback: track.userData
+                            ) ?? track.userData?.isFavorite ?? false,
+                            onTap: { playFrom(index: index) }
+                        )
+                        .padding(.horizontal)
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+        }
+        .task(id: artistItem.id) {
+            await loadTopTracks()
+        }
+    }
+
+    private func loadTopTracks() async {
+        isLoading = true
+        do {
+            tracks = try await authManager.provider.topTracks(artist: artistItem.id, limit: 5)
+        } catch {
+            tracks = []
+        }
+        isLoading = false
+    }
+
+    private func playFrom(index: Int) {
+        guard !tracks.isEmpty else { return }
+        appState.audioPlayer.play(tracks: tracks, startingAt: index)
+    }
+
+    private func imageURL(for track: Track) -> URL? {
+        let itemId = track.albumId ?? track.id
+        return authManager.provider.imageURL(
+            for: itemId, type: .primary, maxSize: CGSize(width: 88, height: 88))
     }
 }
 
