@@ -56,6 +56,7 @@ final class AppState {
     let authManager: AuthManager
     let downloadCoordinator: DownloadCoordinator
     let audioPlayer = AudioPlaybackManager()
+    let lyricsStore = LyricsStore()
     let videoPlayerCoordinator = VideoPlayerCoordinator()
     let networkMonitor = NetworkMonitor.shared
 

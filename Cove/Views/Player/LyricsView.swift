@@ -1,40 +1,46 @@
-import JellyfinProvider
 import Models
 import PlaybackEngine
 import SwiftUI
 
-/// Page 2 of the paged player — displays synced or unsynced lyrics.
+/// Lyrics page in the full-screen audio player.
+///
+/// Displays synchronized or unsynchronized lyrics for the current track.
+/// Synchronized lyrics auto-scroll to keep the active line centred in the
+/// viewport as the track plays. The user can scroll manually at any time;
+/// auto-scroll resumes three seconds after the last interaction.
+///
+/// Lyrics are fetched through ``LyricsStore`` on `AppState`, which deduplicates
+/// requests — if `CurrentLyricPreview` already loaded the lyrics while the artwork
+/// page was visible, they appear instantly without a second network round-trip.
 struct LyricsView: View {
     let track: Track
+
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
+
     @State private var lyrics: Lyrics?
     @State private var isLoading = true
-    @State private var isUserScrolling = false
-    @State private var scrollPauseTask: Task<Void, Never>?
-    @State private var scrollViewHeight: CGFloat = 400
 
-    /// Whether the lyrics have sync timing data.
+    // MARK: - Derived State
+
     private var isSynced: Bool {
-        guard let lyrics else { return false }
-        return lyrics.lines.contains { $0.startTime != nil }
+        lyrics?.lines.contains { $0.startTime != nil } == true
     }
 
-    /// Index of the currently active lyric line based on playback position.
+    /// The index of the lyric line whose `startTime` is the latest one that is
+    /// less-than-or-equal to the current playback position.
     private var currentLineIndex: Int? {
         guard let lyrics, isSynced else { return nil }
         let time = appState.audioPlayer.currentTime
-        var lastIndex: Int?
+        var result: Int?
         for (index, line) in lyrics.lines.enumerated() {
-            guard let startTime = line.startTime else { continue }
-            if startTime <= time {
-                lastIndex = index
-            } else {
-                break
-            }
+            guard let start = line.startTime else { continue }
+            if start <= time { result = index } else { break }
         }
-        return lastIndex
+        return result
     }
+
+    // MARK: - Body
 
     var body: some View {
         Group {
@@ -43,12 +49,16 @@ struct LyricsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let lyrics, !lyrics.lines.isEmpty {
                 if isSynced {
-                    syncedLyricsView(lyrics: lyrics)
+                    SyncedLyricsView(
+                        lines: lyrics.lines,
+                        currentLineIndex: currentLineIndex,
+                        onSeek: { appState.audioPlayer.seek(to: $0) }
+                    )
                 } else {
-                    unsyncedLyricsView(lyrics: lyrics)
+                    UnsyncedLyricsView(lines: lyrics.lines)
                 }
             } else {
-                emptyState
+                ContentUnavailableView("Lyrics Not Available", systemImage: "music.note")
             }
         }
         .task(id: track.id) {
@@ -56,94 +66,80 @@ struct LyricsView: View {
         }
     }
 
-    // MARK: - Synced Lyrics
+    // MARK: - Data Loading
 
-    private func syncedLyricsView(lyrics: Lyrics) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 16) {
-                    // Top spacer: half the measured viewport height so the first
-                    // line can scroll to the centre of the visible area.
-                    Color.clear
-                        .frame(height: scrollViewHeight / 2)
-
-                    ForEach(lyrics.lines.enumerated(), id: \.offset) { index, line in
-                        let isCurrentLine = currentLineIndex == index
-
-                        Button {
-                            if let startTime = line.startTime {
-                                appState.audioPlayer.seek(to: startTime)
-                            }
-                        } label: {
-                            Text(line.text)
-                                .font(.title3.weight(isCurrentLine ? .bold : .regular))
-                                .opacity(isCurrentLine ? 1.0 : 0.4)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 24)
-                                .animation(.easeInOut(duration: 0.3), value: isCurrentLine)
-                        }
-                        .buttonStyle(.plain)
-                        .id(index)
-                    }
-
-                    // Bottom spacer: mirrors the top so the last line can
-                    // also reach the centre of the visible area.
-                    Color.clear
-                        .frame(height: scrollViewHeight / 2)
-                }
-            }
-            .scrollIndicators(.hidden)
-            .onScrollPhaseChange { _, newPhase in
-                if newPhase == .interacting {
-                    pauseAutoScroll()
-                }
-            }
-            .onGeometryChange(
-                for: CGFloat.self,
-                of: {
-                    $0.size.height
-                }
-            ) { newHeight in
-                if newHeight > 0 { scrollViewHeight = newHeight }
-            }
-            .task(id: currentLineIndex) {
-                guard let index = currentLineIndex, !isUserScrolling else { return }
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    proxy.scrollTo(index, anchor: .center)
-                }
-            }
-        }
+    private func loadLyrics() async {
+        isLoading = true
+        lyrics = await appState.lyricsStore.lyrics(for: track.id, using: authManager.provider)
+        isLoading = false
     }
+}
 
-    // MARK: - Unsynced Lyrics
+// MARK: - Synced Lyrics
 
-    private func unsyncedLyricsView(lyrics: Lyrics) -> some View {
+/// Scrolling lyrics view that auto-advances to keep the active line centred,
+/// while respecting manual user scrolls.
+///
+/// Uses the modern `ScrollPosition` API instead of `ScrollViewReader` / `ScrollViewProxy`.
+/// Auto-scroll is driven by `onChange(of: currentLineIndex)` rather than a per-change
+/// `task(id:)`, which avoids spawning a new `Task` on every playback tick.
+private struct SyncedLyricsView: View {
+    let lines: [LyricLine]
+    let currentLineIndex: Int?
+    let onSeek: (TimeInterval) -> Void
+
+    @State private var scrollPosition = ScrollPosition(idType: Int.self)
+    @State private var scrollViewHeight: CGFloat = 400
+    @State private var isUserScrolling = false
+    @State private var scrollPauseTask: Task<Void, Never>?
+
+    var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
-                Spacer()
-                    .frame(height: 24)
+            LazyVStack(spacing: 16) {
+                // Top spacer so the first line can scroll to the centre of the viewport.
+                Color.clear
+                    .frame(height: scrollViewHeight / 2)
 
-                Text(lyrics.lines.map(\.text).joined(separator: "\n"))
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
-                    .lineSpacing(8)
+                ForEach(lines.enumerated(), id: \.offset) { index, line in
+                    let isActive = currentLineIndex == index
 
-                Spacer()
-                    .frame(height: 24)
+                    Button {
+                        if let start = line.startTime { onSeek(start) }
+                    } label: {
+                        Text(line.text)
+                            .font(.title3)
+                            .bold(isActive)
+                            .opacity(isActive ? 1.0 : 0.4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 24)
+                            .animation(.easeInOut(duration: 0.3), value: isActive)
+                    }
+                    .buttonStyle(.plain)
+                    .id(index)
+                }
+
+                // Bottom spacer mirrors the top so the last line can also centre.
+                Color.clear
+                    .frame(height: scrollViewHeight / 2)
             }
         }
         .scrollIndicators(.hidden)
+        .scrollPosition($scrollPosition)
+        .onScrollPhaseChange { _, newPhase in
+            if newPhase == .interacting { pauseAutoScroll() }
+        }
+        .onGeometryChange(for: CGFloat.self, of: \.size.height) { newHeight in
+            if newHeight > 0 { scrollViewHeight = newHeight }
+        }
+        .onChange(of: currentLineIndex) { _, newIndex in
+            guard let index = newIndex, !isUserScrolling else { return }
+            withAnimation(.easeInOut(duration: 0.4)) {
+                scrollPosition.scrollTo(id: index, anchor: .center)
+            }
+        }
     }
 
-    // MARK: - Empty State
-
-    private var emptyState: some View {
-        ContentUnavailableView("Lyrics Not Available", systemImage: "music.note")
-    }
-
-    // MARK: - Auto-Scroll Pause
+    // MARK: - Auto-Scroll
 
     private func pauseAutoScroll() {
         isUserScrolling = true
@@ -154,19 +150,28 @@ struct LyricsView: View {
             isUserScrolling = false
         }
     }
+}
 
-    // MARK: - Data Loading
+// MARK: - Unsynced Lyrics
 
-    private func loadLyrics() async {
-        isLoading = true
-        do {
-            lyrics = try await authManager.provider.lyrics(track: track.id)
-        } catch {
-            lyrics = nil
+private struct UnsyncedLyricsView: View {
+    let lines: [LyricLine]
+
+    var body: some View {
+        ScrollView {
+            Text(lines.map(\.text).joined(separator: "\n"))
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 24)
+                .lineSpacing(8)
         }
-        isLoading = false
+        .scrollIndicators(.hidden)
     }
 }
+
+// MARK: - Preview
 
 #Preview {
     let state = AppState.preview

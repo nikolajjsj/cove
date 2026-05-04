@@ -1,4 +1,3 @@
-import JellyfinProvider
 import Models
 import PlaybackEngine
 import SwiftUI
@@ -6,9 +5,13 @@ import SwiftUI
 /// Shows the currently active lyric line on the artwork page.
 ///
 /// Isolated in its own struct so that per-tick `currentTime` observation only
-/// re-renders this small subtree — not the parent controls view.
+/// re-renders this small subtree — not the parent artwork view.
+///
+/// Lyrics are fetched through ``LyricsStore`` on `AppState`, so if ``LyricsView``
+/// is (or was) open for the same track, no additional network request is made.
 struct CurrentLyricPreview: View {
     let track: Track
+
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
 
@@ -54,18 +57,17 @@ struct CurrentLyricPreview: View {
         }
     }
 
+    // MARK: - Data Loading
+
     private func loadSyncedLines() async {
-        do {
-            let lyrics = try await authManager.provider.lyrics(track: track.id)
-            guard let lyrics else { return }
-            syncedLines = lyrics.lines
-                .compactMap { line in
-                    guard let t = line.startTime else { return nil }
-                    return (startTime: t, text: line.text)
-                }
-                .sorted { $0.startTime < $1.startTime }
-        } catch {
-            syncedLines = []
-        }
+        let lyrics = await appState.lyricsStore.lyrics(for: track.id, using: authManager.provider)
+        syncedLines =
+            lyrics?.lines
+            .compactMap { line in
+                guard let t = line.startTime else { return nil }
+                return (startTime: t, text: line.text)
+            }
+            .sorted { $0.startTime < $1.startTime }
+            ?? []
     }
 }
