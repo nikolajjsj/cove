@@ -65,6 +65,7 @@ struct AlbumDetailView: View {
                             albumItem: albumItem,
                             imageURL: albumImageURL,
                             artistName: inferredArtistName,
+                            artistId: inferredArtistId,
                             metadata: metadataParts.joined(separator: " · "),
                             isOffline: isOffline
                         )
@@ -326,6 +327,13 @@ struct AlbumDetailView: View {
         offlineAlbumMetadata?.artistName ?? tracks.first?.artistName
     }
 
+    private var inferredArtistId: ItemID? {
+        if let id = offlineAlbumMetadata?.artistId {
+            return ItemID(id)
+        }
+        return tracks.first?.artistId.map { ItemID($0.rawValue) }
+    }
+
     private func downloadAlbum() async {
         guard !tracks.isEmpty else { return }
         isDownloadingAlbum = true
@@ -401,6 +409,7 @@ private struct AlbumHeaderView: View {
     let albumItem: MediaItem
     let imageURL: URL?
     let artistName: String?
+    let artistId: ItemID?
     let metadata: String
     let isOffline: Bool
 
@@ -418,11 +427,31 @@ private struct AlbumHeaderView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            // Artist name
+            // Artist name — navigates to the artist page once the ID is known
             if let artistName {
-                Text(artistName)
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
+                if let artistId {
+                    NavigationLink(
+                        value: MediaItem(
+                            id: artistId,
+                            title: artistName,
+                            mediaType: .artist
+                        )
+                    ) {
+                        HStack(spacing: 4) {
+                            Text(artistName)
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.forward")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text(artistName)
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             // Metadata line: Year · Tracks · Duration
