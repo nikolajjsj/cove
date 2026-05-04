@@ -72,11 +72,18 @@ struct AlbumDetailView: View {
 
                         AlbumActionButtons(
                             tracks: tracks,
+                            albumId: albumItem.id,
                             onPlay: { playAllTracks(startingAt: 0) },
                             onShuffle: { playShuffled() }
                         )
                         .padding(.horizontal)
                         .padding(.bottom, 16)
+
+                        // Album overview — shown only when online and overview exists
+                        if !isOffline, let overview = albumItem.overview, !overview.isEmpty {
+                            ExpandableOverview(text: overview, font: .subheadline)
+                                .padding(.horizontal)
+                        }
 
                         Divider()
                             .padding(.horizontal)
@@ -87,6 +94,31 @@ struct AlbumDetailView: View {
                             onPlayTrack: { playAllTracks(startingAt: $0) },
                             onDeleteOfflineTrack: { track in await deleteOfflineTrack(track) }
                         )
+
+                        // Similar Albums
+                        if !isOffline {
+                            Divider()
+                                .padding(.horizontal)
+                                .padding(.top, 24)
+
+                            ContentRail(
+                                title: "Similar Albums",
+                                skeleton: { SkeletonCard.albumShelf(width: 140) }
+                            ) {
+                                try await authManager.provider.similarItems(
+                                    for: albumItem, limit: nil)
+                            } card: { item in
+                                AlbumCard(
+                                    item: item,
+                                    subtitle: item.productionYear.map { String($0) },
+                                    imageURL: authManager.provider.imageURL(
+                                        for: item, type: .primary,
+                                        maxSize: CGSize(width: 300, height: 300))
+                                )
+                                .frame(width: 140)
+                            }
+                            .padding(.top, 8)
+                        }
                     }
                     .padding(.bottom, 32)
                 }
@@ -185,14 +217,16 @@ struct AlbumDetailView: View {
 
     private func playAllTracks(startingAt index: Int) {
         guard !tracks.isEmpty else { return }
-        appState.audioPlayer.play(tracks: tracks, startingAt: index)
+        let context = PlayContext(title: albumItem.title, type: .album, id: albumItem.id)
+        appState.audioPlayer.play(tracks: tracks, startingAt: index, context: context)
     }
 
     private func playShuffled() {
         guard !tracks.isEmpty else { return }
         var shuffled = tracks
         shuffled.shuffle()
-        appState.audioPlayer.play(tracks: shuffled, startingAt: 0)
+        let context = PlayContext(title: albumItem.title, type: .album, id: albumItem.id)
+        appState.audioPlayer.play(tracks: shuffled, startingAt: 0, context: context)
     }
 
     private func isCurrentTrack(_ track: Track) -> Bool {
@@ -408,15 +442,50 @@ private struct AlbumHeaderView: View {
 
 private struct AlbumActionButtons: View {
     let tracks: [Track]
+    let albumId: ItemID
     let onPlay: () -> Void
     let onShuffle: () -> Void
 
+    @Environment(AppState.self) private var appState
+
     var body: some View {
-        PlayShuffleButtons(
-            isDisabled: tracks.isEmpty,
-            onPlay: onPlay,
-            onShuffle: onShuffle
-        )
+        VStack(spacing: 10) {
+            // Primary actions
+            HStack(spacing: 12) {
+                Button {
+                    onPlay()
+                } label: {
+                    Label("Play", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(tracks.isEmpty)
+
+                Button {
+                    onShuffle()
+                } label: {
+                    Label("Shuffle", systemImage: "shuffle")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .disabled(tracks.isEmpty)
+            }
+
+            // Secondary action
+            Button {
+                Task { await appState.startRadio(for: albumId) }
+            } label: {
+                Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.bordered)
+            .tint(.secondary)
+            .disabled(tracks.isEmpty)
+        }
     }
 }
 
@@ -531,8 +600,6 @@ private struct AlbumDownloadButton: View {
             } label: {
                 Image(systemName: "arrow.down.circle")
                     .font(.title2)
-                    .foregroundStyle(.tint)
-                    .symbolRenderingMode(.hierarchical)
             }
             .disabled(tracksIsEmpty)
         }
@@ -550,7 +617,7 @@ private struct AlbumTrackRow: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 // Track number or now-playing indicator
                 Group {
                     if isCurrentTrack {
@@ -582,6 +649,17 @@ private struct AlbumTrackRow: View {
 
                 Spacer(minLength: 0)
 
+                if let label = qualityLabel {
+                    Text(label)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tint)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(.tint.opacity(0.12), in: .rect(cornerRadius: 4))
+                        // Optically align badge with the title baseline in .firstTextBaseline HStack
+                        .alignmentGuide(.firstTextBaseline) { $0[.firstTextBaseline] }
+                }
+
                 if isFavorite {
                     Image(systemName: "heart.fill")
                         .foregroundStyle(.pink)
@@ -610,6 +688,17 @@ private struct AlbumTrackRow: View {
             return "\(num)"
         }
         return ""
+    }
+
+    /// Quality label shown for lossless formats.
+    private var qualityLabel: String? {
+        guard let codec = track.codec?.lowercased() else { return nil }
+        let losslessCodecs: Set<String> = ["flac", "alac", "wav", "aiff", "ape", "wv", "truehd"]
+        guard losslessCodecs.contains(codec) else { return nil }
+        if let sampleRate = track.sampleRate, sampleRate > 44100 {
+            return "Hi-Res"
+        }
+        return "Lossless"
     }
 
 }
