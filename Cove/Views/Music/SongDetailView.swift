@@ -93,6 +93,21 @@ struct SongDetailView: View {
 
         if let streams = item.mediaStreams {
             if let audioStream = streams.first(where: { $0.type == .audio }) {
+                // Quality summary — shown for lossless formats
+                if let codec = audioStream.codec?.lowercased() {
+                    let losslessCodecs: Set<String> = [
+                        "flac", "alac", "wav", "aiff", "ape", "wv", "truehd",
+                    ]
+                    if losslessCodecs.contains(codec) {
+                        let label: String
+                        if let sr = audioStream.sampleRate, sr > 44100 {
+                            label = "Hi-Res Lossless"
+                        } else {
+                            label = "Lossless"
+                        }
+                        parts.append(AudioInfoRow(label: "Quality", value: label))
+                    }
+                }
                 if let codec = audioStream.codec {
                     parts.append(AudioInfoRow(label: "Codec", value: codec.uppercased()))
                 }
@@ -108,6 +123,17 @@ struct SongDetailView: View {
                                 ? "Mono" : channels == 2 ? "Stereo" : "\(channels) channels"
                         )
                     )
+                }
+                if let sampleRate = audioStream.sampleRate, sampleRate > 0 {
+                    let kHz = Double(sampleRate) / 1000.0
+                    // Format as "44.1 kHz" or "96 kHz" (no decimal for round thousands)
+                    let formatted: String
+                    if sampleRate % 1000 == 0 {
+                        formatted = "\(sampleRate / 1000) kHz"
+                    } else {
+                        formatted = kHz.formatted(.number.precision(.fractionLength(1))) + " kHz"
+                    }
+                    parts.append(AudioInfoRow(label: "Sample Rate", value: formatted))
                 }
             }
         }
@@ -272,6 +298,7 @@ private struct SongDetailSections: View {
             }
 
             SongAudioInfoSection(infoParts: audioParts)
+            SongLyricsSection(item: item)
         }
     }
 }
@@ -398,6 +425,59 @@ private struct AudioInfoRow: Identifiable {
     let label: String
     let value: String
     var id: String { label }
+}
+
+// MARK: - Song Lyrics Section
+
+private struct SongLyricsSection: View {
+    let item: MediaItem
+
+    @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
+    @State private var lyrics: Lyrics?
+    @State private var isLoading = true
+
+    var body: some View {
+        Group {
+            if isLoading {
+                // Subtle loading indicator while lyrics fetch is in progress
+                HStack {
+                    Text("Lyrics")
+                        .font(.headline)
+                    Spacer()
+                    ProgressView()
+                        .scaleEffect(0.7)
+                }
+                .padding(.horizontal)
+            } else if let lyrics, !lyrics.lines.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Lyrics")
+                        .font(.headline)
+                        .padding(.horizontal)
+
+                    Text(lyrics.lines.map(\.text).joined(separator: "\n"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(6)
+                        .padding(.horizontal)
+                        .textSelection(.enabled)
+                }
+            }
+            // If lyrics are nil or empty, render nothing (EmptyView)
+        }
+        .task(id: item.id) {
+            await loadLyrics()
+        }
+    }
+
+    private func loadLyrics() async {
+        isLoading = true
+        lyrics = await appState.lyricsStore.lyrics(
+            for: TrackID(item.id.rawValue),
+            using: authManager.provider
+        )
+        isLoading = false
+    }
 }
 
 // MARK: - Preview
