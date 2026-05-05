@@ -886,13 +886,11 @@ public final class VideoPlaybackManager {
 
             #if canImport(UIKit)
                 guard let image = UIImage(data: data) else { return }
-                let size = image.size
             #elseif canImport(AppKit)
                 guard let image = NSImage(data: data) else { return }
-                let size = image.size
             #endif
 
-            let artwork = MPMediaItemArtwork(boundsSize: size) { _ in image }
+            let artwork = MPMediaItemArtwork(image: image)
             guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
             info[MPMediaItemPropertyArtwork] = artwork
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
