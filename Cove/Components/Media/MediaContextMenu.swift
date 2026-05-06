@@ -89,6 +89,7 @@ struct MediaContextMenuModifier: ViewModifier {
         playVideoButton
         Divider()
         PlayedToggle(itemId: item.id, userData: item.userData)
+        Divider()
         FavoriteToggle(itemId: item.id, userData: item.userData)
     }
 
