@@ -743,8 +743,21 @@ private struct SkipSegmentOverlay: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
+                // Center controls — float independently so the play button sits at
+                // the exact center of the screen regardless of top/bottom bar heights.
+                PlayerCenterControls(
+                    videoManager: videoManager,
+                    backwardSkipTrigger: $backwardSkipTrigger,
+                    forwardSkipTrigger: $forwardSkipTrigger,
+                    onSkipBackward: {
+                        videoManager.skipBackward(Defaults[.skipBackwardInterval])
+                    },
+                    onSkipForward: { videoManager.skipForward(Defaults[.skipForwardInterval]) },
+                    onResetTimer: onResetTimer
+                )
+
+                // Top bar anchored to the top edge
                 VStack(spacing: 0) {
-                    // Top bar: dismiss, title, settings
                     PlayerTopBar(
                         item: item,
                         videoManager: videoManager,
@@ -756,24 +769,12 @@ private struct SkipSegmentOverlay: View {
                     )
                     .padding(.horizontal)
                     .padding(.top, 8)
-
                     Spacer()
+                }
 
-                    // Center: skip back, play/pause, skip forward
-                    PlayerCenterControls(
-                        videoManager: videoManager,
-                        backwardSkipTrigger: $backwardSkipTrigger,
-                        forwardSkipTrigger: $forwardSkipTrigger,
-                        onSkipBackward: {
-                            videoManager.skipBackward(Defaults[.skipBackwardInterval])
-                        },
-                        onSkipForward: { videoManager.skipForward(Defaults[.skipForwardInterval]) },
-                        onResetTimer: onResetTimer
-                    )
-
+                // Bottom bar anchored to the bottom edge
+                VStack(spacing: 0) {
                     Spacer()
-
-                    // Bottom: seek bar, time, subtitle/audio/speed/pip buttons
                     PlayerBottomBar(
                         item: item,
                         streamInfo: streamInfo,
