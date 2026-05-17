@@ -39,6 +39,13 @@ final class AppState {
     /// The currently selected tab in the app shell.
     var selectedTab: AppTab = .home
 
+    /// The shell layout that is currently active.
+    ///
+    /// Set by each shell view on appear so that ``navigate(to:destination:)`` can
+    /// determine which tabs are actually rendered in the current environment and
+    /// avoid silently swallowing navigations to tabs that don't exist in the tab bar.
+    var shellLayout: AppTab.ShellLayout = .compact
+
     /// Per-tab navigation paths for controlled NavigationStacks.
     /// Enables dismiss-then-navigate from the player and deep linking.
     var navigationPaths: [AppTab: NavigationPath] = [
@@ -302,10 +309,25 @@ final class AppState {
 
     // MARK: - Navigation Helpers
 
-    /// Navigate to a specific destination by switching tabs and appending to the navigation path.
+    /// Navigate to a specific destination, switching to the target tab when it is rendered.
+    ///
+    /// On iPhone (compact layout) only one media tab is shown at a time, so the TV Shows tab
+    /// may not be present even when the server has a TV Shows library. When this happens,
+    /// blindly setting `selectedTab` has no visible effect and the navigation is silently lost.
+    ///
+    /// This method guards against that by checking whether the target tab actually exists in
+    /// the current layout. If it does, the tab is switched and the destination is pushed as
+    /// expected. If it does not, the destination is pushed onto the currently active tab so
+    /// the user always ends up at the right place — just without a tab switch.
     func navigate(to tab: AppTab, destination: any Hashable) {
-        selectedTab = tab
-        navigationPaths[tab, default: NavigationPath()].append(destination)
+        let rendered = AppTab.availableTabs(for: self, layout: shellLayout)
+        if rendered.contains(tab) {
+            selectedTab = tab
+            navigationPaths[tab, default: NavigationPath()].append(destination)
+        } else {
+            // Target tab is not in the current tab bar — push within the active tab.
+            navigationPaths[selectedTab, default: NavigationPath()].append(destination)
+        }
     }
 
     // MARK: - Common Media Actions

@@ -70,6 +70,7 @@ private struct CompactTabShell: View {
                 }
             }
         }
+        .onAppear { appState.shellLayout = .compact }
         .tabViewBottomAccessory(isEnabled: appState.audioPlayer.queue.currentTrack != nil) {
             if let track = appState.audioPlayer.queue.currentTrack {
                 NowPlayingBar(showFullPlayer: $showFullPlayer, track: track)
@@ -127,6 +128,7 @@ private struct SidebarShell: View {
                     .padding(.bottom, 4)
             }
         }
+        .onAppear { appState.shellLayout = .regular }
     }
 }
 
@@ -154,6 +156,7 @@ private struct SidebarShell: View {
                     }
                 }
             }
+            .onAppear { appState.shellLayout = .tv }
         }
     }
 #endif
