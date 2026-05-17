@@ -52,6 +52,14 @@ public protocol AudioPlayerBackend: AnyObject {
     @discardableResult
     func enqueue(url: URL) -> AnyHashable
 
+    /// Remove a preloaded (non-current) item from the backend queue, keeping the
+    /// model and backend in sync without interrupting the currently-playing item.
+    ///
+    /// - Parameter token: The token returned by ``enqueue(url:)`` for the item to
+    ///   remove. If the token belongs to the **currently-playing** item, this call
+    ///   is a no-op.
+    func removePreloadedItem(for token: AnyHashable)
+
     // MARK: - State
 
     /// The duration of the currently-playing item in seconds,

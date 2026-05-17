@@ -94,6 +94,14 @@ public final class AVQueuePlayerBackend: AudioPlayerBackend {
         return token
     }
 
+    public func removePreloadedItem(for token: AnyHashable) {
+        guard let entry = itemToToken.first(where: { $0.value == token }),
+            entry.key != player.currentItem
+        else { return }
+        player.remove(entry.key)
+        itemToToken.removeValue(forKey: entry.key)
+    }
+
     // MARK: - AudioPlayerBackend — State
 
     public var currentItemDuration: TimeInterval? {

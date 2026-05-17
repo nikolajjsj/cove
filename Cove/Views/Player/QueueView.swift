@@ -229,7 +229,7 @@ struct QueueView: View {
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         let absoluteIndex = queue.currentIndex + 1 + offset
-                        queue.remove(at: absoluteIndex)
+                        appState.audioPlayer.removeTrack(at: absoluteIndex)
                     }
                 } label: {
                     Image(systemName: "minus.circle.fill")

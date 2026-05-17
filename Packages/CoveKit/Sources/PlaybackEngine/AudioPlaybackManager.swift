@@ -209,6 +209,30 @@ public final class AudioPlaybackManager {
         logger.info("Skipped to index \(index): \(self.queue.currentTrack?.title ?? "unknown")")
     }
 
+    /// Remove the track at the given index from the queue.
+    ///
+    /// If the track is currently preloaded in the backend it is also removed from
+    /// the backend queue so that both stay in sync without interrupting playback of
+    /// the currently-playing item.
+    ///
+    /// - Parameter index: The zero-based index of the track to remove.
+    public func removeTrack(at index: Int) {
+        guard queue.tracks.indices.contains(index) else { return }
+        let trackToRemove = queue.tracks[index]
+
+        // Remove the backend item for this track if it is preloaded (i.e. it has a
+        // tokenToTrack entry but is NOT the active/current token).
+        if let token = tokenToTrack.first(where: {
+            $0.value.id == trackToRemove.id && $0.key != currentTrackToken
+        })?.key {
+            playerBackend.removePreloadedItem(for: token)
+            tokenToTrack.removeValue(forKey: token)
+        }
+
+        queue.remove(at: index)
+        logger.debug("Removed track '\(trackToRemove.title)' at index \(index) from queue")
+    }
+
     /// Go to the previous track, or restart the current track if more than 3 seconds in.
     public func previous() {
         if currentTime > 3 {
@@ -559,28 +583,48 @@ public final class AudioPlaybackManager {
         }
 
         // Check if the backend already has the next track loaded (gapless transition).
+        //
+        // AVQueuePlayer may have silently skipped one or more failed/removed
+        // preloaded items and already be further ahead in the queue. We search
+        // forward *without* mutating currentIndex so a failed search never
+        // corrupts the queue state.
         if let currentToken = playerBackend.currentItemToken,
             let backendTrack = tokenToTrack[currentToken]
         {
-            // Gapless transition occurred. If AVQueuePlayer silently skipped one or
-            // more failed preloaded items, the backend may now be further ahead than
-            // the single step we just advanced. Fast-forward the queue model to match.
-            var catchUpSteps = 0
-            while let modelTrack = queue.currentTrack,
-                modelTrack.id != backendTrack.id,
-                catchUpSteps < queue.tracks.count
-            {
-                guard queue.advance() != nil else { break }
-                catchUpSteps += 1
-            }
-            if catchUpSteps > 0 {
-                logger.warning(
-                    "Queue model caught up \(catchUpSteps) skipped track(s) to match backend")
+            // Determine how many positions ahead the backend is relative to the
+            // model's current position (which was already advanced once above).
+            let searchStart = queue.currentIndex
+            var foundIndex: Int? = queue.currentTrack?.id == backendTrack.id ? searchStart : nil
+
+            if foundIndex == nil {
+                for i in (searchStart + 1)..<queue.tracks.count {
+                    if queue.tracks[i].id == backendTrack.id {
+                        foundIndex = i
+                        break
+                    }
+                }
             }
 
-            // Record which token we now expect to fire next.
-            currentTrackToken = currentToken
-            preloadNextTracks()
+            if let targetIndex = foundIndex {
+                let skippedCount = targetIndex - searchStart
+                if skippedCount > 0 {
+                    queue.skipTo(index: targetIndex)
+                    logger.warning(
+                        "Queue model caught up \(skippedCount) skipped track(s) to match backend"
+                    )
+                }
+                currentTrackToken = currentToken
+                preloadNextTracks()
+            } else {
+                // The backend is playing a track that no longer exists in the
+                // model queue (e.g. it was removed while preloaded). Rebuild
+                // from the model's current position so playback stays coherent.
+                logger.warning(
+                    "Backend track '\(backendTrack.title)' not found in queue — rebuilding from model position"
+                )
+                rebuildPlayerQueue()
+                playerBackend.play()
+            }
         } else {
             // Backend does not have the next track preloaded (e.g. repeat-all
             // wrap-around, or all preloaded items failed).

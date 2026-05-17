@@ -66,6 +66,17 @@ final class MockAudioPlayerBackend: AudioPlayerBackend {
         return token
     }
 
+    func removePreloadedItem(for token: AnyHashable) {
+        // Never remove the currently-playing item (first in the list).
+        guard enqueuedTokens.first != token else { return }
+        if let idx = enqueuedTokens.firstIndex(of: token) {
+            enqueuedTokens.remove(at: idx)
+            if enqueuedURLs.indices.contains(idx) {
+                enqueuedURLs.remove(at: idx)
+            }
+        }
+    }
+
     // MARK: - Simulation Helpers
 
     func simulateItemFinish() {
@@ -1422,6 +1433,92 @@ struct AudioPlaybackManagerTests {
             manager.play(tracks: makeTracks(3))
             #expect(manager.isPlaying == true)
             #expect(manager.queue.tracks.count == 3)
+        }
+    }
+
+    @Suite("Queue Track Removal")
+    struct QueueTrackRemoval {
+
+        @Test("removeTrack removes a preloaded track from the backend")
+        @MainActor
+        func removeTrackSyncsBackend() {
+            let player = MockAudioPlayerBackend()
+            let nowPlaying = MockNowPlayingProvider()
+            let manager = makeManager(player: player, nowPlaying: nowPlaying)
+
+            // 5 tracks → backend gets current (A) + 2 preloads (B, C)
+            manager.play(tracks: makeTracks(5))
+            #expect(player.enqueuedTokens.count == 3)
+
+            // Remove B (index 1) — it is preloaded in the backend
+            manager.removeTrack(at: 1)
+
+            // B must be evicted from the backend
+            #expect(player.enqueuedTokens.count == 2)
+            // Model queue is now [A, C, D, E]
+            #expect(manager.queue.tracks.count == 4)
+        }
+
+        @Test("removeTrack on a non-preloaded track only updates the model")
+        @MainActor
+        func removeNonPreloadedTrackOnlyUpdatesModel() {
+            let player = MockAudioPlayerBackend()
+            let nowPlaying = MockNowPlayingProvider()
+            let manager = makeManager(player: player, nowPlaying: nowPlaying)
+
+            manager.play(tracks: makeTracks(5))
+            #expect(player.enqueuedTokens.count == 3)  // A, B, C
+
+            // Remove D (index 3) — it is NOT yet preloaded in the backend
+            manager.removeTrack(at: 3)
+
+            // Backend should be unchanged
+            #expect(player.enqueuedTokens.count == 3)
+            // Model queue is now [A, B, C, E]
+            #expect(manager.queue.tracks.count == 4)
+        }
+
+        @Test("finishing current track after removing a preloaded track advances correctly")
+        @MainActor
+        func finishAfterRemoveAdvancesToCorrectTrack() {
+            let player = MockAudioPlayerBackend()
+            let nowPlaying = MockNowPlayingProvider()
+            let manager = makeManager(player: player, nowPlaying: nowPlaying)
+
+            manager.play(tracks: makeTracks(5))
+
+            // Remove B (index 1) — it was the immediate next track
+            manager.removeTrack(at: 1)
+
+            // A finishes — the queue should advance to C, not fly past the entire queue
+            player.simulateItemFinish()
+
+            #expect(manager.queue.currentTrack?.id == ItemID("track-2"))
+            #expect(manager.isPlaying == true)
+        }
+
+        @Test("catch-up safety check rebuilds when backend track is absent from model queue")
+        @MainActor
+        func catchUpSafetyCheckRebuildsOnDesync() {
+            let player = MockAudioPlayerBackend()
+            let nowPlaying = MockNowPlayingProvider()
+            let manager = makeManager(player: player, nowPlaying: nowPlaying)
+
+            manager.play(tracks: makeTracks(5))
+
+            // Simulate desync: remove B from the model only (bypassing removeTrack),
+            // leaving the backend preload intact. This reproduces the state that
+            // would previously exhaust the whole queue via the catch-up loop.
+            manager.queue.remove(at: 1)
+
+            // A finishes; the mock backend still has B's token as its next item.
+            // The safety check should detect that B is missing from the model and
+            // rebuild from the model's current position instead of advancing past
+            // every remaining track.
+            player.simulateItemFinish()
+
+            #expect(manager.isPlaying == true)
+            #expect(manager.queue.currentTrack != nil)
         }
     }
 }
