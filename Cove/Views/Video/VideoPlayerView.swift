@@ -46,9 +46,9 @@ struct VideoPlayerView: View {
     @State private var showChapterList = false
     @State private var showSubtitleSearch = false
 
-    // Landscape orientation
+    // Tracks the window scene geometry we unlocked on entry so we can always restore it on exit.
     #if os(iOS)
-        @State private var previousOrientationMask: UIInterfaceOrientationMask?
+        @State private var didUnlockOrientation = false
     #endif
 
     var body: some View {
@@ -182,7 +182,7 @@ struct VideoPlayerView: View {
             .persistentSystemOverlays(.hidden)
         #endif
         .onAppear {
-            applyLandscapeOrientation()
+            configureOrientationForPlayback()
             setupAndPlay()
         }
         .onDisappear {
@@ -415,62 +415,67 @@ struct VideoPlayerView: View {
 
     // MARK: - Orientation Management
 
-    private func applyLandscapeOrientation() {
+    /// Unlocks the window to support both portrait and landscape during playback.
+    ///
+    /// If the user has "Force landscape" enabled the device is first rotated into
+    /// landscape, then unlocked — so it starts sideways but can still be freely
+    /// rotated afterwards. Without the setting we unlock immediately.
+    ///
+    /// Because `requestGeometryUpdate(.all)` tells the system all orientations are
+    /// supported, iOS/SwiftUI automatically re-layouts the view tree whenever the
+    /// device physically rotates — no `NotificationCenter` observer is needed.
+    private func configureOrientationForPlayback() {
         #if os(iOS)
-            guard Defaults[.forceLandscapeVideo] else { return }
-
-            // Store current orientation mask and force landscape
-            if let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene }).first
-            {
-                previousOrientationMask =
-                    windowScene.windows.first?.windowScene?.effectiveGeometry
-                        .interfaceOrientation == .portrait ? .portrait : nil
-            }
-
-            // Request landscape orientation
-            if let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene }).first
-            {
-                let preferences = UIWindowScene.GeometryPreferences.iOS(
-                    interfaceOrientations: .landscape)
-                windowScene.requestGeometryUpdate(preferences) { error in
-                    // Best effort — some devices or multitasking modes may not support this
+            if Defaults[.forceLandscapeVideo] {
+                // Snap to landscape first so the user's preference is honoured,
+                // then unlock so the device can freely follow physical rotation.
+                requestOrientationUpdate(.landscape)
+                Task { @MainActor in
+                    // Give the initial landscape rotation a moment to settle.
+                    try? await Task.sleep(for: .milliseconds(350))
+                    requestOrientationUpdate(.all)
                 }
+            } else {
+                // Immediately allow both portrait and landscape.
+                requestOrientationUpdate(.all)
             }
-
-            // Also set the supported orientations via the app delegate approach
-            UIViewController.attemptRotationToDeviceOrientation()
+            didUnlockOrientation = true
         #endif
     }
 
+    /// Restores the window to portrait and then re-allows all orientations so the
+    /// rest of the app is not left in a non-portrait locked state.
     private func restoreOrientation() {
         #if os(iOS)
-            guard Defaults[.forceLandscapeVideo] else { return }
+            guard didUnlockOrientation else { return }
+            didUnlockOrientation = false
 
-            if let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene }).first
-            {
-                // Actively request portrait so the device rotates back
-                // immediately instead of just "allowing" all orientations
-                // (which leaves the device stuck in landscape).
-                let portraitPreferences = UIWindowScene.GeometryPreferences.iOS(
-                    interfaceOrientations: .portrait)
-                windowScene.requestGeometryUpdate(portraitPreferences) { _ in }
+            // Actively request portrait so the device snaps back immediately
+            // rather than waiting for the user to physically rotate.
+            requestOrientationUpdate(.portrait)
 
-                // After a short delay, re-allow all orientations so the user
-                // can freely rotate again (e.g. landscape for another video).
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(400))
-                    let allPreferences = UIWindowScene.GeometryPreferences.iOS(
-                        interfaceOrientations: .all)
-                    windowScene.requestGeometryUpdate(allPreferences) { _ in }
-                }
+            // Re-allow all orientations after the portrait transition settles,
+            // so the rest of the app can still rotate if it needs to.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
+                requestOrientationUpdate(.all)
             }
-
-            UIViewController.attemptRotationToDeviceOrientation()
         #endif
     }
+
+    /// Sends a geometry-update request to the key window scene.
+    /// Best-effort: silently ignores failures (e.g. multitasking or Split View).
+    #if os(iOS)
+        private func requestOrientationUpdate(_ orientations: UIInterfaceOrientationMask) {
+            guard
+                let windowScene = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene }).first
+            else { return }
+            let preferences = UIWindowScene.GeometryPreferences.iOS(
+                interfaceOrientations: orientations)
+            windowScene.requestGeometryUpdate(preferences) { _ in }
+        }
+    #endif
 
     // MARK: - Helpers
 
