@@ -201,9 +201,16 @@ struct VideoPlayerView: View {
             }
         }
         .onChange(of: videoManager.isPlaying) { _, isPlaying in
-            if isPlaying && !videoManager.isBuffering && !hasStartedPlaying {
-                hasStartedPlaying = true
+            if isPlaying {
+                // Mark first play and schedule auto-hide.
+                if !videoManager.isBuffering && !hasStartedPlaying {
+                    hasStartedPlaying = true
+                }
                 scheduleControlsHide()
+            } else {
+                // Paused or stopped: cancel any pending hide and keep controls visible.
+                controlsTimer?.cancel()
+                showControls = true
             }
         }
         .onChange(of: coordinator.isSwitchingQuality) { wasSwitching, isSwitching in
@@ -375,7 +382,10 @@ struct VideoPlayerView: View {
         private func toggleControls() {
             showControls.toggle()
             if showControls {
-                scheduleControlsHide()
+                // Only auto-hide when actively playing; keep controls visible when paused.
+                if videoManager.isPlaying {
+                    scheduleControlsHide()
+                }
             } else {
                 controlsTimer?.cancel()
             }
@@ -383,7 +393,12 @@ struct VideoPlayerView: View {
 
         private func resetControlsTimer() {
             showControls = true
-            scheduleControlsHide()
+            // Only schedule auto-hide while playing.
+            if videoManager.isPlaying {
+                scheduleControlsHide()
+            } else {
+                controlsTimer?.cancel()
+            }
         }
     #endif
 
@@ -391,7 +406,8 @@ struct VideoPlayerView: View {
         controlsTimer?.cancel()
         controlsTimer = Task {
             try? await Task.sleep(for: .seconds(4))
-            if !Task.isCancelled {
+            // Double-check playback state at hide time; user may have paused during the delay.
+            if !Task.isCancelled && videoManager.isPlaying {
                 showControls = false
             }
         }
