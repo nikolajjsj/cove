@@ -81,6 +81,17 @@ struct NowPlayingBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("Open Player", systemImage: "music.note") {
+                showFullPlayer = true
+            }
+
+            Divider()
+
+            Button("Close", systemImage: "xmark", role: .destructive) {
+                appState.audioPlayer.stop()
+            }
+        }
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .animation(.spring(duration: 0.35, bounce: 0.2), value: track.id)
     }
