@@ -44,5 +44,38 @@ import SwiftUI
         }
     }
 
+    // MARK: - Player Time Labels
+
+    /// Displays elapsed / total time, isolated so `currentTime` reads don't
+    /// propagate up to `VideoPlayerView.body`.
+    struct PlayerTimeLabels: View {
+        let videoManager: VideoPlaybackManager
+        let isSeeking: Bool
+        let seekTime: TimeInterval
+        let isGestureSeeking: Bool
+        let gestureSeekTime: TimeInterval
+
+        private var displayTime: TimeInterval {
+            if isGestureSeeking { return gestureSeekTime }
+            if isSeeking { return seekTime }
+            return videoManager.currentTime
+        }
+
+        var body: some View {
+            HStack(spacing: 12) {
+                Text(TimeFormatting.playbackPosition(displayTime))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.8))
+
+                Text("/")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.5))
+
+                Text(TimeFormatting.playbackPosition(videoManager.duration))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+        }
+    }
 
 #endif
