@@ -267,9 +267,11 @@ struct MediaContextMenuModifier: ViewModifier {
         Button {
             coordinator.play(item: item, using: authManager.provider)
         } label: {
-            let hasProgress = (item.userData?.playbackPosition ?? 0) > 0
+            let position =
+                appState.userDataStore?.userData(for: item.id, fallback: item.userData)
+                .playbackPosition ?? 0
             Label(
-                hasProgress ? "Resume" : "Play",
+                position > 0 ? "Resume" : "Play",
                 systemImage: "play.fill"
             )
         }
