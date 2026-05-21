@@ -223,6 +223,8 @@ private struct MoreEpisodesSection: View {
     let coordinator: VideoPlayerCoordinator
     let provider: JellyfinServerProvider
 
+    @Environment(AppState.self) private var appState
+
     @State private var nearbyEpisodes: [Episode] = []
     @State private var isLoading = true
 
@@ -314,11 +316,11 @@ private struct MoreEpisodesSection: View {
     }
 
     private func episodeProgress(for episode: Episode) -> Double? {
-        guard let runtime = episode.runtime, runtime > 0,
-            let userData = episode.userData,
-            userData.playbackPosition > 0
-        else { return nil }
-        return min(userData.playbackPosition / runtime, 1.0)
+        guard let runtime = episode.runtime, runtime > 0 else { return nil }
+        let userData = appState.userDataStore?.userData(for: episode.id, fallback: episode.userData)
+        let position = userData?.playbackPosition ?? 0
+        guard position > 0 else { return nil }
+        return min(position / runtime, 1.0)
     }
 }
 
