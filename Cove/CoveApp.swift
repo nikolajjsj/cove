@@ -78,6 +78,7 @@ struct CoveApp: App {
         // 4. Create the centralized user data mutation store
         let userDataStore = UserDataStore(provider: authManager.provider)
         appState.userDataStore = userDataStore
+        appState.videoPlayerCoordinator.userDataStore = userDataStore
 
         _authManager = State(initialValue: authManager)
         _downloadCoordinator = State(initialValue: downloadCoordinator)

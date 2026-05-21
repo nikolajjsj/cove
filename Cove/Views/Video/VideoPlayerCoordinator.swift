@@ -25,6 +25,13 @@ import SwiftUI
 @MainActor
 final class VideoPlayerCoordinator {
 
+    // MARK: - Dependencies
+
+    /// Injected by `AppState` after the user data store is configured.
+    /// Used to resolve the effective playback position including any
+    /// optimistic overrides from `UserDataStore`.
+    var userDataStore: UserDataStore?
+
     // MARK: - Presentation State
 
     /// Whether the video player is currently presented.
@@ -180,7 +187,8 @@ final class VideoPlayerCoordinator {
             startPosition = overridePosition
             isPresented = true
         } else {
-            let position = item.userData?.playbackPosition ?? 0
+            let position =
+                userDataStore?.userData(for: item.id, fallback: item.userData).playbackPosition ?? 0
             if position > 30 {
                 let behavior = Defaults[.resumePlaybackBehavior]
                 switch behavior {
@@ -323,7 +331,8 @@ final class VideoPlayerCoordinator {
         sourceVideoBitrate = nil
         activeQuality = .auto
         activeProvider = nil
-        startPosition = item.userData?.playbackPosition ?? 0
+        startPosition =
+            userDataStore?.userData(for: item.id, fallback: item.userData).playbackPosition ?? 0
         isPresented = true
     }
 
