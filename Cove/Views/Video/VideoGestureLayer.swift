@@ -41,7 +41,6 @@ struct VideoGestureLayer: View {
 
     /// Drag gesture tracking
     @State private var isDragging = false
-    @State private var dragType: DragType? = nil
     @State private var dragStartLocation: CGPoint = .zero
     @State private var dragSeekTime: TimeInterval = 0
 
@@ -113,7 +112,7 @@ struct VideoGestureLayer: View {
 
                 // MARK: - Seek scrub indicator
 
-                if isDragging, dragType == .horizontalSeek {
+                if isDragging {
                     SeekIndicatorView(dragSeekTime: dragSeekTime, currentTime: currentTime)
                         .allowsHitTesting(false)
                 }
@@ -215,36 +214,27 @@ struct VideoGestureLayer: View {
 
     private func handleDragChanged(value: DragGesture.Value, in size: CGSize) {
         if !isDragging {
-            // Determine drag type from initial gesture direction
             isDragging = true
             dragStartLocation = value.startLocation
             dragSeekTime = currentTime
-
-            dragType = .horizontalSeek
             onSeekStarted()
         }
 
-        switch dragType {
-        case .horizontalSeek:
-            // Map horizontal drag to time: full screen width = duration (capped at 5 min)
-            let maxSeekRange = min(duration, 300)
-            let fraction = value.translation.width / size.width
-            let delta = TimeInterval(fraction) * maxSeekRange
-            let newTime = max(0, min(duration, currentTime + delta))
-            dragSeekTime = newTime
-            onSeekChanged(newTime)
-        default:
-            break
-        }
+        // Map horizontal drag to time: full screen width = duration (capped at 5 min)
+        let maxSeekRange = min(duration, 300)
+        let fraction = value.translation.width / size.width
+        let delta = TimeInterval(fraction) * maxSeekRange
+        let newTime = max(0, min(duration, currentTime + delta))
+        dragSeekTime = newTime
+        onSeekChanged(newTime)
     }
 
     private func handleDragEnded(value: DragGesture.Value) {
-        if dragType == .horizontalSeek {
+        if isDragging {
             onSeekCommitted(dragSeekTime)
         }
 
         isDragging = false
-        dragType = nil
         dragSeekTime = 0
     }
 
@@ -286,7 +276,4 @@ extension VideoGestureLayer {
         case backward
     }
 
-    enum DragType {
-        case horizontalSeek
-    }
 }
