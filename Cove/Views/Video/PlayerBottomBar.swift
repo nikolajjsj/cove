@@ -78,4 +78,57 @@ import SwiftUI
         }
     }
 
+    // MARK: - Player Bottom Bar
+
+    /// The bottom bar composes time-dependent children (slider, labels) and
+    /// time-independent children (menus) as separate `View` structs so that
+    /// rapid `currentTime` ticks don't cause menu re-renders.
+    struct PlayerBottomBar: View {
+        let item: MediaItem
+        let streamInfo: StreamInfo
+        let videoManager: VideoPlaybackManager
+        let coordinator: VideoPlayerCoordinator
+        let authManager: AuthManager
+        @Binding var isSeeking: Bool
+        @Binding var seekTime: TimeInterval
+        let isGestureSeeking: Bool
+        let gestureSeekTime: TimeInterval
+        @Binding var showSubtitleSearch: Bool
+        let onControlsInteraction: StableAction
+
+        var body: some View {
+            VStack(spacing: 8) {
+                PlayerSeekSlider(
+                    videoManager: videoManager,
+                    isSeeking: $isSeeking,
+                    seekTime: $seekTime,
+                    isGestureSeeking: isGestureSeeking,
+                    gestureSeekTime: gestureSeekTime
+                )
+
+                HStack(spacing: 12) {
+                    PlayerTimeLabels(
+                        videoManager: videoManager,
+                        isSeeking: isSeeking,
+                        seekTime: seekTime,
+                        isGestureSeeking: isGestureSeeking,
+                        gestureSeekTime: gestureSeekTime
+                    )
+
+                    Spacer()
+
+                    PlayerMenuBar(
+                        item: item,
+                        streamInfo: streamInfo,
+                        videoManager: videoManager,
+                        coordinator: coordinator,
+                        authManager: authManager,
+                        showSubtitleSearch: $showSubtitleSearch,
+                        onControlsInteraction: onControlsInteraction
+                    )
+                }
+            }
+        }
+    }
+
 #endif
