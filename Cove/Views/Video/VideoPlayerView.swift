@@ -266,10 +266,10 @@ struct VideoPlayerView: View {
 
     private func setupAndPlay() {
         // Debug: log media segments received from the coordinator
-        logger.info("Setting up playback for \(self.item.title) (id: \(self.item.id.rawValue))")
-        logger.info("Media segments received: \(self.mediaSegments.count)")
+        logger.debug("Setting up playback for \(self.item.title) (id: \(self.item.id.rawValue))")
+        logger.debug("Media segments received: \(self.mediaSegments.count)")
         for segment in mediaSegments {
-            logger.info(
+            logger.debug(
                 "  Segment: type=\(segment.type.rawValue) start=\(segment.startTime) end=\(segment.endTime)"
             )
         }
