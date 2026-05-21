@@ -29,20 +29,16 @@ struct PlaylistCard: View {
 
     var body: some View {
         NavigationLink(value: playlist) {
-            cardContent
+            MediaCardContent(
+                imageURL: imageURL,
+                title: playlist.name,
+                subtitle: subtitle,
+                titleLineLimit: 2,
+                reservesSpace: true
+            )
         }
         .buttonStyle(.plain)
         .playlistContextMenu(playlist: playlist)
-    }
-
-    private var cardContent: some View {
-        MediaCardContent(
-            imageURL: imageURL,
-            title: playlist.name,
-            subtitle: subtitle,
-            titleLineLimit: 2,
-            reservesSpace: true
-        )
     }
 
     // MARK: - Helpers

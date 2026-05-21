@@ -31,18 +31,14 @@ struct SongCard: View {
 
     var body: some View {
         Button(action: onTap) {
-            cardContent
+            MediaCardContent(
+                imageURL: imageURL,
+                title: item.title,
+                subtitle: subtitle
+            )
         }
         .buttonStyle(.plain)
         .mediaContextMenu(item: item)
-    }
-
-    private var cardContent: some View {
-        MediaCardContent(
-            imageURL: imageURL,
-            title: item.title,
-            subtitle: subtitle
-        )
     }
 }
 
