@@ -280,7 +280,7 @@ struct DownloadsView: View {
                     Button {
                         playOfflineMovie(item, vm: vm)
                     } label: {
-                        offlinePosterCard(
+                        OfflinePosterCard(
                             title: vm.metadataByItemId[item.itemId.rawValue]?.title ?? item.title,
                             imageURL: vm.localPrimaryImageURL(for: item.itemId.rawValue),
                             aspectRatio: 2.0 / 3.0,
@@ -324,7 +324,7 @@ struct DownloadsView: View {
                             title: group.series.title ?? "Unknown Series"
                         )
                     ) {
-                        offlinePosterCard(
+                        OfflinePosterCard(
                             title: group.series.title ?? "Unknown Series",
                             subtitle:
                                 "\(group.episodes.count) episode\(group.episodes.count == 1 ? "" : "s")",
@@ -384,7 +384,7 @@ struct DownloadsView: View {
                                     title: albumGroup.album.title ?? "Unknown Album"
                                 )
                             ) {
-                                offlineAlbumCard(
+                                OfflineAlbumCard(
                                     title: albumGroup.album.title ?? "Unknown Album",
                                     subtitle:
                                         "\(albumGroup.tracks.count) track\(albumGroup.tracks.count == 1 ? "" : "s")",
@@ -413,64 +413,6 @@ struct DownloadsView: View {
                 }
             }
         }
-    }
-
-    // MARK: - Card Components
-
-    private func offlinePosterCard(
-        title: String,
-        subtitle: String? = nil,
-        imageURL: URL?,
-        aspectRatio: CGFloat,
-        icon: String
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            MediaImage.poster(
-                url: imageURL,
-                aspectRatio: aspectRatio,
-                icon: icon,
-                cornerRadius: 8
-            )
-
-            Text(title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(2, reservesSpace: true)
-                .foregroundStyle(.primary)
-
-            if let subtitle {
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func offlineAlbumCard(
-        title: String,
-        subtitle: String? = nil,
-        imageURL: URL?
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            MediaImage.artwork(url: imageURL, cornerRadius: 8)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-
-            Text(title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(2, reservesSpace: true)
-                .foregroundStyle(.primary)
-
-            if let subtitle {
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Section Header
@@ -540,6 +482,68 @@ struct DownloadsView: View {
     }
 
     // MARK: - Bindings
+}
+
+// MARK: - Card Components
+
+private struct OfflinePosterCard: View {
+    let title: String
+    var subtitle: String? = nil
+    let imageURL: URL?
+    let aspectRatio: CGFloat
+    let icon: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            MediaImage.poster(
+                url: imageURL,
+                aspectRatio: aspectRatio,
+                icon: icon,
+                cornerRadius: 8
+            )
+
+            Text(title)
+                .font(.caption)
+                .bold()
+                .lineLimit(2, reservesSpace: true)
+                .foregroundStyle(.primary)
+
+            if let subtitle {
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct OfflineAlbumCard: View {
+    let title: String
+    var subtitle: String? = nil
+    let imageURL: URL?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            MediaImage.artwork(url: imageURL, cornerRadius: 8)
+                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+
+            Text(title)
+                .font(.caption)
+                .bold()
+                .lineLimit(2, reservesSpace: true)
+                .foregroundStyle(.primary)
+
+            if let subtitle {
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
 }
 
 // MARK: - Empty State
