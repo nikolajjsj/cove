@@ -22,12 +22,14 @@ struct ChapterListSheet: View {
                 Button {
                     onSelectChapter(chapter)
                 } label: {
-                    chapterRow(chapter)
+                    ChapterRow(
+                        chapter: chapter,
+                        chapters: chapters,
+                        currentTime: currentTime,
+                        itemId: itemId
+                    )
                 }
                 .buttonStyle(.plain)
-                .listRowBackground(
-                    isCurrentChapter(chapter) ? Color.accentColor.opacity(0.15) : Color.clear
-                )
             }
             .listStyle(.plain)
             .navigationTitle("Chapters")
@@ -39,19 +41,26 @@ struct ChapterListSheet: View {
             }
         }
     }
+}
 
-    @ViewBuilder
-    private func chapterRow(_ chapter: Chapter) -> some View {
+// MARK: - Chapter Row
+
+private struct ChapterRow: View {
+    let chapter: Chapter
+    let chapters: [Chapter]
+    let currentTime: TimeInterval
+    let itemId: ItemID
+
+    var body: some View {
         HStack(spacing: 14) {
-            // Chapter thumbnail
-            chapterThumbnail(chapter)
+            ChapterThumbnailView(chapter: chapter, itemId: itemId)
                 .frame(width: 100, height: 56)
                 .clipShape(.rect(cornerRadius: 6))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(chapter.name)
-                    .font(.subheadline.weight(isCurrentChapter(chapter) ? .semibold : .regular))
-                    .foregroundStyle(isCurrentChapter(chapter) ? Color.accentColor : .primary)
+                    .font(.subheadline.weight(isCurrent ? .semibold : .regular))
+                    .foregroundStyle(isCurrent ? Color.accentColor : .primary)
                     .lineLimit(2)
 
                 Text(TimeFormatting.playbackPosition(chapter.startPosition))
@@ -61,17 +70,39 @@ struct ChapterListSheet: View {
 
             Spacer()
 
-            if isCurrentChapter(chapter) {
+            if isCurrent {
                 Image(systemName: "speaker.wave.2.fill")
                     .font(.caption)
                     .foregroundStyle(Color.accentColor)
             }
         }
         .padding(.vertical, 4)
+        .listRowBackground(isCurrent ? Color.accentColor.opacity(0.15) : Color.clear)
     }
 
-    @ViewBuilder
-    private func chapterThumbnail(_ chapter: Chapter) -> some View {
+    /// Determines if this chapter is the one currently playing.
+    private var isCurrent: Bool {
+        guard !chapters.isEmpty else { return false }
+
+        // Find the last chapter whose start position is at or before current time
+        let sortedChapters = chapters.sorted { $0.startPosition < $1.startPosition }
+        guard let currentChapter = sortedChapters.last(where: { $0.startPosition <= currentTime })
+        else {
+            return chapter.id == sortedChapters.first?.id
+        }
+        return chapter.id == currentChapter.id
+    }
+}
+
+// MARK: - Chapter Thumbnail
+
+private struct ChapterThumbnailView: View {
+    let chapter: Chapter
+    let itemId: ItemID
+
+    @Environment(AuthManager.self) private var authManager
+
+    var body: some View {
         if let imageTag = chapter.imageTag {
             let url = authManager.provider.chapterImageURL(
                 itemId: itemId,
@@ -88,18 +119,5 @@ struct ChapterListSheet: View {
                         .foregroundStyle(.secondary)
                 }
         }
-    }
-
-    /// Determines if the given chapter is the one currently playing.
-    private func isCurrentChapter(_ chapter: Chapter) -> Bool {
-        guard !chapters.isEmpty else { return false }
-
-        // Find the last chapter whose start position is at or before current time
-        let sortedChapters = chapters.sorted { $0.startPosition < $1.startPosition }
-        guard let currentChapter = sortedChapters.last(where: { $0.startPosition <= currentTime })
-        else {
-            return chapter.id == sortedChapters.first?.id
-        }
-        return chapter.id == currentChapter.id
     }
 }
