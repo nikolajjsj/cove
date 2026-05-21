@@ -504,7 +504,7 @@ private struct OfflinePosterCard: View {
 
             Text(title)
                 .font(.caption)
-                .bold()
+                .fontWeight(.medium)
                 .lineLimit(2, reservesSpace: true)
                 .foregroundStyle(.primary)
 
@@ -531,7 +531,7 @@ private struct OfflineAlbumCard: View {
 
             Text(title)
                 .font(.caption)
-                .bold()
+                .fontWeight(.medium)
                 .lineLimit(2, reservesSpace: true)
                 .foregroundStyle(.primary)
 
