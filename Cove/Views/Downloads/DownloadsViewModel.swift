@@ -138,6 +138,13 @@ final class DownloadsViewModel {
         allDownloads.isEmpty
     }
 
+    /// On-disk bytes per download, keyed by `DownloadItem.id`.
+    ///
+    /// Measured from the file system — `DownloadItem.totalBytes` is the server's
+    /// estimate of the original file and omits artwork and subtitle sidecars, so
+    /// it must never be shown as a size or summed into one.
+    private(set) var bytesOnDisk: [String: Int64] = [:]
+
     // MARK: - Dependencies
 
     private let downloadManager: DownloadManagerService
@@ -183,8 +190,20 @@ final class DownloadsViewModel {
                 // Refresh metadata when downloads change
                 await self.loadMetadata(serverId: serverId)
                 await self.loadGroups(serverId: serverId)
+                await self.measureDiskUsage()
             }
         }
+    }
+
+    /// Measure the on-disk size of every completed download.
+    private func measureDiskUsage() async {
+        let completed = allDownloads.filter { $0.state == .completed }
+        bytesOnDisk = await downloadManager.diskUsageByDownloadID(for: completed)
+    }
+
+    /// Total on-disk bytes for a set of downloads, for delete confirmations.
+    func diskUsage(of items: [DownloadItem]) -> Int64 {
+        items.reduce(Int64(0)) { $0 + (bytesOnDisk[$1.id] ?? 0) }
     }
 
     /// Stop observing.
@@ -325,6 +344,7 @@ final class DownloadsViewModel {
             allDownloads = all.filter { $0.serverId == serverId }
             await loadMetadata(serverId: serverId)
             await loadGroups(serverId: serverId)
+            await measureDiskUsage()
         } catch {
             errorMessage = "Could not load downloads."
         }

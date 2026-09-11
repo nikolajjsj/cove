@@ -665,6 +665,24 @@ public final class DownloadManagerService: @unchecked Sendable {
         }.value
     }
 
+    /// Bytes actually occupied on disk by each of the given downloads, keyed by
+    /// `DownloadItem.id`.
+    ///
+    /// Any UI that shows a per-item size must use this rather than
+    /// `DownloadItem.totalBytes`, which is the server's estimate of the
+    /// *original* file and excludes artwork and subtitle sidecars.
+    public func diskUsageByDownloadID(for items: [DownloadItem]) async -> [String: Int64] {
+        let storage = storage
+        let requests = items.map { (id: $0.id, item: $0) }
+        return await Task.detached(priority: .utility) {
+            var sizes: [String: Int64] = [:]
+            for request in requests {
+                sizes[request.id] = (try? storage.diskUsage(for: request.item)) ?? 0
+            }
+            return sizes
+        }.value
+    }
+
     /// Remove orphaned offline metadata records that no longer have a
     /// corresponding download record.
     ///
