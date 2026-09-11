@@ -6,7 +6,10 @@ import Foundation
 /// Conform your section enum to this protocol and pair it with `SectionConfig`
 /// to enable drag-to-reorder and show/hide functionality using
 /// `SectionCustomizationSheet`.
-protocol ConfigurableSection: RawRepresentable<String>, CaseIterable, Codable, Hashable, Sendable, Defaults.Serializable {
+// `nonisolated`: the app target defaults to main-actor isolation, which would
+// infer main-actor-isolated Codable conformances. Defaults.Serializable needs
+// them nonisolated, and these are plain value types anyway.
+nonisolated protocol ConfigurableSection: RawRepresentable<String>, CaseIterable, Codable, Hashable, Sendable, Defaults.Serializable {
     /// Human-readable name shown in the customization sheet.
     var displayName: String { get }
 
@@ -21,7 +24,7 @@ protocol ConfigurableSection: RawRepresentable<String>, CaseIterable, Codable, H
 ///
 /// Each entry pairs a `ConfigurableSection` identifier with a visibility toggle.
 /// Persist an array of these to let users customize which sections appear and in what order.
-struct SectionConfig<Section: ConfigurableSection>: Codable, Equatable, Sendable, Defaults.Serializable {
+nonisolated struct SectionConfig<Section: ConfigurableSection>: Codable, Equatable, Sendable, Defaults.Serializable {
     /// Which section this entry represents.
     let section: Section
 

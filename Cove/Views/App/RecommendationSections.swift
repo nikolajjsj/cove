@@ -12,11 +12,14 @@ struct BecauseYouWatchedSection: View {
     @State private var sourceTitle: String?
 
     var body: some View {
+        // Read the provider on the main actor; the fetch closure is @Sendable and
+        // cannot reach main-actor state itself.
+        let provider = authManager.provider
+
         ContentRail(
             cardWidth: { _ in 130 },
             skeleton: { SkeletonCard(width: 130, aspectRatio: 2.0 / 3.0, lineCount: 2) }
         ) {
-            let provider = authManager.provider
             let resumeItems = try await provider.resumeItems()
 
             guard let source = resumeItems.first else { return [] }

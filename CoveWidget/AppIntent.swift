@@ -18,8 +18,10 @@ enum WidgetContentType: String, AppEnum {
 }
 
 struct CoveWidgetIntent: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource = "Cove Widget"
-    static var description: IntentDescription = "Choose what to display in your Cove widget."
+    // `let`, not `var`: these never change, and as mutable statics they are
+    // global shared mutable state that Swift 6 rejects.
+    static let title: LocalizedStringResource = "Cove Widget"
+    static let description = IntentDescription("Choose what to display in your Cove widget.")
 
     @Parameter(title: "Content", default: .continueWatching)
     var contentType: WidgetContentType
