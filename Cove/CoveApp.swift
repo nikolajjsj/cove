@@ -58,6 +58,12 @@ struct CoveApp: App {
 
         // 2. Create managers
         let authManager = AuthManager(serverRepository: serverRepository)
+
+        // Download URLs are stored without credentials, so the engine reads the
+        // live token per request. That also means a transfer resumed after a
+        // re-login uses the new token instead of a stale one.
+        let provider = authManager.provider
+        downloadManagerService?.authTokenProvider = { provider.currentAccessToken }
         let downloadCoordinator = DownloadCoordinator(
             downloadManager: downloadManagerService,
             offlineSyncManager: offlineSyncManager,

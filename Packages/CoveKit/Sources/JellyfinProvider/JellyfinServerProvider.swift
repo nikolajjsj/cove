@@ -99,6 +99,15 @@ public final class JellyfinServerProvider: MediaServerProvider,
         state.clear()
     }
 
+    /// The access token for the current connection, if any.
+    ///
+    /// Exposed so components that build their own authenticated URLs — the
+    /// download engine, which stores URLs without credentials and attaches the
+    /// token per request — can read the live token rather than persisting a copy.
+    public var currentAccessToken: String? {
+        state.client?.accessToken
+    }
+
     /// Clears the HTTP response cache used by the underlying API client.
     public func clearCache() async {
         guard let client = state.client else { return }

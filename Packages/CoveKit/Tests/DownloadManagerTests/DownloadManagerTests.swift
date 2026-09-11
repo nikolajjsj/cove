@@ -104,41 +104,45 @@ final class DownloadStorageTests: XCTestCase {
 }
 
 
-/// Tests for the Jellyfin 12.0 authorization migration on persisted download URLs.
-final class DownloadURLModernizationTests: XCTestCase {
+/// Tests for keeping access tokens out of persisted download URLs.
+final class DownloadURLCredentialTests: XCTestCase {
 
-    func testLegacyAPIKeyParameterIsRewritten() throws {
-        let url = try XCTUnwrap(
-            DownloadManagerService.modernizedURL(
-                from: "https://example.com/Items/i1/Download?api_key=tok"))
+    // MARK: - Stripping
 
-        let items = try XCTUnwrap(
-            URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
-        XCTAssertEqual(items.map(\.name), ["ApiKey"])
-        XCTAssertEqual(items.first?.value, "tok")
+    func testLegacyAPIKeyIsStripped() {
+        XCTAssertEqual(
+            DownloadManagerService.credentialFreeURL(
+                from: "https://example.com/Items/i1/Download?api_key=tok"),
+            "https://example.com/Items/i1/Download")
     }
 
-    func testOtherParametersAreLeftUntouched() throws {
-        let url = try XCTUnwrap(
-            DownloadManagerService.modernizedURL(
-                from: "https://example.com/Videos/v1/stream?static=false&api_key=tok&container=mp4")
-        )
+    func testModernApiKeyIsStripped() {
+        XCTAssertEqual(
+            DownloadManagerService.credentialFreeURL(
+                from: "https://example.com/Items/i1/Download?ApiKey=tok"),
+            "https://example.com/Items/i1/Download")
+    }
+
+    func testOtherParametersSurviveStripping() throws {
+        let stripped = DownloadManagerService.credentialFreeURL(
+            from: "https://example.com/Videos/v1/stream?static=false&api_key=tok&container=mp4")
 
         let items = try XCTUnwrap(
-            URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
-        XCTAssertEqual(items.map(\.name), ["static", "ApiKey", "container"])
+            URLComponents(string: stripped)?.queryItems)
+        XCTAssertEqual(items.map(\.name), ["static", "container"])
         XCTAssertEqual(items.first { $0.name == "container" }?.value, "mp4")
     }
 
-    func testAlreadyModernURLIsUnchanged() throws {
-        let original = "https://example.com/Items/i1/Download?ApiKey=tok"
-        let url = try XCTUnwrap(DownloadManagerService.modernizedURL(from: original))
-        XCTAssertEqual(url.absoluteString, original)
+    func testURLWithoutCredentialsIsUnchanged() {
+        let original = "https://example.com/Items/i1/Download?static=true"
+        XCTAssertEqual(DownloadManagerService.credentialFreeURL(from: original), original)
     }
 
-    func testURLWithoutQueryIsUnchanged() throws {
-        let original = "https://example.com/Items/i1/Download"
-        let url = try XCTUnwrap(DownloadManagerService.modernizedURL(from: original))
-        XCTAssertEqual(url.absoluteString, original)
+    /// `isResumable` reads `static=false` out of the stored URL, so stripping the
+    /// token must not disturb it.
+    func testStrippingPreservesResumabilityMarker() {
+        let stripped = DownloadManagerService.credentialFreeURL(
+            from: "https://example.com/Videos/v1/stream?static=false&ApiKey=tok")
+        XCTAssertTrue(stripped.contains("static=false"))
     }
 }

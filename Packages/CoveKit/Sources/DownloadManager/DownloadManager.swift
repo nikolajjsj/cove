@@ -55,6 +55,14 @@ public final class DownloadManagerService: @unchecked Sendable {
     /// Closure that returns whether downloads should be WiFi-only.
     /// Injected by the app layer since the DownloadManager module doesn't depend on Defaults.
     public var isWifiOnlyEnabled: @Sendable () -> Bool = { false }
+
+    /// Closure returning the current server access token.
+    ///
+    /// Injected by the app layer, which reads it from the Keychain. Download URLs
+    /// are stored without credentials, so the token is attached per-request from
+    /// here — meaning a transfer resumed after a re-login uses the *new* token
+    /// instead of a stale one.
+    public var authTokenProvider: @Sendable () -> String? = { nil }
     private let logger = Logger(
         subsystem: AppConstants.bundleIdentifier, category: "DownloadManager")
 
@@ -184,7 +192,7 @@ public final class DownloadManagerService: @unchecked Sendable {
             totalBytes: expectedBytes,
             downloadedBytes: 0,
             localFilePath: nil,
-            remoteURL: remoteURL.absoluteString,
+            remoteURL: Self.credentialFreeURL(from: remoteURL.absoluteString),
             parentId: parentId,
             artworkURL: artworkURL?.absoluteString,
             errorMessage: nil,
@@ -251,7 +259,7 @@ public final class DownloadManagerService: @unchecked Sendable {
                 totalBytes: child.expectedBytes,
                 downloadedBytes: 0,
                 localFilePath: nil,
-                remoteURL: child.remoteURL.absoluteString,
+                remoteURL: Self.credentialFreeURL(from: child.remoteURL.absoluteString),
                 parentId: parentIdOverride ?? groupItemId,
                 groupId: group.id,
                 artworkURL: nil,
@@ -726,6 +734,11 @@ public final class DownloadManagerService: @unchecked Sendable {
         // 0. Clean up any leftover staged files from previous sessions.
         storage.cleanupStagingDirectory()
 
+        // 0b. Scrub access tokens out of rows written before URLs were stored
+        //     credential-free. Without this the old token sits in the database
+        //     indefinitely, including for completed downloads that never restart.
+        await scrubStoredCredentials()
+
         // 1. Get all tasks the background session still knows about.
         let existingTasks = await urlSession.allTasks
         var runningTaskDescriptions: [Int: String] = [:]  // taskIdentifier → original URL string
@@ -750,13 +763,13 @@ public final class DownloadManagerService: @unchecked Sendable {
             var orphaned: [String] = []
 
             for item in inFlight {
-                // Compare the modernized form on both sides: a live task started by
-                // this build carries `ApiKey` while an older DB row still carries
-                // `api_key`, and a raw string compare would orphan the task.
-                let itemURL = Self.modernizedURL(from: item.remoteURL)?.absoluteString
+                // Compare with credentials stripped from both sides: the live task's
+                // URL carries a token, the stored one does not, and an older row may
+                // still carry the legacy `api_key` spelling.
+                let itemURL = Self.credentialFreeURL(from: item.remoteURL)
                 var matched = false
                 for (taskId, taskURL) in taskDescriptions where !usedTaskIds.contains(taskId) {
-                    if Self.modernizedURL(from: taskURL)?.absoluteString == itemURL {
+                    if Self.credentialFreeURL(from: taskURL) == itemURL {
                         state.taskToDownloadID[taskId] = item.id
                         matched = true
                         usedTaskIds.insert(taskId)
@@ -785,6 +798,24 @@ public final class DownloadManagerService: @unchecked Sendable {
 
         // 4. Kick the scheduler.
         await startNextDownloadsIfNeeded()
+    }
+
+    /// Rewrite any stored download URL that still embeds an access token.
+    private func scrubStoredCredentials() async {
+        guard let all = try? await downloadRepository.fetchAll() else { return }
+        var scrubbed = 0
+        for item in all {
+            let clean = Self.credentialFreeURL(from: item.remoteURL)
+            guard clean != item.remoteURL else { continue }
+            if (try? await downloadRepository.updateRemoteURL(id: item.id, remoteURL: clean))
+                == true
+            {
+                scrubbed += 1
+            }
+        }
+        if scrubbed > 0 {
+            logger.info("Removed stored access tokens from \(scrubbed) download URL(s)")
+        }
     }
 
     // MARK: - Internal — Scheduling
@@ -850,40 +881,52 @@ public final class DownloadManagerService: @unchecked Sendable {
         }
     }
 
-    /// The legacy Jellyfin query parameter for token auth, disabled by default from
-    /// server 12.0 onwards.
-    private static let legacyAPIKeyParameter = "api_key"
+    /// Query parameters that carry the access token. `api_key` is the legacy
+    /// spelling Jellyfin 12.0 rejects; `ApiKey` is the current one.
+    private static let tokenParameters: Set<String> = ["api_key", "ApiKey"]
 
-    /// The modern equivalent, accepted by every server from 10.8 onwards.
+    /// The parameter name to authenticate with.
     private static let apiKeyParameter = "ApiKey"
 
-    /// Rewrite a persisted download URL that still authenticates with the legacy
-    /// `api_key` query parameter.
+    /// Strip the access token out of a download URL.
     ///
-    /// Download URLs are stored in the database when the item is enqueued, so rows
-    /// written by an older build of the app still carry `api_key`. Jellyfin 12.0
-    /// rejects that parameter, which would fail every queued and paused download
-    /// after a server upgrade; rewriting it here repairs them in place.
-    static func modernizedURL(from string: String) -> URL? {
-        guard var components = URLComponents(string: string) else {
-            return URL(string: string)
-        }
-        guard let queryItems = components.queryItems,
-            queryItems.contains(where: { $0.name == legacyAPIKeyParameter })
+    /// Download URLs are persisted at enqueue time, so whatever they contain ends
+    /// up in the database in plaintext. The token is a credential and belongs in
+    /// the Keychain, so it is removed before the URL is stored and re-attached
+    /// from ``authTokenProvider`` when the transfer actually starts. That also
+    /// fixes resume after a re-login, which previously replayed a stale token.
+    static func credentialFreeURL(from string: String) -> String {
+        guard var components = URLComponents(string: string),
+            let queryItems = components.queryItems,
+            queryItems.contains(where: { tokenParameters.contains($0.name) })
         else {
-            return components.url
+            return string
         }
-        components.queryItems = queryItems.map { item in
-            item.name == legacyAPIKeyParameter
-                ? URLQueryItem(name: apiKeyParameter, value: item.value)
-                : item
+        let stripped = queryItems.filter { !tokenParameters.contains($0.name) }
+        components.queryItems = stripped.isEmpty ? nil : stripped
+        return components.url?.absoluteString ?? string
+    }
+
+    /// Build the URL to actually request: the stored URL plus the current token.
+    ///
+    /// Returns `nil` for a malformed stored URL. A missing token is not fatal —
+    /// image and some stream endpoints are public — so the URL is returned as-is
+    /// and the server decides.
+    func authorizedURL(from string: String) -> URL? {
+        let base = Self.credentialFreeURL(from: string)
+        guard let token = authTokenProvider(), !token.isEmpty else {
+            return URL(string: base)
         }
+        guard var components = URLComponents(string: base) else { return URL(string: base) }
+        components.queryItems =
+            (components.queryItems ?? [])
+            + [URLQueryItem(name: Self.apiKeyParameter, value: token)]
         return components.url
     }
 
     /// Create (or resume) a `URLSessionDownloadTask` for a single item.
     private func startDownloadTask(for item: DownloadItem) async {
-        guard let url = Self.modernizedURL(from: item.remoteURL) else {
+        guard let url = authorizedURL(from: item.remoteURL) else {
             logger.error("Invalid remote URL for download \(item.id): \(item.remoteURL)")
             try? await downloadRepository.updateState(
                 id: item.id, state: .failed, errorMessage: "Invalid download URL")

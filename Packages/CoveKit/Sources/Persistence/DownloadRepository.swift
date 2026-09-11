@@ -182,6 +182,23 @@ public final class DownloadRepository: Sendable {
         }
     }
 
+    /// Replace the stored remote URL for a download.
+    ///
+    /// Used to scrub credentials out of rows written before download URLs were
+    /// stored token-free.
+    ///
+    /// - Returns: `true` if a row was updated.
+    @discardableResult
+    public func updateRemoteURL(id: String, remoteURL: String) async throws -> Bool {
+        try await dbWriter.write { db in
+            guard var record = try DownloadRecord.fetchOne(db, key: id) else { return false }
+            guard record.remoteURL != remoteURL else { return false }
+            record.remoteURL = remoteURL
+            try record.update(db)
+            return true
+        }
+    }
+
     /// Mark a download as completed with the local file path.
     ///
     /// Sets the state to `.completed`, progress to 1.0, and records the completion timestamp.
