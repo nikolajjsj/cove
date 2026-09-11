@@ -82,10 +82,19 @@ public final class VideoPlaybackManager {
     /// The item ID for which we're currently loading artwork (to discard stale loads).
     @ObservationIgnored private var nowPlayingArtworkItemId: ItemID?
 
+    /// Whether a stop has already been reported for ``currentItem``.
+    ///
+    /// Natural end reports the stop, then auto-play calls `loadAndPlay`, whose
+    /// opening `stop()` would report the *same* item a second time — at the
+    /// position `playNextEpisode` just reset to 0, wiping the server's resume
+    /// point for an episode that was in fact watched to the end.
+    @ObservationIgnored private var hasReportedStop = false
+
     @ObservationIgnored private nonisolated(unsafe) var statusObserver: NSKeyValueObservation?
     @ObservationIgnored private nonisolated(unsafe) var bufferObserver: NSKeyValueObservation?
     @ObservationIgnored private nonisolated(unsafe) var rateObserver: NSKeyValueObservation?
     @ObservationIgnored private nonisolated(unsafe) var endOfVideoTask: Task<Void, Never>?
+    @ObservationIgnored private nonisolated(unsafe) var failedToEndTask: Task<Void, Never>?
     @ObservationIgnored private nonisolated(unsafe) var progressReportTask: Task<Void, Never>?
     @ObservationIgnored private nonisolated(unsafe) var countdownTask: Task<Void, Never>?
 
@@ -132,6 +141,7 @@ public final class VideoPlaybackManager {
         bufferObserver?.invalidate()
         rateObserver?.invalidate()
         endOfVideoTask?.cancel()
+        failedToEndTask?.cancel()
         progressReportTask?.cancel()
         countdownTask?.cancel()
     }
@@ -145,6 +155,7 @@ public final class VideoPlaybackManager {
         stop()
 
         currentItem = item
+        hasReportedStop = false
 
         // Parse subtitle tracks from stream info as initial metadata.
         // These will be replaced by AVPlayer-discovered tracks when the asset loads.
@@ -412,11 +423,11 @@ public final class VideoPlaybackManager {
 
         teardownRemoteCommands()
 
-        // Report playback stopped
-        if let item {
-            Task { [weak self] in
-                await self?.onPlaybackStopped?(item, position)
-            }
+        // Report playback stopped, unless the natural end already did.
+        if let item, !hasReportedStop {
+            hasReportedStop = true
+            let callback = onPlaybackStopped
+            Task { await callback?(item, position) }
         }
 
         logger.info("Stopped video playback")
@@ -500,13 +511,46 @@ public final class VideoPlaybackManager {
             }
         }
 
-        // Observe end of video via async notification stream
+        // Observe end of video via async notification stream.
+        //
+        // AVFoundation posts this for *every* AVPlayerItem in the process — the
+        // music player's items included — so it must be matched against our own
+        // current item rather than acted on unconditionally.
         endOfVideoTask = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(
+            for await notification in NotificationCenter.default.notifications(
                 named: .AVPlayerItemDidPlayToEndTime)
             {
                 guard let self else { break }
+                guard let item = notification.object as? AVPlayerItem,
+                    item === self.player.currentItem
+                else { continue }
                 self.handleVideoEnded()
+            }
+        }
+
+        // A stream that dies mid-playback never reaches its end time, so without
+        // this the player just stalls with no error surfaced to the user.
+        failedToEndTask = Task { [weak self] in
+            for await notification in NotificationCenter.default.notifications(
+                named: .AVPlayerItemFailedToPlayToEndTime)
+            {
+                guard let self else { break }
+                guard let item = notification.object as? AVPlayerItem,
+                    item === self.player.currentItem
+                else { continue }
+                let error =
+                    notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+                    ?? NSError(
+                        domain: "VideoPlayback", code: -2,
+                        userInfo: [
+                            NSLocalizedDescriptionKey: "Playback stopped unexpectedly"
+                        ])
+                self.logger.error(
+                    "Player item failed to play to end: \(error.localizedDescription)")
+                self.isBuffering = false
+                if let currentItem = self.currentItem {
+                    self.onPlaybackError?(currentItem, error)
+                }
             }
         }
     }
@@ -895,10 +939,13 @@ public final class VideoPlaybackManager {
         logger.info("Video ended")
         isPlaying = false
 
-        if let item = currentItem {
-            Task { [weak self] in
-                await self?.onPlaybackStopped?(item, self?.duration ?? 0)
-            }
+        if let item = currentItem, !hasReportedStop {
+            hasReportedStop = true
+            // Capture the position now: `playNextEpisode` resets `duration` to 0
+            // before the detached report would read it.
+            let endPosition = duration
+            let callback = onPlaybackStopped
+            Task { await callback?(item, endPosition) }
         }
 
         if nextEpisode != nil {
