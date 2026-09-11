@@ -432,11 +432,14 @@ public final class JellyfinAPIClient: Sendable {
     public func reportPlaybackStart(
         itemId: String,
         positionTicks: Int64,
-        mediaSourceId: String? = nil
+        mediaSourceId: String? = nil,
+        playMethod: PlayMethod = .directPlay,
+        playSessionId: String? = nil
     ) async throws {
         let url = baseURL.appending(path: "Sessions/Playing")
         let body = PlaybackStartInfo(
-            itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId)
+            itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId,
+            playMethod: playMethod, playSessionId: playSessionId)
         logger.debug("Reporting playback start for item \(itemId)")
         try await httpClient.request(
             url: url, method: .post, headers: authHeaders, body: body,
@@ -449,12 +452,14 @@ public final class JellyfinAPIClient: Sendable {
         itemId: String,
         positionTicks: Int64,
         isPaused: Bool,
-        mediaSourceId: String? = nil
+        mediaSourceId: String? = nil,
+        playMethod: PlayMethod = .directPlay,
+        playSessionId: String? = nil
     ) async throws {
         let url = baseURL.appending(path: "Sessions/Playing/Progress")
         let body = PlaybackProgressInfo(
             itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId,
-            isPaused: isPaused)
+            playMethod: playMethod, playSessionId: playSessionId, isPaused: isPaused)
         logger.debug("Reporting playback progress for item \(itemId)")
         try await httpClient.request(
             url: url, method: .post, headers: authHeaders, body: body,
@@ -466,14 +471,31 @@ public final class JellyfinAPIClient: Sendable {
     public func reportPlaybackStopped(
         itemId: String,
         positionTicks: Int64,
-        mediaSourceId: String? = nil
+        mediaSourceId: String? = nil,
+        playSessionId: String? = nil
     ) async throws {
         let url = baseURL.appending(path: "Sessions/Playing/Stopped")
         let body = PlaybackStopInfo(
-            itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId)
+            itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId,
+            playSessionId: playSessionId)
         logger.debug("Reporting playback stopped for item \(itemId)")
         try await httpClient.request(
             url: url, method: .post, headers: authHeaders, body: body,
+            cachePolicy: .networkOnly)
+    }
+
+    /// Close a live stream the server opened for a playback session.
+    /// `POST /LiveStreams/Close`
+    ///
+    /// `PlaybackInfo` is requested with `AutoOpenLiveStream`, so the server may
+    /// allocate a live stream per session. Closing it releases those resources
+    /// instead of leaving them to time out.
+    public func closeLiveStream(liveStreamId: String) async throws {
+        let url = baseURL.appending(path: "LiveStreams/Close")
+        logger.debug("Closing live stream \(liveStreamId)")
+        try await httpClient.request(
+            url: url, method: .post, headers: authHeaders,
+            queryItems: [URLQueryItem(name: "liveStreamId", value: liveStreamId)],
             cachePolicy: .networkOnly)
     }
 
@@ -1109,12 +1131,17 @@ private struct PlaybackStartInfo: Encodable, Sendable {
     let positionTicks: Int64
     let mediaSourceId: String?
     let playMethod: String
+    let playSessionId: String?
 
-    init(itemId: String, positionTicks: Int64, mediaSourceId: String?) {
+    init(
+        itemId: String, positionTicks: Int64, mediaSourceId: String?,
+        playMethod: PlayMethod, playSessionId: String?
+    ) {
         self.itemId = itemId
         self.positionTicks = positionTicks
         self.mediaSourceId = mediaSourceId
-        self.playMethod = "DirectPlay"
+        self.playMethod = playMethod.rawValue
+        self.playSessionId = playSessionId
     }
 
     // All-lowercase string values so that the HTTPClient's convertToSnakeCase
@@ -1125,6 +1152,7 @@ private struct PlaybackStartInfo: Encodable, Sendable {
         case positionTicks = "positionticks"
         case mediaSourceId = "mediasourceid"
         case playMethod = "playmethod"
+        case playSessionId = "playsessionid"
     }
 }
 
@@ -1134,13 +1162,18 @@ private struct PlaybackProgressInfo: Encodable, Sendable {
     let positionTicks: Int64
     let mediaSourceId: String?
     let playMethod: String
+    let playSessionId: String?
     let isPaused: Bool
 
-    init(itemId: String, positionTicks: Int64, mediaSourceId: String?, isPaused: Bool) {
+    init(
+        itemId: String, positionTicks: Int64, mediaSourceId: String?,
+        playMethod: PlayMethod, playSessionId: String?, isPaused: Bool
+    ) {
         self.itemId = itemId
         self.positionTicks = positionTicks
         self.mediaSourceId = mediaSourceId
-        self.playMethod = "DirectPlay"
+        self.playMethod = playMethod.rawValue
+        self.playSessionId = playSessionId
         self.isPaused = isPaused
     }
 
@@ -1149,6 +1182,7 @@ private struct PlaybackProgressInfo: Encodable, Sendable {
         case positionTicks = "positionticks"
         case mediaSourceId = "mediasourceid"
         case playMethod = "playmethod"
+        case playSessionId = "playsessionid"
         case isPaused = "ispaused"
     }
 }
@@ -1158,20 +1192,22 @@ private struct PlaybackStopInfo: Encodable, Sendable {
     let itemId: String
     let positionTicks: Int64
     let mediaSourceId: String?
-    let playMethod: String
+    let playSessionId: String?
 
-    init(itemId: String, positionTicks: Int64, mediaSourceId: String?) {
+    init(
+        itemId: String, positionTicks: Int64, mediaSourceId: String?, playSessionId: String?
+    ) {
         self.itemId = itemId
         self.positionTicks = positionTicks
         self.mediaSourceId = mediaSourceId
-        self.playMethod = "DirectPlay"
+        self.playSessionId = playSessionId
     }
 
     enum CodingKeys: String, CodingKey {
         case itemId = "itemid"
         case positionTicks = "positionticks"
         case mediaSourceId = "mediasourceid"
-        case playMethod = "playmethod"
+        case playSessionId = "playsessionid"
     }
 }
 

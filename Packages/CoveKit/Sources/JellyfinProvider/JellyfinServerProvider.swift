@@ -700,6 +700,17 @@ public final class JellyfinServerProvider: MediaServerProvider,
             throw AppError.playbackFailed(reason: "No media source available")
         }
 
+        /// The session the server just opened for us. Reported back with every
+        /// progress update so the server can tie them to its transcode job, and
+        /// carries the live stream that has to be closed when playback ends.
+        func session(_ method: PlayMethod, source: MediaSourceInfo = source) -> PlaybackSession {
+            PlaybackSession(
+                playSessionId: playbackInfo.playSessionId,
+                playMethod: method,
+                liveStreamId: source.liveStreamId
+            )
+        }
+
         let mediaStreams = JellyfinMapper.mapMediaStreams(source.mediaStreams ?? [])
         let sourceId = source.id ?? item.id.rawValue
 
@@ -738,7 +749,8 @@ public final class JellyfinServerProvider: MediaServerProvider,
                 videoCodec: videoCodec,
                 audioCodec: audioCodec,
                 mediaStreams: mediaStreams,
-                mediaSourceId: sourceId
+                mediaSourceId: sourceId,
+                session: session(.directPlay)
             )
         }
 
@@ -764,7 +776,8 @@ public final class JellyfinServerProvider: MediaServerProvider,
                 videoCodec: videoCodec,
                 audioCodec: audioCodec,
                 mediaStreams: mediaStreams,
-                mediaSourceId: sourceId
+                mediaSourceId: sourceId,
+                session: session(.directStream)
             )
         }
 
@@ -792,7 +805,8 @@ public final class JellyfinServerProvider: MediaServerProvider,
                 videoCodec: videoCodec,
                 audioCodec: audioCodec,
                 mediaStreams: mediaStreams,
-                mediaSourceId: sourceId
+                mediaSourceId: sourceId,
+                session: session(.transcode)
             )
         }
 
@@ -819,7 +833,13 @@ public final class JellyfinServerProvider: MediaServerProvider,
                     videoCodec: videoCodec,
                     audioCodec: audioCodec,
                     mediaStreams: mediaStreams,
-                    mediaSourceId: sourceId
+                    mediaSourceId: sourceId,
+                    // The retry opened a *new* session, so report against that one.
+                    session: PlaybackSession(
+                        playSessionId: retryPlaybackInfo.playSessionId,
+                        playMethod: .transcode,
+                        liveStreamId: retrySource.liveStreamId
+                    )
                 )
             }
         }
@@ -972,34 +992,48 @@ public final class JellyfinServerProvider: MediaServerProvider,
 
     // MARK: - PlaybackReportingProvider (Phase 4/5)
 
-    public func reportPlaybackStart(item: MediaItem, position: TimeInterval) async throws {
+    public func reportPlaybackStart(
+        item: MediaItem, position: TimeInterval, session: PlaybackSession?
+    ) async throws {
         let client = try client()
         let positionTicks = JellyfinTicks.fromSeconds(position)
         try await client.reportPlaybackStart(
             itemId: item.id.rawValue,
-            positionTicks: positionTicks
+            positionTicks: positionTicks,
+            playMethod: session?.playMethod ?? .directPlay,
+            playSessionId: session?.playSessionId
         )
     }
 
-    public func reportPlaybackProgress(item: MediaItem, position: TimeInterval, isPaused: Bool)
-        async throws
-    {
+    public func reportPlaybackProgress(
+        item: MediaItem, position: TimeInterval, isPaused: Bool, session: PlaybackSession?
+    ) async throws {
         let client = try client()
         let positionTicks = JellyfinTicks.fromSeconds(position)
         try await client.reportPlaybackProgress(
             itemId: item.id.rawValue,
             positionTicks: positionTicks,
-            isPaused: isPaused
+            isPaused: isPaused,
+            playMethod: session?.playMethod ?? .directPlay,
+            playSessionId: session?.playSessionId
         )
     }
 
-    public func reportPlaybackStopped(item: MediaItem, position: TimeInterval) async throws {
+    public func reportPlaybackStopped(
+        item: MediaItem, position: TimeInterval, session: PlaybackSession?
+    ) async throws {
         let client = try client()
         let positionTicks = JellyfinTicks.fromSeconds(position)
         try await client.reportPlaybackStopped(
             itemId: item.id.rawValue,
-            positionTicks: positionTicks
+            positionTicks: positionTicks,
+            playSessionId: session?.playSessionId
         )
+    }
+
+    public func closeLiveStream(id: String) async throws {
+        let client = try client()
+        try await client.closeLiveStream(liveStreamId: id)
     }
 
     // MARK: - DownloadableProvider (Phase 6)

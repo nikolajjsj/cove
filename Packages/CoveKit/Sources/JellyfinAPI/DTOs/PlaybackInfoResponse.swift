@@ -23,6 +23,9 @@ public struct MediaSourceInfo: Codable, Sendable {
     public let mediaStreams: [MediaStreamInfo]?
     public let bitrate: Int?
     public let size: Int64?
+    /// Set when the server opened a live stream for this source (we request
+    /// `AutoOpenLiveStream`). Must be closed when playback ends.
+    public let liveStreamId: String?
 
     enum CodingKeys: String, CodingKey {
         case id = "Id"
@@ -35,6 +38,36 @@ public struct MediaSourceInfo: Codable, Sendable {
         case mediaStreams = "MediaStreams"
         case bitrate = "Bitrate"
         case size = "Size"
+        case liveStreamId = "LiveStreamId"
+    }
+
+    /// Every field defaults to `nil` so that adding one — as `liveStreamId` was —
+    /// doesn't break callers that construct a partial source, which is the normal
+    /// case in tests.
+    public init(
+        id: String? = nil,
+        name: String? = nil,
+        container: String? = nil,
+        supportsDirectPlay: Bool? = nil,
+        supportsDirectStream: Bool? = nil,
+        supportsTranscoding: Bool? = nil,
+        transcodingUrl: String? = nil,
+        mediaStreams: [MediaStreamInfo]? = nil,
+        bitrate: Int? = nil,
+        size: Int64? = nil,
+        liveStreamId: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.container = container
+        self.supportsDirectPlay = supportsDirectPlay
+        self.supportsDirectStream = supportsDirectStream
+        self.supportsTranscoding = supportsTranscoding
+        self.transcodingUrl = transcodingUrl
+        self.mediaStreams = mediaStreams
+        self.bitrate = bitrate
+        self.size = size
+        self.liveStreamId = liveStreamId
     }
 }
 
