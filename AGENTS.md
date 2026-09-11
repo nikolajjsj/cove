@@ -83,6 +83,8 @@ If SwiftData is configured to use CloudKit:
 
 - **User data (favorites, played state, play counts)** must always be read through `UserDataStore`, never directly from a model's `userData` property. `UserDataStore` holds live optimistic overrides that may differ from the stale server value stored on the model. Use `appState.userDataStore?.isFavorite(item.id, fallback: item.userData) ?? item.userData?.isFavorite ?? false` (or the equivalent `isPlayed` variant). Never write `item.userData?.isFavorite ?? false` at a call site.
 
+- **Download storage sizes** must be measured from disk via `DownloadStorage` (`totalDiskUsage()`, `diskUsage(serverId:)`, `diskUsage(for:)`), never by summing `DownloadItem.totalBytes` / `downloadedBytes` from the database. Those DB fields start as the server's `MediaSource.size` estimate, which is the *original* file size even when the download goes through the transcode endpoint, and they exclude artwork and subtitle sidecars stored alongside the media file. They are only corrected to the real size at completion, so older records keep the stale estimate. Any UI showing "space used" must also agree on scope — the Settings row and `StorageManagementView` both report all servers.
+
 ## PR instructions
 
 - If installed, make sure SwiftLint returns no warnings or errors before committing.

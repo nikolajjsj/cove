@@ -11,6 +11,11 @@ struct StorageManagementView: View {
     @State private var downloads: [DownloadItem] = []
     @State private var totalUsedBytes: Int64 = 0
     @State private var availableBytes: Int64 = 0
+    /// On-disk bytes per media type, measured from the file system.
+    @State private var bytesByType: [MediaType: Int64] = [:]
+    /// Bytes on disk not attributable to a completed download's own directory —
+    /// parent artwork (series/season/album posters) and staging leftovers.
+    @State private var otherBytes: Int64 = 0
     @State private var isLoading = true
     @State private var showDeleteAllConfirmation = false
     @State private var errorMessage: String?
@@ -114,7 +119,7 @@ struct StorageManagementView: View {
     // MARK: - Breakdown by Media Type
 
     private var breakdownSection: some View {
-        Section("Downloaded Items") {
+        Section {
             if completedDownloads.isEmpty {
                 Text("No completed downloads")
                     .foregroundStyle(.secondary)
@@ -124,7 +129,7 @@ struct StorageManagementView: View {
 
                 ForEach(sortedKeys, id: \.self) { type in
                     let items = grouped[type] ?? []
-                    let typeBytes = items.reduce(Int64(0)) { $0 + $1.totalBytes }
+                    let typeBytes = bytesByType[type] ?? 0
 
                     HStack {
                         Image(systemName: type.placeholderIcon)
@@ -144,6 +149,32 @@ struct StorageManagementView: View {
                         Spacer()
 
                         Text(formattedBytes(typeBytes))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+
+                // Everything on disk that isn't inside a completed item's own
+                // directory: parent artwork and staging leftovers. Listing it
+                // keeps the rows adding up to "Used by Downloads".
+                if otherBytes > 0 {
+                    HStack {
+                        Image(systemName: "photo.on.rectangle")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Artwork & Other")
+                                .font(.body)
+                            Text("Posters and cached extras")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Text(formattedBytes(otherBytes))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
@@ -182,6 +213,14 @@ struct StorageManagementView: View {
                     }
                 }
             }
+        } header: {
+            Text("Downloaded Items")
+        } footer: {
+            if hasInProgressDownloads {
+                Text(
+                    "In-progress downloads are held in temporary storage and aren't counted above until they finish."
+                )
+            }
         }
     }
 
@@ -219,13 +258,34 @@ struct StorageManagementView: View {
                 await downloadManager.cleanupOrphanedMetadata(serverId: serverId)
             }
 
-            let storage = DownloadStorage.shared
-            totalUsedBytes = (try? storage.totalDiskUsage()) ?? 0
-            availableBytes = (try? storage.availableDiskSpace()) ?? 0
+            let usage = await Self.measureDiskUsage(for: completedDownloads)
+            totalUsedBytes = usage.total
+            availableBytes = usage.available
+            bytesByType = usage.byType
+            otherBytes = max(0, usage.total - usage.byType.values.reduce(0, +))
         } catch {
             downloads = []
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Measure on-disk usage off the main actor — walking the downloads tree
+    /// touches the file system once per item and must not block the UI.
+    private static func measureDiskUsage(
+        for items: [DownloadItem]
+    ) async -> (total: Int64, available: Int64, byType: [MediaType: Int64]) {
+        await Task.detached(priority: .utility) {
+            let storage = DownloadStorage.shared
+            var byType: [MediaType: Int64] = [:]
+            for item in items {
+                byType[item.mediaType, default: 0] += (try? storage.diskUsage(for: item)) ?? 0
+            }
+            return (
+                total: (try? storage.totalDiskUsage()) ?? 0,
+                available: (try? storage.availableDiskSpace()) ?? 0,
+                byType: byType
+            )
+        }.value
     }
 
     private func deleteAllDownloads() async {
@@ -243,10 +303,16 @@ struct StorageManagementView: View {
         downloads.filter { $0.state == .completed }
     }
 
+    private var hasInProgressDownloads: Bool {
+        downloads.contains {
+            $0.state == .queued || $0.state == .downloading || $0.state == .paused
+        }
+    }
+
     // MARK: - Helpers
 
     private func formattedBytes(_ bytes: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        bytes.formatted(.byteCount(style: .file))
     }
 
     private func sectionTitle(for type: MediaType) -> String {

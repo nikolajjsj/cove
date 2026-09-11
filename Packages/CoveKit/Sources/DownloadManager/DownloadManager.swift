@@ -629,9 +629,26 @@ public final class DownloadManagerService: @unchecked Sendable {
 
     // MARK: - Public API — Storage
 
-    /// Total bytes of completed downloads for a specific server (from the DB).
+    /// Bytes actually occupied on disk by a specific server's downloads.
+    ///
+    /// Measured from the file system rather than the database so that artwork,
+    /// subtitle sidecars, and any size the server mis-reported are all included.
     public func totalStorageUsed(serverId: String) async throws -> Int64 {
-        try await downloadRepository.totalDownloadedBytes(serverId: serverId)
+        let storage = storage
+        return try await Task.detached(priority: .utility) {
+            try storage.diskUsage(serverId: serverId)
+        }.value
+    }
+
+    /// Bytes actually occupied on disk by downloads across every server.
+    ///
+    /// This is the same figure the storage management screen reports, so the
+    /// two never disagree.
+    public func totalStorageUsed() async throws -> Int64 {
+        let storage = storage
+        return try await Task.detached(priority: .utility) {
+            try storage.totalDiskUsage()
+        }.value
     }
 
     /// Remove orphaned offline metadata records that no longer have a

@@ -321,8 +321,25 @@ public struct DownloadStorage: Sendable {
     }
 
     /// Calculate total disk usage across all downloads.
+    ///
+    /// This is the authoritative figure for "space used by downloads": it counts
+    /// media files, artwork, subtitles, and any orphaned staging files.
     public func totalDiskUsage() throws -> Int64 {
         return try directorySize(at: downloadsDirectory)
+    }
+
+    /// Calculate disk usage for a single item's directory.
+    ///
+    /// This includes everything stored alongside the media file — artwork and
+    /// subtitle sidecars — so per-item sizes add up to the server total.
+    public func diskUsage(serverId: String, mediaType: MediaType, itemId: ItemID) throws -> Int64 {
+        let dir = itemDirectory(serverId: serverId, mediaType: mediaType, itemId: itemId)
+        return try directorySize(at: dir)
+    }
+
+    /// Calculate disk usage for a single download item.
+    public func diskUsage(for item: DownloadItem) throws -> Int64 {
+        try diskUsage(serverId: item.serverId, mediaType: item.mediaType, itemId: item.itemId)
     }
 
     /// Check available disk space on the volume containing the downloads directory.
@@ -397,6 +414,9 @@ public struct DownloadStorage: Sendable {
     // MARK: - Private Helpers
 
     /// Recursively calculate the total size of all files within a directory.
+    ///
+    /// Hidden entries are deliberately included so that orphaned files in
+    /// `.staging` are reported as the space they actually occupy.
     private func directorySize(at url: URL) throws -> Int64 {
         let fm = FileManager.default
         guard fm.fileExists(atPath: url.path) else { return 0 }
@@ -405,20 +425,25 @@ public struct DownloadStorage: Sendable {
         guard
             let enumerator = fm.enumerator(
                 at: url,
-                includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
-                options: [.skipsHiddenFiles]
+                includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
+                options: []
             )
         else {
             return 0
         }
 
         for case let fileURL as URL in enumerator {
-            let resourceValues = try fileURL.resourceValues(forKeys: [
-                .fileSizeKey, .isDirectoryKey,
-            ])
-            if resourceValues.isDirectory == false {
-                totalSize += Int64(resourceValues.fileSize ?? 0)
+            // A single unreadable entry must not discard the whole measurement,
+            // which would make the UI report 0 bytes used.
+            guard
+                let resourceValues = try? fileURL.resourceValues(forKeys: [
+                    .fileSizeKey, .isRegularFileKey,
+                ]),
+                resourceValues.isRegularFile == true
+            else {
+                continue
             }
+            totalSize += Int64(resourceValues.fileSize ?? 0)
         }
 
         return totalSize

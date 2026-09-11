@@ -279,9 +279,9 @@ struct SettingsView: View {
         else { return }
 
         do {
-            totalDownloadSize = try await downloadManager.totalStorageUsed(
-                serverId: connection.id.uuidString
-            )
+            // Measured across every server, matching what StorageManagementView
+            // reports — otherwise this row and that screen disagree.
+            totalDownloadSize = try await downloadManager.totalStorageUsed()
             let downloads = try await downloadManager.downloads(
                 for: connection.id.uuidString
             )
