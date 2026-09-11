@@ -85,6 +85,18 @@ If SwiftData is configured to use CloudKit:
 
 - **Download storage sizes** must be measured from disk via `DownloadStorage` (`totalDiskUsage()`, `diskUsage(serverId:)`, `diskUsage(for:)`), never by summing `DownloadItem.totalBytes` / `downloadedBytes` from the database. Those DB fields start as the server's `MediaSource.size` estimate, which is the *original* file size even when the download goes through the transcode endpoint, and they exclude artwork and subtitle sidecars stored alongside the media file. They are only corrected to the real size at completion, so older records keep the stale estimate. Any UI showing "space used" must also agree on scope — the Settings row and `StorageManagementView` both report all servers.
 
+- **Jellyfin server API compatibility.** The app targets Jellyfin **10.9 or later**; server 12.0 removed and disabled things earlier clients relied on. Two rules follow from that:
+
+  - **Token auth in URLs uses `ApiKey`, never the legacy `api_key`.** 12.0 disables the legacy query parameter (and the `X-Emby-*` headers) unless the admin re-enables `EnableLegacyAuthorization`. Use `JellyfinAuthHeader.apiKeyQueryItem(token:)` for any URL handed to `AVPlayer` or a background download task; everything else authenticates with the `Authorization: MediaBrowser …` header. Note that `DownloadItem.remoteURL` is persisted at enqueue time, so old DB rows still carry `api_key` — `DownloadManagerService.modernizedURL(from:)` repairs them on start, and anything else that replays a stored URL must do the same.
+
+  - **Never use a `/Users/{userId}/…` route.** They were deprecated in 10.9 and *deleted* in 12.0. The replacements take `userId` as a query parameter instead: `/Items`, `/Items/{itemId}`, `/UserItems/Resume`, `/UserViews`, `/Items/Suggestions`, `/UserFavoriteItems/{itemId}`, `/UserPlayedItems/{itemId}`, `/Items/{itemId}/SpecialFeatures`, `/Items/{itemId}/LocalTrailers`.
+
+  Before adding or changing an endpoint, verify it against the real spec rather than from memory — it lists removals, deprecations, and the exact parameter names and casing:
+
+  ```bash
+  curl -sL https://api.jellyfin.org/openapi/jellyfin-openapi-stable.json -o /tmp/jf.json && python3 -c "import json;s=json.load(open('/tmp/jf.json'));print(s['info']['version']);op=s['paths']['/Items']['get'];print(op.get('deprecated',False));print([q['name'] for q in op['parameters'] if q['in']=='query'])"
+  ```
+
 ## PR instructions
 
 - If installed, make sure SwiftLint returns no warnings or errors before committing.
