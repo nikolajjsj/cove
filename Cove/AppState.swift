@@ -34,6 +34,12 @@ final class AppState {
     var isOffline = false
     var error: AppError?
 
+    /// Set when the on-device database could not be opened at launch.
+    ///
+    /// Downloads, offline metadata, and saved servers all depend on it, so this
+    /// is surfaced rather than leaving those features silently inert.
+    var databaseError: String?
+
     // MARK: - Navigation
 
     /// The currently selected tab in the app shell.

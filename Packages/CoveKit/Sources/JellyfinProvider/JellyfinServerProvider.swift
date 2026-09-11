@@ -92,6 +92,15 @@ public final class JellyfinServerProvider: MediaServerProvider,
     }
 
     public func disconnect() async {
+        // Drop cached responses before tearing down the client. The in-memory
+        // cache and URLSession's on-disk URLCache both hold this user's library
+        // and item data, which must not survive a sign-out or leak into the next
+        // account signed in on this device.
+        if let client = state.client {
+            await client.httpClient.clearCache()
+            client.httpClient.clearURLCache()
+        }
+
         if let connection = state.connection {
             keychain.deleteToken(forServerID: connection.id.uuidString)
             logger.info("Disconnected from \(connection.name)")

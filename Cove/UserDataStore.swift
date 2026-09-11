@@ -96,6 +96,7 @@ final class UserDataStore {
         var updated = base
         updated.isFavorite = newValue
         overrides[itemId] = updated
+        evictOverridesIfNeeded()
         markInflight(itemId, .favorite)
 
         do {
@@ -130,6 +131,7 @@ final class UserDataStore {
         var updated = base
         updated.isPlayed = true
         overrides[itemId] = updated
+        evictOverridesIfNeeded()
         markInflight(itemId, .played)
 
         do {
@@ -173,6 +175,7 @@ final class UserDataStore {
         }
 
         overrides[itemId] = data
+        evictOverridesIfNeeded()
     }
 
     /// Toggle played/watched: apply optimistic update → call server → rollback on failure.
@@ -189,6 +192,7 @@ final class UserDataStore {
         var updated = base
         updated.isPlayed = newValue
         overrides[itemId] = updated
+        evictOverridesIfNeeded()
         markInflight(itemId, .played)
 
         do {
@@ -250,6 +254,27 @@ final class UserDataStore {
     }
 
     // MARK: - In-flight Tracking (Private)
+
+    /// Upper bound on retained overrides.
+    ///
+    /// An entry is added for every item the user favourites, marks played, or
+    /// finishes watching, and `rebase` only drops one when it exactly matches
+    /// fresh server data — so without a cap the dictionary grows for the life of
+    /// the process.
+    private static let maxOverrides = 500
+
+    /// Drop the oldest overrides once the store exceeds ``maxOverrides``.
+    ///
+    /// Only entries with no in-flight mutation are evicted; an evicted item
+    /// simply falls back to its server value at the next read.
+    private func evictOverridesIfNeeded() {
+        guard overrides.count > Self.maxOverrides else { return }
+        let evictable = overrides.keys.filter { !hasAnyInflight($0) }
+        let excess = overrides.count - Self.maxOverrides
+        for itemId in evictable.prefix(excess) {
+            overrides.removeValue(forKey: itemId)
+        }
+    }
 
     private func markInflight(_ itemId: ItemID, _ field: MutationField) {
         inflightCounts[itemId, default: [:]][field, default: 0] += 1
