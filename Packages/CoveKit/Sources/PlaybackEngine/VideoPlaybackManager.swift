@@ -90,6 +90,10 @@ public final class VideoPlaybackManager {
     /// point for an episode that was in fact watched to the end.
     @ObservationIgnored private var hasReportedStop = false
 
+    /// Tracks our own remote-command targets so teardown removes exactly those,
+    /// leaving the music player's lock-screen controls working.
+    @ObservationIgnored private let commands = RemoteCommandRegistry()
+
     @ObservationIgnored private nonisolated(unsafe) var statusObserver: NSKeyValueObservation?
     @ObservationIgnored private nonisolated(unsafe) var bufferObserver: NSKeyValueObservation?
     @ObservationIgnored private nonisolated(unsafe) var rateObserver: NSKeyValueObservation?
@@ -153,6 +157,8 @@ public final class VideoPlaybackManager {
         item: MediaItem, streamInfo: StreamInfo, startPosition: TimeInterval = 0
     ) {
         stop()
+
+        activateAudioSession()
 
         currentItem = item
         hasReportedStop = false
@@ -456,14 +462,29 @@ public final class VideoPlaybackManager {
 
     // MARK: - Audio Session
 
+    /// Configure the audio session category without activating it.
+    ///
+    /// Activating interrupts whatever else is playing, so it must not happen just
+    /// because a manager was constructed — the video player view creates one
+    /// before the user has asked for anything to play.
     private func setupAudioSession() {
         #if !os(macOS)
             do {
-                let session = AVAudioSession.sharedInstance()
-                try session.setCategory(.playback, mode: .moviePlayback)
-                try session.setActive(true)
+                try AVAudioSession.sharedInstance()
+                    .setCategory(.playback, mode: .moviePlayback)
             } catch {
                 logger.error("Failed to configure audio session: \(error.localizedDescription)")
+            }
+        #endif
+    }
+
+    /// Take the audio session. Called when playback actually starts.
+    private func activateAudioSession() {
+        #if !os(macOS)
+            do {
+                try AVAudioSession.sharedInstance().setActive(true)
+            } catch {
+                logger.error("Failed to activate audio session: \(error.localizedDescription)")
             }
         #endif
     }
@@ -802,85 +823,75 @@ public final class VideoPlaybackManager {
 
     /// Set up remote command center for video playback controls.
     private func setupRemoteCommands() {
+        teardownRemoteCommands()
         let center = MPRemoteCommandCenter.shared()
 
-        center.playCommand.isEnabled = true
-        center.playCommand.addTarget { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.play()
-            }
+        commands.register(center.playCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.play() }
             return .success
         }
 
-        center.pauseCommand.isEnabled = true
-        center.pauseCommand.addTarget { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.pause()
-            }
+        commands.register(center.pauseCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.pause() }
             return .success
         }
 
-        center.togglePlayPauseCommand.isEnabled = true
-        center.togglePlayPauseCommand.addTarget { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.togglePlayPause()
-            }
+        commands.register(center.togglePlayPauseCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.togglePlayPause() }
             return .success
         }
 
-        center.skipForwardCommand.isEnabled = true
         center.skipForwardCommand.preferredIntervals = [10]
-        center.skipForwardCommand.addTarget { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.skipForward()
-            }
+        commands.register(center.skipForwardCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.skipForward() }
             return .success
         }
 
-        center.skipBackwardCommand.isEnabled = true
         center.skipBackwardCommand.preferredIntervals = [10]
-        center.skipBackwardCommand.addTarget { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.skipBackward()
-            }
+        commands.register(center.skipBackwardCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.skipBackward() }
             return .success
         }
 
-        center.changePlaybackPositionCommand.isEnabled = true
-        center.changePlaybackPositionCommand.addTarget { [weak self] event in
+        commands.register(center.changePlaybackPositionCommand) { [weak self] event in
             guard let positionEvent = event as? MPChangePlaybackPositionCommandEvent else {
                 return .commandFailed
             }
             let position = positionEvent.positionTime
-            Task { @MainActor [weak self] in
-                self?.seek(to: position)
-            }
+            Task { @MainActor [weak self] in self?.seek(to: position) }
             return .success
         }
 
         // Next episode from lock screen
-        center.nextTrackCommand.isEnabled = true
-        center.nextTrackCommand.addTarget { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.playNextEpisode()
-            }
+        commands.register(center.nextTrackCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.playNextEpisode() }
             return .success
         }
     }
 
-    /// Remove all remote command targets and clear now playing info.
+    /// Remove the remote-command targets this manager registered, and clear the
+    /// now-playing info only if it is still ours.
+    ///
+    /// `MPNowPlayingInfoCenter` and `MPRemoteCommandCenter` are process-wide
+    /// singletons shared with the music player. Blanking them unconditionally —
+    /// or calling `removeTarget(nil)` — wipes the music player's lock screen and
+    /// kills its transport controls when a video is dismissed.
     private func teardownRemoteCommands() {
-        let center = MPRemoteCommandCenter.shared()
-        center.playCommand.removeTarget(nil)
-        center.pauseCommand.removeTarget(nil)
-        center.togglePlayPauseCommand.removeTarget(nil)
-        center.skipForwardCommand.removeTarget(nil)
-        center.skipBackwardCommand.removeTarget(nil)
-        center.changePlaybackPositionCommand.removeTarget(nil)
-        center.nextTrackCommand.removeTarget(nil)
+        commands.removeAll()
 
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        let infoCenter = MPNowPlayingInfoCenter.default()
+        let ownerID =
+            infoCenter.nowPlayingInfo?[MPNowPlayingInfoPropertyExternalContentIdentifier]
+            as? String
+        if ownerID == nil || ownerID == nowPlayingOwnerID {
+            infoCenter.nowPlayingInfo = nil
+        }
+        nowPlayingArtworkItemId = nil
     }
+
+    /// Marks the now-playing info this manager publishes, so teardown can tell
+    /// ours from the music player's.
+    private var nowPlayingOwnerID: String { "cove.video.\(ObjectIdentifier(self).hashValue)" }
 
     /// Update now playing info with the current video metadata.
     private func updateNowPlayingInfo() {
@@ -892,6 +903,7 @@ public final class VideoPlaybackManager {
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? Double(playbackSpeed) : 0.0,
             MPMediaItemPropertyMediaType: MPMediaType.movie.rawValue,
+            MPNowPlayingInfoPropertyExternalContentIdentifier: nowPlayingOwnerID,
         ]
 
         if let seriesName = item.seriesName {

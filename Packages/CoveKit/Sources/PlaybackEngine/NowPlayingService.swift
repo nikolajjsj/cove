@@ -32,9 +32,9 @@ final class NowPlayingService: NowPlayingProvider {
 
     // MARK: - Private State
 
-    /// Stores each registered (command, target) pair so ``teardown()`` can
-    /// remove exactly our targets — not every target on the shared command center.
-    private var registeredTargets: [(command: MPRemoteCommand, target: Any)] = []
+    /// Tracks our own command targets so ``teardown()`` removes exactly those —
+    /// not every target on the shared command center.
+    private let commands = RemoteCommandRegistry()
 
     /// Tracks the track ID of the most-recently-requested artwork download,
     /// allowing stale responses to be silently discarded when the track changes.
@@ -50,32 +50,32 @@ final class NowPlayingService: NowPlayingProvider {
 
         let center = commandCenter
 
-        register(center.playCommand) { [weak self] _ in
+        commands.register(center.playCommand) { [weak self] _ in
             Task { @MainActor [weak self] in self?.onPlay?() }
             return .success
         }
 
-        register(center.pauseCommand) { [weak self] _ in
+        commands.register(center.pauseCommand) { [weak self] _ in
             Task { @MainActor [weak self] in self?.onPause?() }
             return .success
         }
 
-        register(center.togglePlayPauseCommand) { [weak self] _ in
+        commands.register(center.togglePlayPauseCommand) { [weak self] _ in
             Task { @MainActor [weak self] in self?.onTogglePlayPause?() }
             return .success
         }
 
-        register(center.nextTrackCommand) { [weak self] _ in
+        commands.register(center.nextTrackCommand) { [weak self] _ in
             Task { @MainActor [weak self] in self?.onNext?() }
             return .success
         }
 
-        register(center.previousTrackCommand) { [weak self] _ in
+        commands.register(center.previousTrackCommand) { [weak self] _ in
             Task { @MainActor [weak self] in self?.onPrevious?() }
             return .success
         }
 
-        register(center.changePlaybackPositionCommand) { [weak self] event in
+        commands.register(center.changePlaybackPositionCommand) { [weak self] event in
             guard let positionEvent = event as? MPChangePlaybackPositionCommandEvent else {
                 return .commandFailed
             }
@@ -85,7 +85,7 @@ final class NowPlayingService: NowPlayingProvider {
         }
 
         center.likeCommand.isEnabled = true
-        register(center.likeCommand) { [weak self] _ in
+        commands.register(center.likeCommand) { [weak self] _ in
             Task { @MainActor [weak self] in self?.onToggleFavorite?() }
             return .success
         }
@@ -93,10 +93,7 @@ final class NowPlayingService: NowPlayingProvider {
 
     /// Remove all command targets registered by this service and clear now-playing info.
     func teardown() {
-        for (command, target) in registeredTargets {
-            command.removeTarget(target)
-        }
-        registeredTargets.removeAll()
+        commands.removeAll()
 
         commandCenter.likeCommand.isEnabled = false
         commandCenter.likeCommand.isActive = false
@@ -160,17 +157,6 @@ final class NowPlayingService: NowPlayingProvider {
     }
 
     // MARK: - Private Helpers
-
-    /// Register a handler on `command`, enable it, and record the (command, target) pair
-    /// for later clean removal in ``teardown()``.
-    private func register(
-        _ command: MPRemoteCommand,
-        handler: @escaping (MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus
-    ) {
-        command.isEnabled = true
-        let target = command.addTarget(handler: handler)
-        registeredTargets.append((command, target))
-    }
 
     /// Download artwork from `url` and inject it into the now-playing info.
     ///
