@@ -79,6 +79,12 @@ public final class DownloadManagerService: @unchecked Sendable {
         /// Expected file sizes (bytes) stored at enqueue time, keyed by `DownloadItem.id`.
         /// Used as a fallback when the server omits `Content-Length`.
         var expectedBytesCache: [String: Int64] = [:]
+        /// Whether a scheduling pass is currently running. Only one may run at a
+        /// time; see `startNextDownloadsIfNeeded()`.
+        var isScheduling: Bool = false
+        /// Set when a caller arrives while a pass is already running, so the
+        /// running pass knows to look again before it finishes.
+        var schedulingRequested: Bool = false
         /// Timestamp of the last DB progress write per download, keyed by `DownloadItem.id`.
         /// Used to throttle writes to ~1 per second so GRDB observation doesn't cause
         /// excessive SwiftUI re-renders (which break context menu interaction).
@@ -784,7 +790,42 @@ public final class DownloadManagerService: @unchecked Sendable {
     // MARK: - Internal — Scheduling
 
     /// Look at the queue and start tasks until the concurrency limit is reached.
+    ///
+    /// Serialized against itself. The method suspends between checking for a free
+    /// slot and marking the chosen row as downloading, and it is called from the
+    /// session delegate, progress tasks, enqueue, and delete — so two concurrent
+    /// callers could both see the same free slot, pick the same queued row, and
+    /// start two `URLSessionDownloadTask`s for one item. Only one pass runs at a
+    /// time; a caller arriving mid-pass asks the running pass to look again
+    /// rather than starting its own.
     internal func startNextDownloadsIfNeeded() async {
+        let shouldRun = state.withLock { state -> Bool in
+            guard !state.isScheduling else {
+                state.schedulingRequested = true
+                return false
+            }
+            state.isScheduling = true
+            return true
+        }
+        guard shouldRun else { return }
+
+        while true {
+            state.withLock { $0.schedulingRequested = false }
+            await runSchedulingPass()
+
+            // Clear the running flag and re-check the request flag under one lock,
+            // so a caller arriving right as the pass ends is never dropped.
+            let finished = state.withLock { state -> Bool in
+                guard !state.schedulingRequested else { return false }
+                state.isScheduling = false
+                return true
+            }
+            if finished { break }
+        }
+    }
+
+    /// One pass of the scheduler: fill every free slot from the queue.
+    private func runSchedulingPass() async {
         while true {
             // WiFi-only gate: don't start new downloads on cellular if restricted
             if isWifiOnlyEnabled() && NetworkMonitor.shared.isExpensive {
