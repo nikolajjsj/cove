@@ -105,6 +105,7 @@ final class MockNowPlayingProvider: NowPlayingProvider {
     var teardownCallCount = 0
     var updateNowPlayingCallCount = 0
     var updatePlaybackStateCallCount = 0
+    var updateFavoriteStateCallCount = 0
 
     // MARK: - Recorded Values
 
@@ -114,6 +115,7 @@ final class MockNowPlayingProvider: NowPlayingProvider {
     var lastDuration: TimeInterval?
     var lastArtworkURL: URL?
     var lastPlaybackStateIsPlaying: Bool?
+    var lastFavoriteState: Bool?
 
     // MARK: - Remote Command Callbacks
 
@@ -123,6 +125,7 @@ final class MockNowPlayingProvider: NowPlayingProvider {
     var onPrevious: (@MainActor () -> Void)?
     var onSeek: (@MainActor (TimeInterval) -> Void)?
     var onTogglePlayPause: (@MainActor () -> Void)?
+    var onToggleFavorite: (@MainActor () -> Void)?
 
     // MARK: - NowPlayingProvider
 
@@ -159,9 +162,24 @@ final class MockNowPlayingProvider: NowPlayingProvider {
         lastCurrentTime = currentTime
         lastDuration = duration
     }
+
+    func updateFavoriteState(isFavorite: Bool) {
+        updateFavoriteStateCallCount += 1
+        lastFavoriteState = isFavorite
+    }
 }
 
 // MARK: - Test Helpers
+
+/// Let pending main-actor work run to completion.
+///
+/// `AudioPlaybackManager.seek(to:)` awaits the backend's seek completion, so the
+/// resulting state change lands after a couple of suspension points even when the
+/// mock resolves instantly.
+@MainActor
+private func settle() async {
+    for _ in 0..<5 { await Task.yield() }
+}
 
 private func makeTracks(_ count: Int) -> [Track] {
     (0..<count).map { i in
@@ -611,7 +629,7 @@ struct AudioPlaybackManagerTests {
 
         @Test("previous() with more than 3 seconds restarts current track")
         @MainActor
-        func previousRestartsWhenOver3Seconds() {
+        func previousRestartsWhenOver3Seconds() async {
             let player = MockAudioPlayerBackend()
             let nowPlaying = MockNowPlayingProvider()
             let manager = makeManager(player: player, nowPlaying: nowPlaying)
@@ -625,6 +643,7 @@ struct AudioPlaybackManagerTests {
 
             let seekCountBefore = player.seekCallCount
             manager.previous()
+            await settle()
 
             // Should seek to 0 instead of going to previous track
             #expect(player.seekCallCount > seekCountBefore)
@@ -688,13 +707,14 @@ struct AudioPlaybackManagerTests {
 
         @Test("seek() calls backend seek with correct time")
         @MainActor
-        func seekCallsBackend() {
+        func seekCallsBackend() async {
             let player = MockAudioPlayerBackend()
             let nowPlaying = MockNowPlayingProvider()
             let manager = makeManager(player: player, nowPlaying: nowPlaying)
 
             manager.play(tracks: makeTracks(2))
             manager.seek(to: 42.5)
+            await settle()
 
             #expect(player.seekCallCount == 1)
             #expect(player.lastSeekTarget == 42.5)
@@ -702,7 +722,7 @@ struct AudioPlaybackManagerTests {
 
         @Test("seek() updates currentTime on successful completion")
         @MainActor
-        func seekUpdatesCurrentTime() {
+        func seekUpdatesCurrentTime() async {
             let player = MockAudioPlayerBackend()
             let nowPlaying = MockNowPlayingProvider()
             let manager = makeManager(player: player, nowPlaying: nowPlaying)
@@ -710,14 +730,14 @@ struct AudioPlaybackManagerTests {
             player.seekCompletesSuccessfully = true
             manager.play(tracks: makeTracks(2))
             manager.seek(to: 30.0)
+            await settle()
 
-            // The seek completion is called synchronously in our mock
             #expect(manager.currentTime == 30.0)
         }
 
         @Test("seek() does not update currentTime on failed seek")
         @MainActor
-        func seekDoesNotUpdateOnFailure() {
+        func seekDoesNotUpdateOnFailure() async {
             let player = MockAudioPlayerBackend()
             let nowPlaying = MockNowPlayingProvider()
             let manager = makeManager(player: player, nowPlaying: nowPlaying)
@@ -725,13 +745,14 @@ struct AudioPlaybackManagerTests {
             player.seekCompletesSuccessfully = false
             manager.play(tracks: makeTracks(2))
             manager.seek(to: 30.0)
+            await settle()
 
             #expect(manager.currentTime == 0)
         }
 
         @Test("seek() updates playback state on now playing provider")
         @MainActor
-        func seekUpdatesPlaybackState() {
+        func seekUpdatesPlaybackState() async {
             let player = MockAudioPlayerBackend()
             let nowPlaying = MockNowPlayingProvider()
             let manager = makeManager(player: player, nowPlaying: nowPlaying)
@@ -739,6 +760,7 @@ struct AudioPlaybackManagerTests {
             manager.play(tracks: makeTracks(2))
             let countBefore = nowPlaying.updatePlaybackStateCallCount
             manager.seek(to: 60.0)
+            await settle()
 
             #expect(nowPlaying.updatePlaybackStateCallCount > countBefore)
         }
@@ -1248,13 +1270,14 @@ struct AudioPlaybackManagerTests {
 
         @Test("now playing onSeek triggers seek")
         @MainActor
-        func onSeekTriggersSeek() {
+        func onSeekTriggersSeek() async {
             let player = MockAudioPlayerBackend()
             let nowPlaying = MockNowPlayingProvider()
             let manager = makeManager(player: player, nowPlaying: nowPlaying)
 
             manager.play(tracks: makeTracks(2))
             nowPlaying.onSeek?(55.0)
+            await settle()
 
             #expect(player.seekCallCount == 1)
             #expect(player.lastSeekTarget == 55.0)
@@ -1315,7 +1338,7 @@ struct AudioPlaybackManagerTests {
 
         @Test("full playback lifecycle: play, seek, pause, resume, next, stop")
         @MainActor
-        func fullLifecycle() {
+        func fullLifecycle() async {
             let player = MockAudioPlayerBackend()
             let nowPlaying = MockNowPlayingProvider()
             let manager = makeManager(player: player, nowPlaying: nowPlaying)
@@ -1331,6 +1354,7 @@ struct AudioPlaybackManagerTests {
 
             // 3. Seek
             manager.seek(to: 60.0)
+            await settle()
             #expect(manager.currentTime == 60.0)
 
             // 4. Pause

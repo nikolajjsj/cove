@@ -410,56 +410,57 @@ public final class AudioPlaybackManager {
 
     // MARK: - Player Callbacks
 
+    /// Wire up the backend's event callbacks.
+    ///
+    /// `AudioPlayerBackend` declares every callback `@MainActor`-isolated and
+    /// guarantees they fire on the main actor, so these run synchronously rather
+    /// than hopping through a `Task`. That ordering matters: an unstructured hop
+    /// would let a track-end event land *after* a user's `next()` tap and advance
+    /// the queue twice.
     private func setupPlayerCallbacks() {
         playerBackend.onTimeUpdate = { [weak self] time in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                guard time.isFinite, time >= 0 else { return }
-                self.currentTime = time
-                if let backendDuration = self.playerBackend.currentItemDuration {
-                    self.duration = backendDuration
-                }
-                self.nowPlaying.updatePlaybackState(
-                    isPlaying: self.isPlaying,
-                    currentTime: self.currentTime,
-                    duration: self.duration
-                )
-                self.checkListenedThreshold()
+            guard let self else { return }
+            guard time.isFinite, time >= 0 else { return }
+            self.currentTime = time
+            if let backendDuration = self.playerBackend.currentItemDuration {
+                self.duration = backendDuration
             }
+            self.nowPlaying.updatePlaybackState(
+                isPlaying: self.isPlaying,
+                currentTime: self.currentTime,
+                duration: self.duration
+            )
+            self.checkListenedThreshold()
         }
 
         playerBackend.onPlayingChanged = { [weak self] playing in
-            Task { @MainActor [weak self] in
-                guard let self, self.isPlaying != playing else { return }
-                self.isPlaying = playing
-            }
+            guard let self, self.isPlaying != playing else { return }
+            self.isPlaying = playing
         }
 
         playerBackend.onItemDidFinish = { [weak self] token in
-            Task { @MainActor [weak self] in
-                self?.handleTrackEnd(for: token)
-            }
+            self?.handleTrackEnd(for: token)
         }
     }
 
     // MARK: - Remote Command Handlers
 
+    /// Wire up the lock-screen / Control Center commands.
+    ///
+    /// `NowPlayingProvider` declares these handlers `@MainActor`-isolated, so they
+    /// call straight through. Only the favourite toggle needs a `Task`, because the
+    /// app-layer callback it forwards to is `async`.
     private func setupRemoteCommandHandlers() {
-        nowPlaying.onPlay = { [weak self] in Task { @MainActor [weak self] in self?.resume() } }
-        nowPlaying.onPause = { [weak self] in Task { @MainActor [weak self] in self?.pause() } }
-        nowPlaying.onNext = { [weak self] in Task { @MainActor [weak self] in self?.next() } }
-        nowPlaying.onPrevious = { [weak self] in Task { @MainActor [weak self] in self?.previous() }
-        }
-        nowPlaying.onTogglePlayPause = { [weak self] in
-            Task { @MainActor [weak self] in self?.togglePlayPause() }
-        }
-        nowPlaying.onSeek = { [weak self] time in
-            Task { @MainActor [weak self] in self?.seek(to: time) }
-        }
+        nowPlaying.onPlay = { [weak self] in self?.resume() }
+        nowPlaying.onPause = { [weak self] in self?.pause() }
+        nowPlaying.onNext = { [weak self] in self?.next() }
+        nowPlaying.onPrevious = { [weak self] in self?.previous() }
+        nowPlaying.onTogglePlayPause = { [weak self] in self?.togglePlayPause() }
+        nowPlaying.onSeek = { [weak self] time in self?.seek(to: time) }
         nowPlaying.onToggleFavorite = { [weak self] in
+            guard let self, let track = self.queue.currentTrack else { return }
             Task { @MainActor [weak self] in
-                guard let self, let track = self.queue.currentTrack else { return }
-                await self.onToggleFavorite?(track)
+                await self?.onToggleFavorite?(track)
             }
         }
     }

@@ -884,13 +884,7 @@ public final class VideoPlaybackManager {
             guard let (data, _) = try? await URLSession.shared.data(from: url) else { return }
             guard let self, self.nowPlayingArtworkItemId == itemId else { return }
 
-            #if canImport(UIKit)
-                guard let image = UIImage(data: data) else { return }
-            #elseif canImport(AppKit)
-                guard let image = NSImage(data: data) else { return }
-            #endif
-
-            let artwork = MPMediaItemArtwork(image: image)
+            guard let artwork = MPMediaItemArtwork.make(from: data) else { return }
             guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
             info[MPMediaItemPropertyArtwork] = artwork
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info

@@ -183,13 +183,7 @@ final class NowPlayingService: NowPlayingProvider {
             // Discard if the track changed while we were downloading.
             guard let self, self.currentArtworkTrackID == trackID else { return }
 
-            #if os(iOS)
-                guard let image = UIImage(data: data) else { return }
-            #elseif os(macOS)
-                guard let image = NSImage(data: data) else { return }
-            #endif
-
-            let artwork = MPMediaItemArtwork(image: image)
+            guard let artwork = MPMediaItemArtwork.make(from: data) else { return }
 
             guard var info = self.infoCenter.nowPlayingInfo else { return }
             info[MPMediaItemPropertyArtwork] = artwork
