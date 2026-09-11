@@ -744,9 +744,13 @@ public final class DownloadManagerService: @unchecked Sendable {
             var orphaned: [String] = []
 
             for item in inFlight {
+                // Compare the modernized form on both sides: a live task started by
+                // this build carries `ApiKey` while an older DB row still carries
+                // `api_key`, and a raw string compare would orphan the task.
+                let itemURL = Self.modernizedURL(from: item.remoteURL)?.absoluteString
                 var matched = false
                 for (taskId, taskURL) in taskDescriptions where !usedTaskIds.contains(taskId) {
-                    if taskURL == item.remoteURL {
+                    if Self.modernizedURL(from: taskURL)?.absoluteString == itemURL {
                         state.taskToDownloadID[taskId] = item.id
                         matched = true
                         usedTaskIds.insert(taskId)
@@ -805,9 +809,40 @@ public final class DownloadManagerService: @unchecked Sendable {
         }
     }
 
+    /// The legacy Jellyfin query parameter for token auth, disabled by default from
+    /// server 12.0 onwards.
+    private static let legacyAPIKeyParameter = "api_key"
+
+    /// The modern equivalent, accepted by every server from 10.8 onwards.
+    private static let apiKeyParameter = "ApiKey"
+
+    /// Rewrite a persisted download URL that still authenticates with the legacy
+    /// `api_key` query parameter.
+    ///
+    /// Download URLs are stored in the database when the item is enqueued, so rows
+    /// written by an older build of the app still carry `api_key`. Jellyfin 12.0
+    /// rejects that parameter, which would fail every queued and paused download
+    /// after a server upgrade; rewriting it here repairs them in place.
+    static func modernizedURL(from string: String) -> URL? {
+        guard var components = URLComponents(string: string) else {
+            return URL(string: string)
+        }
+        guard let queryItems = components.queryItems,
+            queryItems.contains(where: { $0.name == legacyAPIKeyParameter })
+        else {
+            return components.url
+        }
+        components.queryItems = queryItems.map { item in
+            item.name == legacyAPIKeyParameter
+                ? URLQueryItem(name: apiKeyParameter, value: item.value)
+                : item
+        }
+        return components.url
+    }
+
     /// Create (or resume) a `URLSessionDownloadTask` for a single item.
     private func startDownloadTask(for item: DownloadItem) async {
-        guard let url = URL(string: item.remoteURL) else {
+        guard let url = Self.modernizedURL(from: item.remoteURL) else {
             logger.error("Invalid remote URL for download \(item.id): \(item.remoteURL)")
             try? await downloadRepository.updateState(
                 id: item.id, state: .failed, errorMessage: "Invalid download URL")
@@ -923,6 +958,28 @@ public final class DownloadManagerService: @unchecked Sendable {
         guard let downloadID = state.withLock({ $0.taskToDownloadID[taskIdentifier] }) else {
             logger.warning(
                 "Received download completion for unknown task \(taskIdentifier)")
+            return
+        }
+
+        // A download task reports success for *any* completed HTTP exchange, so a
+        // 401 (expired token), 404, or 5xx arrives here with the error page as its
+        // body. Without this check that body is staged, given an extension from its
+        // Content-Type, and marked completed — leaving the user a "downloaded" item
+        // that will never play.
+        if let httpResponse = response as? HTTPURLResponse,
+            !(200...299).contains(httpResponse.statusCode)
+        {
+            logger.error(
+                "Download \(downloadID) failed with HTTP \(httpResponse.statusCode)")
+            let message =
+                httpResponse.statusCode == 401 || httpResponse.statusCode == 403
+                ? "Sign-in expired — reconnect to the server and retry"
+                : "Server returned HTTP \(httpResponse.statusCode)"
+            try? FileManager.default.removeItem(at: location)
+            Task { [downloadRepository] in
+                try? await downloadRepository.updateState(
+                    id: downloadID, state: .failed, errorMessage: message)
+            }
             return
         }
 
