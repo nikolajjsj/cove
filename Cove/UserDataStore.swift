@@ -117,8 +117,13 @@ final class UserDataStore {
     ///
     /// Used by the audio player when 95% of a track has been listened to.
     /// Unlike ``togglePlayed(itemId:current:)``, this never un-marks an item.
-    func markPlayed(itemId: ItemID) async throws {
-        let base = userData(for: itemId, fallback: nil)
+    ///
+    /// - Parameter current: The item's server-side `UserData`. Pass it whenever
+    ///   the caller has it: overrides replace the server value wholesale at every
+    ///   read site, so basing one on `nil` publishes a blank `UserData` and drops
+    ///   the item's favourite state and playback position until it is refetched.
+    func markPlayed(itemId: ItemID, current: UserData? = nil) async throws {
+        let base = userData(for: itemId, fallback: current)
         guard !base.isPlayed else { return }
 
         // Optimistic update
@@ -132,9 +137,9 @@ final class UserDataStore {
             unmarkInflight(itemId, .played)
         } catch {
             unmarkInflight(itemId, .played)
-            if var current = overrides[itemId] {
-                current.isPlayed = false
-                overrides[itemId] = current
+            if var rolledBack = overrides[itemId] {
+                rolledBack.isPlayed = base.isPlayed
+                overrides[itemId] = rolledBack
             }
             throw error
         }
