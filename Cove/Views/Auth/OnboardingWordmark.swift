@@ -7,16 +7,12 @@ import SwiftUI
 struct OnboardingWordmark: View {
     var isCompact: Bool
 
-    @ScaledMetric(relativeTo: .largeTitle) private var fullGlyph: CGFloat = 76
-    @ScaledMetric(relativeTo: .title) private var compactGlyph: CGFloat = 44
+    @ScaledMetric(relativeTo: .largeTitle) private var fullGlyph: CGFloat = 168
+    @ScaledMetric(relativeTo: .title) private var compactGlyph: CGFloat = 76
 
     var body: some View {
         VStack(spacing: isCompact ? 6 : 12) {
-            Image(systemName: "play.circle.fill")
-                .font(.system(size: isCompact ? compactGlyph : fullGlyph))
-                .foregroundStyle(.white, .white.opacity(0.22))
-                .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
-                .accessibilityHidden(true)
+            JellyfishMark(size: isCompact ? compactGlyph : fullGlyph)
 
             Text("Cove")
                 .font(isCompact ? .title2 : .largeTitle)
