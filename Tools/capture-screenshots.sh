@@ -18,8 +18,8 @@
 # argument. Downloads is a headline feature in the App Store copy, so an empty
 # shot of it undersells the app.
 #
-# The demo server also has no cover art for much of its music library, so the
-# Music tab captures with grey placeholders. Shoot that one elsewhere.
+# There is deliberately no Music shot: FeatureFlags.musicEnabled is false, so
+# the tab does not exist. Re-add one here if music is ever turned back on.
 
 set -euo pipefail
 
@@ -49,7 +49,7 @@ shoot() {
 
 shoot 01-home      -screenshotTab home
 shoot 02-detail    -screenshotItem 5e6e8380563c5211106652362c5c6843
-shoot 03-music     -screenshotTab music
+shoot 03-movies    -screenshotTab movies
 shoot 04-search    -screenshotTab search
 shoot 05-downloads -screenshotTab downloads
 
