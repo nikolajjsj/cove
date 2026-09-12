@@ -1,0 +1,69 @@
+#if DEBUG
+import Foundation
+import JellyfinProvider
+import Models
+import SwiftUI
+
+/// Puts the app on a chosen screen for App Store capture.
+///
+/// Every screen worth showing sits behind a server login, and the simulator's
+/// tap automation is not always available, so a capture script needs some way
+/// in that does not involve touching the UI. Launch arguments of the form
+/// `-key value` are parsed into `UserDefaults` by Foundation, which gives us
+/// one for free:
+///
+///     xcrun simctl launch <device> com.nikolajjsj.cove \
+///         -screenshotServer https://demo.jellyfin.org/stable \
+///         -screenshotUser demo \
+///         -screenshotTab movies
+///
+/// Pass a real server only when you are willing for its contents to end up in a
+/// screenshot; point it at a demo instance otherwise. Compiled out of release
+/// builds entirely.
+enum ScreenshotDriver {
+    private static let tabs: [String: AppTab] = [
+        "home": .home, "search": .search, "music": .music, "movies": .movies,
+        "tvShows": .tvShows, "downloads": .downloads, "settings": .settings,
+    ]
+
+    static func runIfRequested(authManager: AuthManager, appState: AppState) async {
+        let defaults = UserDefaults.standard
+        guard let server = defaults.string(forKey: "screenshotServer"),
+            let url = URL(string: server),
+            let username = defaults.string(forKey: "screenshotUser")
+        else { return }
+
+        if !authManager.isAuthenticated {
+            do {
+                try await authManager.connect(
+                    url: url,
+                    username: username,
+                    password: defaults.string(forKey: "screenshotPassword") ?? ""
+                )
+                await appState.onConnected()
+            } catch {
+                // Printed rather than surfaced: the capture script reads the log.
+                print("[ScreenshotDriver] connect failed: \(error)")
+                return
+            }
+        }
+
+        if let name = defaults.string(forKey: "screenshotTab"), let tab = Self.tabs[name] {
+            appState.selectedTab = tab
+        }
+
+        // Pushing in-process rather than through `cove://` on purpose: an
+        // external open shows a system "Open in Cove?" alert, which lands in
+        // the middle of the screenshot.
+        if let rawId = defaults.string(forKey: "screenshotItem") {
+            do {
+                let item = try await authManager.provider.item(id: ItemID(rawId))
+                appState.selectedTab = .home
+                appState.navigationPaths[.home, default: NavigationPath()].append(item)
+            } catch {
+                print("[ScreenshotDriver] item \(rawId) failed: \(error)")
+            }
+        }
+    }
+}
+#endif

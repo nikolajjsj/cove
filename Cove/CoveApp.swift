@@ -117,6 +117,14 @@ struct CoveApp: App {
                 .onOpenURL { url in
                     handleDeepLink(url)
                 }
+                .task {
+                    #if DEBUG
+                        await ScreenshotDriver.runIfRequested(
+                            authManager: authManager,
+                            appState: appState
+                        )
+                    #endif
+                }
         }
     }
 
