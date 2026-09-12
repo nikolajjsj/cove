@@ -119,6 +119,10 @@ If SwiftData is configured to use CloudKit:
 
   When a test covers a bug fix, verify it fails with the fix reverted. Two of the tests here passed either way until that check was run.
 
+- **Filter UI goes in the toolbar, not above the content.** Any view that filters a media list composes `MediaFilterSelection` (bundles the bindings, derives the active set) with `MediaFilterMenu` in a `.primaryAction` toolbar item and `ActiveFilterBar` above the content. The bar renders *only* applied filters and collapses to zero height when there are none — do not add a row of always-visible unselected chips, which is what this replaced. Add a new filter by extending `MediaFilterSelection`, so the menu and the bar pick it up together.
+
+- **Never trigger a system permission prompt at launch.** Notifications, and anything else with an OS alert, are requested at the moment the feature is first used — see `DownloadNotificationPermission`, asked at the first download rather than in `CoveApp.init`. A prompt during onboarding asks the user to approve something they have no context for, and a denial there is effectively permanent.
+
 ## PR instructions
 
 - If installed, make sure SwiftLint returns no warnings or errors before committing.
