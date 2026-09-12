@@ -2,25 +2,30 @@
 //
 // Draws the Cove app icon and writes every image the catalogue needs.
 //
-//     swift Tools/GenerateAppIcon.swift Cove/Assets.xcassets/AppIcon.appiconset
+//     swiftc -O Tools/GenerateAppIcon.swift \
+//            Cove/Components/Jellyfish/JellyfishGeometry.swift \
+//            -o /tmp/genicon && /tmp/genicon Cove/Assets.xcassets/AppIcon.appiconset
 //
-// The mark is a tapered crescent — the sheltering arm of a cove, and the C of
-// Cove — cradling a play triangle, over deep water. Keeping the icon as code
-// rather than a flattened export means the proportions, the palette, and the
-// light/dark/tinted variants stay editable and stay consistent with one
-// another. Contents.json is maintained by hand; this writes only the images.
+// The mark is a jellyfish over deep water — a nod to the Jellyfin server that
+// is actually holding the media. The curves come from JellyfishGeometry, the
+// same file the animated onboarding mark draws from, so the icon and the first
+// screen of the app can never drift apart.
+//
+// Contents.json is maintained by hand; this writes only the images.
 
-import Foundation
 import CoreGraphics
+import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-let S: CGFloat = 1024
+let S = JellyfishGeometry.reference
+let CTR = CGPoint(x: S / 2, y: S / 2)
 
 func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> CGColor {
     CGColor(colorSpace: CGColorSpaceCreateDeviceRGB(), components: [r, g, b, a])!
 }
 func gray(_ v: CGFloat, _ a: CGFloat = 1) -> CGColor { rgb(v, v, v, a) }
+func sgn(_ v: CGFloat) -> CGFloat { v < 0 ? -1 : 1 }
 
 func context(_ size: CGFloat) -> CGContext {
     let ctx = CGContext(data: nil, width: Int(size), height: Int(size), bitsPerComponent: 8,
@@ -37,21 +42,19 @@ func save(_ image: CGImage, _ path: String) {
     CGImageDestinationFinalize(dest)
 }
 
-func sgn(_ v: CGFloat) -> CGFloat { v < 0 ? -1 : 1 }
-
 /// Superellipse standing in for Apple's continuous-corner squircle.
 func squircle(in rect: CGRect, n: CGFloat = 5) -> CGPath {
-    let p = CGMutablePath()
-    let a = rect.width/2, b = rect.height/2
+    let path = CGMutablePath()
+    let a = rect.width / 2, b = rect.height / 2
     for i in 0...1440 {
         let t = CGFloat(i) / 1440 * 2 * .pi
         let ct = cos(t), st = sin(t)
-        let x = rect.midX + a * sgn(ct) * pow(abs(ct), 2/n)
-        let y = rect.midY + b * sgn(st) * pow(abs(st), 2/n)
-        i == 0 ? p.move(to: CGPoint(x: x, y: y)) : p.addLine(to: CGPoint(x: x, y: y))
+        let point = CGPoint(x: rect.midX + a * sgn(ct) * pow(abs(ct), 2 / n),
+                            y: rect.midY + b * sgn(st) * pow(abs(st), 2 / n))
+        i == 0 ? path.move(to: point) : path.addLine(to: point)
     }
-    p.closeSubpath()
-    return p
+    path.closeSubpath()
+    return path
 }
 
 func linear(_ ctx: CGContext, _ stops: [(CGFloat, CGColor)], _ from: CGPoint, _ to: CGPoint) {
@@ -61,93 +64,11 @@ func linear(_ ctx: CGContext, _ stops: [(CGFloat, CGColor)], _ from: CGPoint, _ 
                            options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
 }
 
-func radial(_ ctx: CGContext, _ stops: [(CGFloat, CGColor)], _ center: CGPoint, _ r0: CGFloat, _ r1: CGFloat) {
+func radial(_ ctx: CGContext, _ stops: [(CGFloat, CGColor)], _ center: CGPoint, _ radius: CGFloat) {
     let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
                        colors: stops.map { $0.1 } as CFArray, locations: stops.map { $0.0 })!
-    ctx.drawRadialGradient(g, startCenter: center, startRadius: r0,
-                           endCenter: center, endRadius: r1, options: [])
-}
-
-// MARK: - The mark
-
-/// A band that tapers to a point at both ends — the sheltering arm of a cove,
-/// and the C of Cove. Thickest at `back`, vanishing at ±`halfSweep`.
-func crescent(center: CGPoint, outer: CGFloat, maxWidth: CGFloat,
-              back: CGFloat, halfSweep: CGFloat) -> CGPath {
-    let p = CGMutablePath()
-    let steps = 600
-    func angle(_ i: Int) -> (CGFloat, CGFloat) {
-        let d = -halfSweep + (2*halfSweep) * CGFloat(i)/CGFloat(steps)
-        return (back + d, d)
-    }
-    for i in 0...steps {
-        let (a, _) = angle(i)
-        let pt = CGPoint(x: center.x + outer*cos(a), y: center.y + outer*sin(a))
-        i == 0 ? p.move(to: pt) : p.addLine(to: pt)
-    }
-    for i in stride(from: steps, through: 0, by: -1) {
-        let (a, d) = angle(i)
-        let t = min(1, abs(d) / halfSweep)
-        let r = outer - maxWidth * sqrt(max(0, 1 - t*t))
-        p.addLine(to: CGPoint(x: center.x + r*cos(a), y: center.y + r*sin(a)))
-    }
-    p.closeSubpath()
-    return p
-}
-
-func roundedPolygon(_ pts: [CGPoint], radius: CGFloat) -> CGPath {
-    let p = CGMutablePath()
-    let n = pts.count
-    p.move(to: CGPoint(x: (pts[0].x + pts[1].x)/2, y: (pts[0].y + pts[1].y)/2))
-    for i in 1...n {
-        p.addArc(tangent1End: pts[i % n], tangent2End: pts[(i+1) % n], radius: radius)
-    }
-    p.closeSubpath()
-    return p
-}
-
-func playMark(center: CGPoint, radius: CGFloat, corner: CGFloat) -> CGPath {
-    roundedPolygon((0..<3).map { i in
-        let a = CGFloat(i) * 2 * .pi / 3
-        return CGPoint(x: center.x + radius*cos(a), y: center.y + radius*sin(a))
-    }, radius: corner)
-}
-
-// The group is shifted right so the crescent's mass and the play mark balance
-// around the optical centre rather than the geometric one.
-let groupDX: CGFloat = 48
-let markCenter = CGPoint(x: S/2 + groupDX, y: S/2)
-
-var crescentPath: CGPath {
-    crescent(center: markCenter, outer: 330, maxWidth: 96,
-             back: .pi, halfSweep: 122 * .pi/180)
-}
-var playPath: CGPath {
-    playMark(center: CGPoint(x: markCenter.x + 10, y: markCenter.y), radius: 150, corner: 30)
-}
-
-// MARK: - Shape treatment
-
-/// Fills `path` with a top-lit gradient and drops it onto the background.
-/// Depth comes from the shadow and the gradient alone — an edge bevel reads as
-/// emboss at 1024 and as dirt at 88.
-func sculpt(_ ctx: CGContext, _ path: CGPath,
-            top: CGColor, bottom: CGColor,
-            rim: CGColor, occlusion: CGColor,
-            shadow: CGColor) {
-    let box = path.boundingBox
-
-    ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -18), blur: 52, color: shadow)
-    ctx.addPath(path); ctx.setFillColor(gray(1)); ctx.fillPath()
-    ctx.restoreGState()
-
-    ctx.saveGState()
-    ctx.addPath(path); ctx.clip()
-    linear(ctx, [(0, top), (1, bottom)],
-           CGPoint(x: 0, y: box.maxY), CGPoint(x: 0, y: box.minY))
-    ctx.restoreGState()
-    _ = (rim, occlusion)
+    ctx.drawRadialGradient(g, startCenter: center, startRadius: 0,
+                           endCenter: center, endRadius: radius, options: [])
 }
 
 // MARK: - Variants
@@ -156,7 +77,6 @@ enum Variant { case light, dark, tinted }
 
 func render(_ variant: Variant) -> CGImage {
     let ctx = context(S)
-    let full = CGRect(x: 0, y: 0, width: S, height: S)
 
     switch variant {
     case .light:
@@ -174,23 +94,20 @@ func render(_ variant: Variant) -> CGImage {
         ], CGPoint(x: 0, y: S), CGPoint(x: 0, y: 0))
     case .tinted:
         // Grayscale: the system maps luminance onto the user's tint.
-        linear(ctx, [
-            (0.00, gray(0.055)),
-            (0.50, gray(0.120)),
-            (1.00, gray(0.235)),
-        ], CGPoint(x: 0, y: S), CGPoint(x: 0, y: 0))
+        linear(ctx, [(0.00, gray(0.055)), (0.50, gray(0.120)), (1.00, gray(0.235))],
+               CGPoint(x: 0, y: S), CGPoint(x: 0, y: 0))
     }
 
-    // Light pooling behind the mark.
+    // Light pooling behind the creature.
     ctx.saveGState()
     ctx.setBlendMode(.plusLighter)
     let glow: [(CGFloat, CGColor)]
     switch variant {
-    case .light: glow = [(0, rgb(0.20, 0.62, 0.90, 0.34)), (0.55, rgb(0.12, 0.40, 0.72, 0.13)), (1, rgb(0.08, 0.26, 0.50, 0))]
-    case .dark: glow = [(0, rgb(0.14, 0.44, 0.74, 0.26)), (0.55, rgb(0.08, 0.28, 0.54, 0.10)), (1, rgb(0.05, 0.18, 0.38, 0))]
-    case .tinted: glow = [(0, gray(0.55, 0.22)), (0.55, gray(0.40, 0.09)), (1, gray(0.25, 0))]
+    case .light: glow = [(0, rgb(0.20, 0.62, 0.90, 0.36)), (0.55, rgb(0.12, 0.40, 0.72, 0.14)), (1, rgb(0.08, 0.26, 0.50, 0))]
+    case .dark: glow = [(0, rgb(0.14, 0.44, 0.74, 0.28)), (0.55, rgb(0.08, 0.28, 0.54, 0.11)), (1, rgb(0.05, 0.18, 0.38, 0))]
+    case .tinted: glow = [(0, gray(0.55, 0.24)), (0.55, gray(0.40, 0.10)), (1, gray(0.25, 0))]
     }
-    radial(ctx, glow, CGPoint(x: S*0.54, y: S*0.46), 0, S*0.60)
+    radial(ctx, glow, CGPoint(x: S * 0.50, y: S * 0.44), S * 0.62)
     ctx.restoreGState()
 
     // Corner vignette — keeps the squircle's edges from glowing brighter than
@@ -201,94 +118,127 @@ func render(_ variant: Variant) -> CGImage {
         (0.00, gray(1.0, 0)),
         (0.62, gray(1.0, 0)),
         (1.00, variant == .tinted ? gray(0.55, 1) : rgb(0.35, 0.48, 0.62, 1)),
-    ], CGPoint(x: S/2, y: S/2), 0, S*0.78)
+    ], CTR, S * 0.78)
     ctx.restoreGState()
-    _ = full
 
-    let cres = crescentPath
-    let play = playPath
+    // JellyfishGeometry is laid out y-down, like SwiftUI. Flip once here.
+    ctx.saveGState()
+    ctx.translateBy(x: 0, y: S)
+    ctx.scaleBy(x: 1, y: -1)
 
+    let jelly = JellyfishGeometry()
+    let highlight = gray(1.0)
+    let shade: CGColor
     switch variant {
-    case .light:
-        sculpt(ctx, cres,
-               top: gray(1.0), bottom: rgb(0.820, 0.912, 0.988),
-               rim: gray(1.0, 0.85), occlusion: rgb(0.15, 0.38, 0.60, 0.22),
-               shadow: rgb(0, 0.043, 0.129, 0.55))
-        sculpt(ctx, play,
-               top: gray(1.0), bottom: rgb(0.855, 0.933, 0.996),
-               rim: gray(1.0, 0.85), occlusion: rgb(0.15, 0.38, 0.60, 0.20),
-               shadow: rgb(0, 0.043, 0.129, 0.50))
-    case .dark:
-        sculpt(ctx, cres,
-               top: rgb(0.914, 0.957, 1.0), bottom: rgb(0.596, 0.780, 0.945),
-               rim: gray(1.0, 0.7), occlusion: rgb(0.08, 0.22, 0.40, 0.30),
-               shadow: rgb(0, 0.02, 0.07, 0.65))
-        sculpt(ctx, play,
-               top: rgb(0.925, 0.961, 1.0), bottom: rgb(0.639, 0.808, 0.957),
-               rim: gray(1.0, 0.7), occlusion: rgb(0.08, 0.22, 0.40, 0.28),
-               shadow: rgb(0, 0.02, 0.07, 0.6))
-    case .tinted:
-        sculpt(ctx, cres,
-               top: gray(1.0), bottom: gray(0.78),
-               rim: gray(1.0, 0.8), occlusion: gray(0.35, 0.25),
-               shadow: gray(0.0, 0.55))
-        sculpt(ctx, play,
-               top: gray(1.0), bottom: gray(0.82),
-               rim: gray(1.0, 0.8), occlusion: gray(0.35, 0.22),
-               shadow: gray(0.0, 0.5))
+    case .light: shade = rgb(0.760, 0.886, 0.988)
+    case .dark: shade = rgb(0.596, 0.780, 0.945)
+    case .tinted: shade = gray(0.74)
     }
 
+    // Bioluminescence pooled under the bell.
+    ctx.saveGState()
+    ctx.setBlendMode(.plusLighter)
+    radial(ctx, variant == .tinted
+           ? [(0, gray(0.70, 0.30)), (1, gray(0.30, 0))]
+           : [(0, rgb(0.45, 0.80, 1.0, 0.34)), (1, rgb(0.15, 0.40, 0.70, 0))],
+           CGPoint(x: jelly.hem.x, y: jelly.hem.y + 60), 360)
+    ctx.restoreGState()
+
+    for i in 0..<jelly.fineCount {
+        ctx.addPath(jelly.finePath(i))
+        ctx.setFillColor(gray(1, 0.26))
+        ctx.fillPath()
+    }
+
+    for i in 0..<jelly.armCount {
+        let path = jelly.armPath(i)
+        ctx.saveGState()
+        ctx.setShadow(offset: CGSize(width: 0, height: 14), blur: 34, color: rgb(0, 0.04, 0.13, 0.40))
+        ctx.addPath(path); ctx.setFillColor(gray(1)); ctx.fillPath()
+        ctx.restoreGState()
+
+        ctx.saveGState()
+        ctx.addPath(path); ctx.clip()
+        let box = path.boundingBox
+        linear(ctx, [(0, highlight), (1, shade)],
+               CGPoint(x: 0, y: box.maxY), CGPoint(x: 0, y: box.minY))
+        ctx.restoreGState()
+    }
+
+    let bell = jelly.bellPath()
+    ctx.saveGState()
+    ctx.setShadow(offset: CGSize(width: 0, height: -18), blur: 52, color: rgb(0, 0.04, 0.13, 0.55))
+    ctx.addPath(bell); ctx.setFillColor(gray(1)); ctx.fillPath()
+    ctx.restoreGState()
+
+    ctx.saveGState()
+    ctx.addPath(bell); ctx.clip()
+    let box = bell.boundingBox
+    linear(ctx, [
+        (0, highlight),
+        (0.62, variant == .tinted ? gray(0.93) : rgb(0.930, 0.968, 1.0)),
+        (1, shade),
+    ], CGPoint(x: 0, y: box.maxY), CGPoint(x: 0, y: box.minY))
+    ctx.setBlendMode(.multiply)
+    radial(ctx, [(0, variant == .tinted ? gray(0.72, 0.55) : rgb(0.48, 0.72, 0.92, 0.55)), (1, gray(1, 0))],
+           CGPoint(x: jelly.hem.x, y: jelly.hem.y - 96), 208)
+    ctx.restoreGState()
+
+    ctx.restoreGState()
     return ctx.makeImage()!
 }
 
 // MARK: - Output
 
-let outDir = CommandLine.arguments[1]
-
-func scaled(_ img: CGImage, _ size: Int) -> CGImage {
-    let c = context(CGFloat(size))
-    c.draw(img, in: CGRect(x: 0, y: 0, width: CGFloat(size), height: CGFloat(size)))
-    return c.makeImage()!
-}
-
 /// macOS icons carry their own mask, margin, and contact shadow.
-func macIcon(_ img: CGImage, _ size: Int) -> CGImage {
+func macIcon(_ image: CGImage, _ size: Int) -> CGImage {
     let f = CGFloat(size)
-    let c = context(f)
+    let ctx = context(f)
     let inset = f * 0.10
-    let rect = CGRect(x: inset, y: inset + f*0.015, width: f - inset*2, height: f - inset*2)
+    let rect = CGRect(x: inset, y: inset + f * 0.015, width: f - inset * 2, height: f - inset * 2)
     let mask = squircle(in: rect)
-    c.saveGState()
-    c.setShadow(offset: CGSize(width: 0, height: -f*0.012), blur: f*0.035, color: gray(0, 0.35))
-    c.addPath(mask); c.setFillColor(gray(0, 1)); c.fillPath()
-    c.restoreGState()
-    c.saveGState()
-    c.addPath(mask); c.clip()
-    c.draw(img, in: rect)
-    c.restoreGState()
-    return c.makeImage()!
+    ctx.saveGState()
+    ctx.setShadow(offset: CGSize(width: 0, height: -f * 0.012), blur: f * 0.035, color: gray(0, 0.35))
+    ctx.addPath(mask); ctx.setFillColor(gray(0, 1)); ctx.fillPath()
+    ctx.restoreGState()
+    ctx.saveGState()
+    ctx.addPath(mask); ctx.clip()
+    ctx.draw(image, in: rect)
+    ctx.restoreGState()
+    return ctx.makeImage()!
 }
 
-let light = render(.light), dark = render(.dark), tinted = render(.tinted)
+@main
+enum GenerateAppIcon {
+    static func main() {
+        guard CommandLine.arguments.count > 1 else {
+            FileHandle.standardError.write(
+                "usage: genicon <output directory>\n".data(using: .utf8)!)
+            exit(2)
+        }
+        let outDir = CommandLine.arguments[1]
 
-save(light, "\(outDir)/AppIcon-1024.png")
-save(dark, "\(outDir)/AppIcon-Dark-1024.png")
-save(tinted, "\(outDir)/AppIcon-Tinted-1024.png")
+        let light = render(.light), dark = render(.dark), tinted = render(.tinted)
+        save(light, "\(outDir)/AppIcon-1024.png")
+        save(dark, "\(outDir)/AppIcon-Dark-1024.png")
+        save(tinted, "\(outDir)/AppIcon-Tinted-1024.png")
 
-for (px, name) in [(16, "16"), (32, "16@2x"), (32, "32"), (64, "32@2x"),
-                   (128, "128"), (256, "128@2x"), (256, "256"), (512, "256@2x"),
-                   (512, "512"), (1024, "512@2x")] {
-    save(macIcon(light, px), "\(outDir)/AppIcon-mac-\(name).png")
-}
+        for (px, name) in [(16, "16"), (32, "16@2x"), (32, "32"), (64, "32@2x"),
+                           (128, "128"), (256, "128@2x"), (256, "256"), (512, "256@2x"),
+                           (512, "512"), (1024, "512@2x")] {
+            save(macIcon(light, px), "\(outDir)/AppIcon-mac-\(name).png")
+        }
 
-// Previews
-for (img, tag) in [(light, "light"), (dark, "dark"), (tinted, "tinted")] {
-    for size in [512, 180, 88] {
-        let c = context(CGFloat(size))
-        let r = CGRect(x: 0, y: 0, width: CGFloat(size), height: CGFloat(size))
-        c.addPath(squircle(in: r)); c.clip()
-        c.draw(img, in: r)
-        save(c.makeImage()!, "\(outDir)/preview-\(tag)-\(size).png")
+        // Previews for eyeballing; intentionally not part of the catalogue.
+        for (image, tag) in [(light, "light"), (dark, "dark"), (tinted, "tinted")] {
+            for size in [512, 88] {
+                let ctx = context(CGFloat(size))
+                let rect = CGRect(x: 0, y: 0, width: CGFloat(size), height: CGFloat(size))
+                ctx.addPath(squircle(in: rect)); ctx.clip()
+                ctx.draw(image, in: rect)
+                save(ctx.makeImage()!, "\(outDir)/preview-\(tag)-\(size).png")
+            }
+        }
+        print("ok")
     }
 }
-print("ok")
