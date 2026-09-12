@@ -11,7 +11,7 @@ struct DownloadRowView: View {
     /// Bytes this download actually occupies on disk, measured from the file
     /// system. `DownloadItem.totalBytes` is the server's estimate of the original
     /// file and excludes artwork and subtitle sidecars, so it must not be shown.
-    var diskBytes: Int64?
+var diskBytes: Int64? = nil
     let onAction: (DownloadAction, DownloadItem) -> Void
 
     var body: some View {
