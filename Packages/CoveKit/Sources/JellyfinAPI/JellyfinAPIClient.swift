@@ -594,7 +594,12 @@ public final class JellyfinAPIClient: Sendable {
         let sentPath = sent.path.hasPrefix("/") ? sent.path : "/" + sent.path
 
         resolved.path = basePath + sentPath
-var queryItems = sent.queryItems ?? []
+
+        // Keep the query the server sent — it carries PlaySessionId and the
+        // transcode parameters — but never the token inside it. Substituting our
+        // own means a hostile TranscodingUrl cannot put a *different* token in the
+        // playback URL, only its own path and parameters.
+        var queryItems = sent.queryItems ?? []
         queryItems.removeAll { $0.name == "api_key" || $0.name == "ApiKey" }
         if let accessToken {
             queryItems.append(JellyfinAuthHeader.apiKeyQueryItem(token: accessToken))

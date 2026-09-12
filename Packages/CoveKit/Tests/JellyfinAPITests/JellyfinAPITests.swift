@@ -173,17 +173,51 @@ final class JellyfinAPITests: XCTestCase {
         }
     }
 
-    /// The server legitimately puts the play session in the query, so it has to
-    /// survive having the authority replaced.
+    /// The server legitimately puts the play session and transcode parameters in
+    /// the query, so those have to survive having the authority replaced.
     func testHLSStreamURLKeepsTheServerSuppliedQuery() throws {
         let client = JellyfinAPIClient(baseURL: URL(string: "https://example.com")!)
+        client.setAccessToken("our-token")
+
         let url = try XCTUnwrap(
             client.hlsStreamURL(
-                transcodingPath: "/videos/abc/master.m3u8?PlaySessionId=xyz&ApiKey=TOK"))
+                transcodingPath: "/videos/abc/master.m3u8?PlaySessionId=xyz&videoCodec=h264"))
+        let items = try XCTUnwrap(
+            URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
 
-        XCTAssertEqual(
-            url.absoluteString,
-            "https://example.com/videos/abc/master.m3u8?PlaySessionId=xyz&ApiKey=TOK")
+        XCTAssertEqual(items.first { $0.name == "PlaySessionId" }?.value, "xyz")
+        XCTAssertEqual(items.first { $0.name == "videoCodec" }?.value, "h264")
+    }
+
+    /// The token in the query is ours, never the one the server put in
+    /// TranscodingUrl — a hostile server should not get to choose which
+    /// credential the playback request carries.
+    func testHLSStreamURLSubstitutesOurOwnToken() throws {
+        let client = JellyfinAPIClient(baseURL: URL(string: "https://example.com")!)
+        client.setAccessToken("our-token")
+
+        let url = try XCTUnwrap(
+            client.hlsStreamURL(
+                transcodingPath:
+                    "/videos/abc/master.m3u8?ApiKey=SOMEONE-ELSES&api_key=LEGACY&PlaySessionId=xyz"))
+        let items = try XCTUnwrap(
+            URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+
+        XCTAssertEqual(items.filter { $0.name == "ApiKey" }.count, 1)
+        XCTAssertEqual(items.first { $0.name == "ApiKey" }?.value, "our-token")
+        XCTAssertNil(items.first { $0.name == "api_key" }, "legacy parameter survived")
+        XCTAssertEqual(items.first { $0.name == "PlaySessionId" }?.value, "xyz")
+    }
+
+    /// With no token there is nothing to authenticate with; a server-supplied one
+    /// must not be used as a stand-in.
+    func testHLSStreamURLCarriesNoTokenWhenSignedOut() throws {
+        let client = JellyfinAPIClient(baseURL: URL(string: "https://example.com")!)
+        let url = try XCTUnwrap(
+            client.hlsStreamURL(transcodingPath: "/videos/abc/master.m3u8?ApiKey=SOMEONE-ELSES"))
+
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        XCTAssertTrue(items.isEmpty, "a server-supplied token was used: \(items)")
     }
 
     func testHLSStreamURLRejectsEmptyPath() {
