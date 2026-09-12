@@ -124,7 +124,13 @@ final class AppState {
 
     func loadLibraries() async {
         do {
-            libraries = try await authManager.provider.libraries()
+            let fetched = try await authManager.provider.libraries()
+            // Dropping music here is what hides it everywhere else: the Music
+            // tab, the Home rails and the Settings list are all derived from
+            // this array. See FeatureFlags.musicEnabled.
+            libraries = FeatureFlags.musicEnabled
+                ? fetched
+                : fetched.filter { $0.collectionType != .music }
             libraryLoadFailed = false
         } catch {
             libraries = []

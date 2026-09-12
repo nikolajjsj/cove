@@ -97,6 +97,8 @@ private struct SearchContentView: View {
 
     // MARK: Derived
 
+    private static let musicTypes: Set<MediaType> = [.artist, .album, .track]
+
     private var maxPreviewItems: Int { sizeClass == .compact ? 3 : 5 }
 
     private var trimmedQuery: String { searchText.trimmingCharacters(in: .whitespaces) }
@@ -203,8 +205,15 @@ private struct SearchContentView: View {
                 years: selectedDecade?.years,
                 minCommunityRating: minRating
             )
-            results = fetched
-            if !fetched.items.isEmpty { onSearch(trimmedQuery) }
+            // Search hits the server directly rather than going through the
+            // library list, so it needs its own guard.
+            let visible = FeatureFlags.musicEnabled
+                ? fetched
+                : SearchResults(
+                    items: fetched.items.filter { !Self.musicTypes.contains($0.mediaType) }
+                )
+            results = visible
+            if !visible.items.isEmpty { onSearch(trimmedQuery) }
         } catch {
             if !Task.isCancelled { results = SearchResults() }
         }
