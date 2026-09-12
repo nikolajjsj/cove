@@ -6,5 +6,18 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.nikolajjsj.cove</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>cove</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
