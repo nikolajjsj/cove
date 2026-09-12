@@ -123,16 +123,20 @@ If SwiftData is configured to use CloudKit:
 
 - **Never trigger a system permission prompt at launch.** Notifications, and anything else with an OS alert, are requested at the moment the feature is first used — see `DownloadNotificationPermission`, asked at the first download rather than in `CoveApp.init`. A prompt during onboarding asks the user to approve something they have no context for, and a denial there is effectively permanent.
 
-- **The app icon is generated, not exported.** Change it by editing `Tools/GenerateAppIcon.swift` and re-running it, never by editing the PNGs in `AppIcon.appiconset` — the light, dark, tinted, and macOS images all come from one set of parameters and will drift apart if touched individually. The script writes images only; `Contents.json` is hand-maintained, so adding a size means adding both an entry there and an output in the script's emit loop. Re-running with no source change reproduces every installed PNG byte-for-byte, which is the check that the two are still in sync (the script also writes `preview-*.png` for eyeballing, which are intentionally not installed — compare only `AppIcon-*`):
+- **The app icon is generated, not exported.** Change it by editing `Tools/GenerateAppIcon.swift` or `Cove/Components/Jellyfish/JellyfishGeometry.swift` and re-running the generator — never by editing the PNGs in `AppIcon.appiconset`, since the light, dark, tinted, and macOS images all come from one set of parameters and will drift apart if touched individually. The generator is *not* a `swift` script: it compiles the shared geometry alongside itself, and it has no top-level code, so it must be built with `swiftc`.
+
+  `JellyfishGeometry` is the single source of truth for the creature's curves — the icon and the animated onboarding mark (`JellyfishMark`) both draw it, which is the only reason the home screen and the first screen agree. Edit it and you change both; that is intended, so check both before committing. It is laid out **y-down to match SwiftUI**, and the icon generator flips its context once before drawing. Anything drawn with CoreGraphics from it needs that flip.
+
+  Re-running with no source change reproduces every installed PNG byte-for-byte, which is the check that the catalogue and the code are still in sync (the generator also writes `preview-*.png` for eyeballing, which are intentionally not installed — compare only `AppIcon-*`):
 
   ```bash
-  mkdir -p /tmp/iconcheck && swift Tools/GenerateAppIcon.swift /tmp/iconcheck && for f in /tmp/iconcheck/AppIcon-*.png; do cmp -s "$f" "Cove/Assets.xcassets/AppIcon.appiconset/$(basename "$f")" || echo "DIFF $(basename "$f")"; done; echo done
+  mkdir -p /tmp/iconcheck && swiftc -O Tools/GenerateAppIcon.swift Cove/Components/Jellyfish/JellyfishGeometry.swift -o /tmp/genicon && /tmp/genicon /tmp/iconcheck && for f in /tmp/iconcheck/AppIcon-*.png; do cmp -s "$f" "Cove/Assets.xcassets/AppIcon.appiconset/$(basename "$f")" || echo "DIFF $(basename "$f")"; done; echo done
   ```
 
-  Verify a change actually reached the bundle rather than trusting a silent build — `actool` does not warn about a variant it never received:
+  `Contents.json` is maintained by hand, so adding a size means adding both an entry there and an output in the generator's emit loop. Verify a change actually reached the bundle rather than trusting a silent build — `actool` does not warn about a variant it never received:
 
   ```bash
-  xcrun assetutil --info <DerivedData>/Build/Products/Debug-iphonesimulator/Cove.app/Assets.car | grep -i appicon
+  xcrun assetutil --info <DerivedData>/Build/Products/Debug-iphonesimulator/Cove.app/Assets.car | grep -i AppIcon
   ```
 
 ## PR instructions
