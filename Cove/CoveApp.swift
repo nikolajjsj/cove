@@ -4,6 +4,7 @@ import ImageService
 import JellyfinProvider
 import Models
 import Persistence
+import os
 import SwiftUI
 import UserNotifications
 
@@ -18,7 +19,20 @@ struct CoveApp: App {
         ImageService.configure()
 
         // 1. Set up persistence layer
-        let databaseManager = try? DatabaseManager(path: DatabaseManager.defaultPath)
+        //
+        // Downloads, offline metadata, and saved servers all live here, so a
+        // failure silently disables every offline feature. Record it so the UI
+        // can tell the user instead of the app looking simply broken.
+        let databaseManager: DatabaseManager?
+        var databaseError: String?
+        do {
+            databaseManager = try DatabaseManager(path: DatabaseManager.defaultPath)
+        } catch {
+            databaseManager = nil
+            databaseError = error.localizedDescription
+            Logger(subsystem: AppConstants.bundleIdentifier, category: "Startup")
+                .error("Database unavailable: \(error.localizedDescription)")
+        }
 
         let serverRepository: ServerRepository? = databaseManager.map {
             ServerRepository(database: $0)
@@ -58,6 +72,12 @@ struct CoveApp: App {
 
         // 2. Create managers
         let authManager = AuthManager(serverRepository: serverRepository)
+
+        // Download URLs are stored without credentials, so the engine reads the
+        // live token per request. That also means a transfer resumed after a
+        // re-login uses the new token instead of a stale one.
+        let provider = authManager.provider
+        downloadManagerService?.authTokenProvider = { provider.currentAccessToken }
         let downloadCoordinator = DownloadCoordinator(
             downloadManager: downloadManagerService,
             offlineSyncManager: offlineSyncManager,
@@ -79,6 +99,8 @@ struct CoveApp: App {
         let userDataStore = UserDataStore(provider: authManager.provider)
         appState.userDataStore = userDataStore
         appState.videoPlayerCoordinator.userDataStore = userDataStore
+
+        appState.databaseError = databaseError
 
         _authManager = State(initialValue: authManager)
         _downloadCoordinator = State(initialValue: downloadCoordinator)

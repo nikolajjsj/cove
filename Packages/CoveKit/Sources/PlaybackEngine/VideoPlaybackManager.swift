@@ -82,10 +82,23 @@ public final class VideoPlaybackManager {
     /// The item ID for which we're currently loading artwork (to discard stale loads).
     @ObservationIgnored private var nowPlayingArtworkItemId: ItemID?
 
+    /// Whether a stop has already been reported for ``currentItem``.
+    ///
+    /// Natural end reports the stop, then auto-play calls `loadAndPlay`, whose
+    /// opening `stop()` would report the *same* item a second time — at the
+    /// position `playNextEpisode` just reset to 0, wiping the server's resume
+    /// point for an episode that was in fact watched to the end.
+    @ObservationIgnored private var hasReportedStop = false
+
+    /// Tracks our own remote-command targets so teardown removes exactly those,
+    /// leaving the music player's lock-screen controls working.
+    @ObservationIgnored private let commands = RemoteCommandRegistry()
+
     @ObservationIgnored private nonisolated(unsafe) var statusObserver: NSKeyValueObservation?
     @ObservationIgnored private nonisolated(unsafe) var bufferObserver: NSKeyValueObservation?
     @ObservationIgnored private nonisolated(unsafe) var rateObserver: NSKeyValueObservation?
     @ObservationIgnored private nonisolated(unsafe) var endOfVideoTask: Task<Void, Never>?
+    @ObservationIgnored private nonisolated(unsafe) var failedToEndTask: Task<Void, Never>?
     @ObservationIgnored private nonisolated(unsafe) var progressReportTask: Task<Void, Never>?
     @ObservationIgnored private nonisolated(unsafe) var countdownTask: Task<Void, Never>?
 
@@ -132,6 +145,7 @@ public final class VideoPlaybackManager {
         bufferObserver?.invalidate()
         rateObserver?.invalidate()
         endOfVideoTask?.cancel()
+        failedToEndTask?.cancel()
         progressReportTask?.cancel()
         countdownTask?.cancel()
     }
@@ -144,7 +158,10 @@ public final class VideoPlaybackManager {
     ) {
         stop()
 
+        activateAudioSession()
+
         currentItem = item
+        hasReportedStop = false
 
         // Parse subtitle tracks from stream info as initial metadata.
         // These will be replaced by AVPlayer-discovered tracks when the asset loads.
@@ -412,11 +429,11 @@ public final class VideoPlaybackManager {
 
         teardownRemoteCommands()
 
-        // Report playback stopped
-        if let item {
-            Task { [weak self] in
-                await self?.onPlaybackStopped?(item, position)
-            }
+        // Report playback stopped, unless the natural end already did.
+        if let item, !hasReportedStop {
+            hasReportedStop = true
+            let callback = onPlaybackStopped
+            Task { await callback?(item, position) }
         }
 
         logger.info("Stopped video playback")
@@ -445,14 +462,29 @@ public final class VideoPlaybackManager {
 
     // MARK: - Audio Session
 
+    /// Configure the audio session category without activating it.
+    ///
+    /// Activating interrupts whatever else is playing, so it must not happen just
+    /// because a manager was constructed — the video player view creates one
+    /// before the user has asked for anything to play.
     private func setupAudioSession() {
         #if !os(macOS)
             do {
-                let session = AVAudioSession.sharedInstance()
-                try session.setCategory(.playback, mode: .moviePlayback)
-                try session.setActive(true)
+                try AVAudioSession.sharedInstance()
+                    .setCategory(.playback, mode: .moviePlayback)
             } catch {
                 logger.error("Failed to configure audio session: \(error.localizedDescription)")
+            }
+        #endif
+    }
+
+    /// Take the audio session. Called when playback actually starts.
+    private func activateAudioSession() {
+        #if !os(macOS)
+            do {
+                try AVAudioSession.sharedInstance().setActive(true)
+            } catch {
+                logger.error("Failed to activate audio session: \(error.localizedDescription)")
             }
         #endif
     }
@@ -500,13 +532,46 @@ public final class VideoPlaybackManager {
             }
         }
 
-        // Observe end of video via async notification stream
+        // Observe end of video via async notification stream.
+        //
+        // AVFoundation posts this for *every* AVPlayerItem in the process — the
+        // music player's items included — so it must be matched against our own
+        // current item rather than acted on unconditionally.
         endOfVideoTask = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(
+            for await notification in NotificationCenter.default.notifications(
                 named: .AVPlayerItemDidPlayToEndTime)
             {
                 guard let self else { break }
+                guard let item = notification.object as? AVPlayerItem,
+                    item === self.player.currentItem
+                else { continue }
                 self.handleVideoEnded()
+            }
+        }
+
+        // A stream that dies mid-playback never reaches its end time, so without
+        // this the player just stalls with no error surfaced to the user.
+        failedToEndTask = Task { [weak self] in
+            for await notification in NotificationCenter.default.notifications(
+                named: .AVPlayerItemFailedToPlayToEndTime)
+            {
+                guard let self else { break }
+                guard let item = notification.object as? AVPlayerItem,
+                    item === self.player.currentItem
+                else { continue }
+                let error =
+                    notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+                    ?? NSError(
+                        domain: "VideoPlayback", code: -2,
+                        userInfo: [
+                            NSLocalizedDescriptionKey: "Playback stopped unexpectedly"
+                        ])
+                self.logger.error(
+                    "Player item failed to play to end: \(error.localizedDescription)")
+                self.isBuffering = false
+                if let currentItem = self.currentItem {
+                    self.onPlaybackError?(currentItem, error)
+                }
             }
         }
     }
@@ -758,85 +823,75 @@ public final class VideoPlaybackManager {
 
     /// Set up remote command center for video playback controls.
     private func setupRemoteCommands() {
+        teardownRemoteCommands()
         let center = MPRemoteCommandCenter.shared()
 
-        center.playCommand.isEnabled = true
-        center.playCommand.addTarget { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.play()
-            }
+        commands.register(center.playCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.play() }
             return .success
         }
 
-        center.pauseCommand.isEnabled = true
-        center.pauseCommand.addTarget { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.pause()
-            }
+        commands.register(center.pauseCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.pause() }
             return .success
         }
 
-        center.togglePlayPauseCommand.isEnabled = true
-        center.togglePlayPauseCommand.addTarget { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.togglePlayPause()
-            }
+        commands.register(center.togglePlayPauseCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.togglePlayPause() }
             return .success
         }
 
-        center.skipForwardCommand.isEnabled = true
         center.skipForwardCommand.preferredIntervals = [10]
-        center.skipForwardCommand.addTarget { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.skipForward()
-            }
+        commands.register(center.skipForwardCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.skipForward() }
             return .success
         }
 
-        center.skipBackwardCommand.isEnabled = true
         center.skipBackwardCommand.preferredIntervals = [10]
-        center.skipBackwardCommand.addTarget { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.skipBackward()
-            }
+        commands.register(center.skipBackwardCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.skipBackward() }
             return .success
         }
 
-        center.changePlaybackPositionCommand.isEnabled = true
-        center.changePlaybackPositionCommand.addTarget { [weak self] event in
+        commands.register(center.changePlaybackPositionCommand) { [weak self] event in
             guard let positionEvent = event as? MPChangePlaybackPositionCommandEvent else {
                 return .commandFailed
             }
             let position = positionEvent.positionTime
-            Task { @MainActor [weak self] in
-                self?.seek(to: position)
-            }
+            Task { @MainActor [weak self] in self?.seek(to: position) }
             return .success
         }
 
         // Next episode from lock screen
-        center.nextTrackCommand.isEnabled = true
-        center.nextTrackCommand.addTarget { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.playNextEpisode()
-            }
+        commands.register(center.nextTrackCommand) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.playNextEpisode() }
             return .success
         }
     }
 
-    /// Remove all remote command targets and clear now playing info.
+    /// Remove the remote-command targets this manager registered, and clear the
+    /// now-playing info only if it is still ours.
+    ///
+    /// `MPNowPlayingInfoCenter` and `MPRemoteCommandCenter` are process-wide
+    /// singletons shared with the music player. Blanking them unconditionally —
+    /// or calling `removeTarget(nil)` — wipes the music player's lock screen and
+    /// kills its transport controls when a video is dismissed.
     private func teardownRemoteCommands() {
-        let center = MPRemoteCommandCenter.shared()
-        center.playCommand.removeTarget(nil)
-        center.pauseCommand.removeTarget(nil)
-        center.togglePlayPauseCommand.removeTarget(nil)
-        center.skipForwardCommand.removeTarget(nil)
-        center.skipBackwardCommand.removeTarget(nil)
-        center.changePlaybackPositionCommand.removeTarget(nil)
-        center.nextTrackCommand.removeTarget(nil)
+        commands.removeAll()
 
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        let infoCenter = MPNowPlayingInfoCenter.default()
+        let ownerID =
+            infoCenter.nowPlayingInfo?[MPNowPlayingInfoPropertyExternalContentIdentifier]
+            as? String
+if ownerID == nowPlayingOwnerID {
+            infoCenter.nowPlayingInfo = nil
+        }
+        nowPlayingArtworkItemId = nil
     }
+
+    /// Marks the now-playing info this manager publishes, so teardown can tell
+    /// ours from the music player's.
+    private var nowPlayingOwnerID: String { "cove.video.\(ObjectIdentifier(self).hashValue)" }
 
     /// Update now playing info with the current video metadata.
     private func updateNowPlayingInfo() {
@@ -848,6 +903,7 @@ public final class VideoPlaybackManager {
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? Double(playbackSpeed) : 0.0,
             MPMediaItemPropertyMediaType: MPMediaType.movie.rawValue,
+            MPNowPlayingInfoPropertyExternalContentIdentifier: nowPlayingOwnerID,
         ]
 
         if let seriesName = item.seriesName {
@@ -884,13 +940,7 @@ public final class VideoPlaybackManager {
             guard let (data, _) = try? await URLSession.shared.data(from: url) else { return }
             guard let self, self.nowPlayingArtworkItemId == itemId else { return }
 
-            #if canImport(UIKit)
-                guard let image = UIImage(data: data) else { return }
-            #elseif canImport(AppKit)
-                guard let image = NSImage(data: data) else { return }
-            #endif
-
-            let artwork = MPMediaItemArtwork(image: image)
+            guard let artwork = MPMediaItemArtwork.make(from: data) else { return }
             guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
             info[MPMediaItemPropertyArtwork] = artwork
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
@@ -901,10 +951,13 @@ public final class VideoPlaybackManager {
         logger.info("Video ended")
         isPlaying = false
 
-        if let item = currentItem {
-            Task { [weak self] in
-                await self?.onPlaybackStopped?(item, self?.duration ?? 0)
-            }
+        if let item = currentItem, !hasReportedStop {
+            hasReportedStop = true
+            // Capture the position now: `playNextEpisode` resets `duration` to 0
+            // before the detached report would read it.
+            let endPosition = duration
+            let callback = onPlaybackStopped
+            Task { await callback?(item, endPosition) }
         }
 
         if nextEpisode != nil {

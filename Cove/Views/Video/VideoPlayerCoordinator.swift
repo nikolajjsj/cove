@@ -133,6 +133,7 @@ final class VideoPlayerCoordinator {
             do {
                 let profile = profileForQuality(quality)
                 let info = try await provider.streamURL(for: item, profile: profile)
+                closeLiveStream(for: streamInfo)
                 streamInfo = info
                 startPosition = currentTime
             } catch {
@@ -358,10 +359,23 @@ final class VideoPlayerCoordinator {
         savedPosition = 0
     }
 
+    /// Release the server-side live stream for a finished session.
+    ///
+    /// `PlaybackInfo` is requested with `AutoOpenLiveStream`, so the server may
+    /// allocate one per session. Dropping the `StreamInfo` without closing it
+    /// leaves the server holding those resources until they time out.
+    private func closeLiveStream(for info: StreamInfo?) {
+        guard let liveStreamId = info?.session?.liveStreamId,
+            let provider = activeProvider
+        else { return }
+        Task { try? await provider.closeLiveStream(id: liveStreamId) }
+    }
+
     /// Dismiss the video player and clear playback state.
     func dismiss() {
         isPresented = false
         showResumePrompt = false
+        closeLiveStream(for: streamInfo)
         // Delay clearing data so the fade-out animation can still reference the current item
         Task {
             try? await Task.sleep(for: .milliseconds(500))
@@ -396,6 +410,7 @@ final class VideoPlayerCoordinator {
             activeQuality = quality
             activeProvider = provider
 
+            closeLiveStream(for: streamInfo)
             currentItem = nextItem
             streamInfo = info
             mediaSegments = segments

@@ -96,6 +96,7 @@ final class UserDataStore {
         var updated = base
         updated.isFavorite = newValue
         overrides[itemId] = updated
+        evictOverridesIfNeeded()
         markInflight(itemId, .favorite)
 
         do {
@@ -117,14 +118,20 @@ final class UserDataStore {
     ///
     /// Used by the audio player when 95% of a track has been listened to.
     /// Unlike ``togglePlayed(itemId:current:)``, this never un-marks an item.
-    func markPlayed(itemId: ItemID) async throws {
-        let base = userData(for: itemId, fallback: nil)
+    ///
+    /// - Parameter current: The item's server-side `UserData`. Pass it whenever
+    ///   the caller has it: overrides replace the server value wholesale at every
+    ///   read site, so basing one on `nil` publishes a blank `UserData` and drops
+    ///   the item's favourite state and playback position until it is refetched.
+    func markPlayed(itemId: ItemID, current: UserData? = nil) async throws {
+        let base = userData(for: itemId, fallback: current)
         guard !base.isPlayed else { return }
 
         // Optimistic update
         var updated = base
         updated.isPlayed = true
         overrides[itemId] = updated
+        evictOverridesIfNeeded()
         markInflight(itemId, .played)
 
         do {
@@ -132,9 +139,9 @@ final class UserDataStore {
             unmarkInflight(itemId, .played)
         } catch {
             unmarkInflight(itemId, .played)
-            if var current = overrides[itemId] {
-                current.isPlayed = false
-                overrides[itemId] = current
+            if var rolledBack = overrides[itemId] {
+                rolledBack.isPlayed = base.isPlayed
+                overrides[itemId] = rolledBack
             }
             throw error
         }
@@ -168,6 +175,7 @@ final class UserDataStore {
         }
 
         overrides[itemId] = data
+        evictOverridesIfNeeded()
     }
 
     /// Toggle played/watched: apply optimistic update → call server → rollback on failure.
@@ -184,6 +192,7 @@ final class UserDataStore {
         var updated = base
         updated.isPlayed = newValue
         overrides[itemId] = updated
+        evictOverridesIfNeeded()
         markInflight(itemId, .played)
 
         do {
@@ -245,6 +254,27 @@ final class UserDataStore {
     }
 
     // MARK: - In-flight Tracking (Private)
+
+    /// Upper bound on retained overrides.
+    ///
+    /// An entry is added for every item the user favourites, marks played, or
+    /// finishes watching, and `rebase` only drops one when it exactly matches
+    /// fresh server data — so without a cap the dictionary grows for the life of
+    /// the process.
+    private static let maxOverrides = 500
+
+    /// Drop the oldest overrides once the store exceeds ``maxOverrides``.
+    ///
+    /// Only entries with no in-flight mutation are evicted; an evicted item
+    /// simply falls back to its server value at the next read.
+    private func evictOverridesIfNeeded() {
+        guard overrides.count > Self.maxOverrides else { return }
+        let evictable = overrides.keys.filter { !hasAnyInflight($0) }
+        let excess = overrides.count - Self.maxOverrides
+        for itemId in evictable.prefix(excess) {
+            overrides.removeValue(forKey: itemId)
+        }
+    }
 
     private func markInflight(_ itemId: ItemID, _ field: MutationField) {
         inflightCounts[itemId, default: [:]][field, default: 0] += 1

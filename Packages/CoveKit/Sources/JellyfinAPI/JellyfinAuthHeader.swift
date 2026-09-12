@@ -1,6 +1,12 @@
 import Foundation
 
-/// Builds the `X-Emby-Authorization` header value required by Jellyfin.
+/// Builds the `Authorization: MediaBrowser …` header value required by Jellyfin.
+///
+/// Jellyfin 12.0 disables the legacy authorization mechanisms (the
+/// `X-Emby-Authorization` / `X-Emby-Token` headers and the `api_key` query
+/// parameter) by default, so only the standard `Authorization` header and the
+/// `ApiKey` query parameter are used here. Both are accepted by every server
+/// from 10.8 through 12.x.
 public enum JellyfinAuthHeader {
     /// The client name sent in auth headers.
     public static let clientName = "Cove"
@@ -51,4 +57,19 @@ public enum JellyfinAuthHeader {
 
     /// The header field name.
     public static let headerName = "Authorization"
+
+    /// The query-parameter name used to authenticate requests that cannot carry
+    /// headers — stream, download, and subtitle URLs handed to `AVPlayer` or
+    /// `URLSession` background download tasks.
+    ///
+    /// Must be `ApiKey`, not the legacy `api_key`: Jellyfin 12.0 rejects the
+    /// legacy spelling unless the server admin has re-enabled
+    /// `EnableLegacyAuthorization`. `ApiKey` is read unconditionally by every
+    /// server from 10.8 onwards.
+    public static let apiKeyQueryName = "ApiKey"
+
+    /// A ready-made `ApiKey` query item for the given token.
+    public static func apiKeyQueryItem(token: String) -> URLQueryItem {
+        URLQueryItem(name: apiKeyQueryName, value: token)
+    }
 }

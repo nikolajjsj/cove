@@ -55,6 +55,14 @@ public final class DownloadManagerService: @unchecked Sendable {
     /// Closure that returns whether downloads should be WiFi-only.
     /// Injected by the app layer since the DownloadManager module doesn't depend on Defaults.
     public var isWifiOnlyEnabled: @Sendable () -> Bool = { false }
+
+    /// Closure returning the current server access token.
+    ///
+    /// Injected by the app layer, which reads it from the Keychain. Download URLs
+    /// are stored without credentials, so the token is attached per-request from
+    /// here — meaning a transfer resumed after a re-login uses the *new* token
+    /// instead of a stale one.
+    public var authTokenProvider: @Sendable () -> String? = { nil }
     private let logger = Logger(
         subsystem: AppConstants.bundleIdentifier, category: "DownloadManager")
 
@@ -79,6 +87,12 @@ public final class DownloadManagerService: @unchecked Sendable {
         /// Expected file sizes (bytes) stored at enqueue time, keyed by `DownloadItem.id`.
         /// Used as a fallback when the server omits `Content-Length`.
         var expectedBytesCache: [String: Int64] = [:]
+        /// Whether a scheduling pass is currently running. Only one may run at a
+        /// time; see `startNextDownloadsIfNeeded()`.
+        var isScheduling: Bool = false
+        /// Set when a caller arrives while a pass is already running, so the
+        /// running pass knows to look again before it finishes.
+        var schedulingRequested: Bool = false
         /// Timestamp of the last DB progress write per download, keyed by `DownloadItem.id`.
         /// Used to throttle writes to ~1 per second so GRDB observation doesn't cause
         /// excessive SwiftUI re-renders (which break context menu interaction).
@@ -178,7 +192,7 @@ public final class DownloadManagerService: @unchecked Sendable {
             totalBytes: expectedBytes,
             downloadedBytes: 0,
             localFilePath: nil,
-            remoteURL: remoteURL.absoluteString,
+            remoteURL: Self.credentialFreeURL(from: remoteURL.absoluteString),
             parentId: parentId,
             artworkURL: artworkURL?.absoluteString,
             errorMessage: nil,
@@ -245,7 +259,7 @@ public final class DownloadManagerService: @unchecked Sendable {
                 totalBytes: child.expectedBytes,
                 downloadedBytes: 0,
                 localFilePath: nil,
-                remoteURL: child.remoteURL.absoluteString,
+                remoteURL: Self.credentialFreeURL(from: child.remoteURL.absoluteString),
                 parentId: parentIdOverride ?? groupItemId,
                 groupId: group.id,
                 artworkURL: nil,
@@ -629,9 +643,44 @@ public final class DownloadManagerService: @unchecked Sendable {
 
     // MARK: - Public API — Storage
 
-    /// Total bytes of completed downloads for a specific server (from the DB).
+    /// Bytes actually occupied on disk by a specific server's downloads.
+    ///
+    /// Measured from the file system rather than the database so that artwork,
+    /// subtitle sidecars, and any size the server mis-reported are all included.
     public func totalStorageUsed(serverId: String) async throws -> Int64 {
-        try await downloadRepository.totalDownloadedBytes(serverId: serverId)
+        let storage = storage
+        return try await Task.detached(priority: .utility) {
+            try storage.diskUsage(serverId: serverId)
+        }.value
+    }
+
+    /// Bytes actually occupied on disk by downloads across every server.
+    ///
+    /// This is the same figure the storage management screen reports, so the
+    /// two never disagree.
+    public func totalStorageUsed() async throws -> Int64 {
+        let storage = storage
+        return try await Task.detached(priority: .utility) {
+            try storage.totalDiskUsage()
+        }.value
+    }
+
+    /// Bytes actually occupied on disk by each of the given downloads, keyed by
+    /// `DownloadItem.id`.
+    ///
+    /// Any UI that shows a per-item size must use this rather than
+    /// `DownloadItem.totalBytes`, which is the server's estimate of the
+    /// *original* file and excludes artwork and subtitle sidecars.
+    public func diskUsageByDownloadID(for items: [DownloadItem]) async -> [String: Int64] {
+        let storage = storage
+        let requests = items.map { (id: $0.id, item: $0) }
+        return await Task.detached(priority: .utility) {
+            var sizes: [String: Int64] = [:]
+            for request in requests {
+                sizes[request.id] = (try? storage.diskUsage(for: request.item)) ?? 0
+            }
+            return sizes
+        }.value
     }
 
     /// Remove orphaned offline metadata records that no longer have a
@@ -703,6 +752,11 @@ public final class DownloadManagerService: @unchecked Sendable {
         // 0. Clean up any leftover staged files from previous sessions.
         storage.cleanupStagingDirectory()
 
+        // 0b. Scrub access tokens out of rows written before URLs were stored
+        //     credential-free. Without this the old token sits in the database
+        //     indefinitely, including for completed downloads that never restart.
+        await scrubStoredCredentials()
+
         // 1. Get all tasks the background session still knows about.
         let existingTasks = await urlSession.allTasks
         var runningTaskDescriptions: [Int: String] = [:]  // taskIdentifier → original URL string
@@ -727,9 +781,13 @@ public final class DownloadManagerService: @unchecked Sendable {
             var orphaned: [String] = []
 
             for item in inFlight {
+                // Compare with credentials stripped from both sides: the live task's
+                // URL carries a token, the stored one does not, and an older row may
+                // still carry the legacy `api_key` spelling.
+                let itemURL = Self.credentialFreeURL(from: item.remoteURL)
                 var matched = false
                 for (taskId, taskURL) in taskDescriptions where !usedTaskIds.contains(taskId) {
-                    if taskURL == item.remoteURL {
+                    if Self.credentialFreeURL(from: taskURL) == itemURL {
                         state.taskToDownloadID[taskId] = item.id
                         matched = true
                         usedTaskIds.insert(taskId)
@@ -760,10 +818,63 @@ public final class DownloadManagerService: @unchecked Sendable {
         await startNextDownloadsIfNeeded()
     }
 
+    /// Rewrite any stored download URL that still embeds an access token.
+    private func scrubStoredCredentials() async {
+        guard let all = try? await downloadRepository.fetchAll() else { return }
+        var scrubbed = 0
+        for item in all {
+            let clean = Self.credentialFreeURL(from: item.remoteURL)
+            guard clean != item.remoteURL else { continue }
+            if (try? await downloadRepository.updateRemoteURL(id: item.id, remoteURL: clean))
+                == true
+            {
+                scrubbed += 1
+            }
+        }
+        if scrubbed > 0 {
+            logger.info("Removed stored access tokens from \(scrubbed) download URL(s)")
+        }
+    }
+
     // MARK: - Internal — Scheduling
 
     /// Look at the queue and start tasks until the concurrency limit is reached.
+    ///
+    /// Serialized against itself. The method suspends between checking for a free
+    /// slot and marking the chosen row as downloading, and it is called from the
+    /// session delegate, progress tasks, enqueue, and delete — so two concurrent
+    /// callers could both see the same free slot, pick the same queued row, and
+    /// start two `URLSessionDownloadTask`s for one item. Only one pass runs at a
+    /// time; a caller arriving mid-pass asks the running pass to look again
+    /// rather than starting its own.
     internal func startNextDownloadsIfNeeded() async {
+        let shouldRun = state.withLock { state -> Bool in
+            guard !state.isScheduling else {
+                state.schedulingRequested = true
+                return false
+            }
+            state.isScheduling = true
+            return true
+        }
+        guard shouldRun else { return }
+
+        while true {
+            state.withLock { $0.schedulingRequested = false }
+            await runSchedulingPass()
+
+            // Clear the running flag and re-check the request flag under one lock,
+            // so a caller arriving right as the pass ends is never dropped.
+            let finished = state.withLock { state -> Bool in
+                guard !state.schedulingRequested else { return false }
+                state.isScheduling = false
+                return true
+            }
+            if finished { break }
+        }
+    }
+
+    /// One pass of the scheduler: fill every free slot from the queue.
+    private func runSchedulingPass() async {
         while true {
             // WiFi-only gate: don't start new downloads on cellular if restricted
             if isWifiOnlyEnabled() && NetworkMonitor.shared.isExpensive {
@@ -788,9 +899,52 @@ public final class DownloadManagerService: @unchecked Sendable {
         }
     }
 
+    /// Query parameters that carry the access token. `api_key` is the legacy
+    /// spelling Jellyfin 12.0 rejects; `ApiKey` is the current one.
+    private static let tokenParameters: Set<String> = ["api_key", "ApiKey"]
+
+    /// The parameter name to authenticate with.
+    private static let apiKeyParameter = "ApiKey"
+
+    /// Strip the access token out of a download URL.
+    ///
+    /// Download URLs are persisted at enqueue time, so whatever they contain ends
+    /// up in the database in plaintext. The token is a credential and belongs in
+    /// the Keychain, so it is removed before the URL is stored and re-attached
+    /// from ``authTokenProvider`` when the transfer actually starts. That also
+    /// fixes resume after a re-login, which previously replayed a stale token.
+    static func credentialFreeURL(from string: String) -> String {
+        guard var components = URLComponents(string: string),
+            let queryItems = components.queryItems,
+            queryItems.contains(where: { tokenParameters.contains($0.name) })
+        else {
+            return string
+        }
+        let stripped = queryItems.filter { !tokenParameters.contains($0.name) }
+        components.queryItems = stripped.isEmpty ? nil : stripped
+        return components.url?.absoluteString ?? string
+    }
+
+    /// Build the URL to actually request: the stored URL plus the current token.
+    ///
+    /// Returns `nil` for a malformed stored URL. A missing token is not fatal —
+    /// image and some stream endpoints are public — so the URL is returned as-is
+    /// and the server decides.
+    func authorizedURL(from string: String) -> URL? {
+        let base = Self.credentialFreeURL(from: string)
+        guard let token = authTokenProvider(), !token.isEmpty else {
+            return URL(string: base)
+        }
+        guard var components = URLComponents(string: base) else { return URL(string: base) }
+        components.queryItems =
+            (components.queryItems ?? [])
+            + [URLQueryItem(name: Self.apiKeyParameter, value: token)]
+        return components.url
+    }
+
     /// Create (or resume) a `URLSessionDownloadTask` for a single item.
     private func startDownloadTask(for item: DownloadItem) async {
-        guard let url = URL(string: item.remoteURL) else {
+        guard let url = authorizedURL(from: item.remoteURL) else {
             logger.error("Invalid remote URL for download \(item.id): \(item.remoteURL)")
             try? await downloadRepository.updateState(
                 id: item.id, state: .failed, errorMessage: "Invalid download URL")
@@ -906,6 +1060,28 @@ public final class DownloadManagerService: @unchecked Sendable {
         guard let downloadID = state.withLock({ $0.taskToDownloadID[taskIdentifier] }) else {
             logger.warning(
                 "Received download completion for unknown task \(taskIdentifier)")
+            return
+        }
+
+        // A download task reports success for *any* completed HTTP exchange, so a
+        // 401 (expired token), 404, or 5xx arrives here with the error page as its
+        // body. Without this check that body is staged, given an extension from its
+        // Content-Type, and marked completed — leaving the user a "downloaded" item
+        // that will never play.
+        if let httpResponse = response as? HTTPURLResponse,
+            !(200...299).contains(httpResponse.statusCode)
+        {
+            logger.error(
+                "Download \(downloadID) failed with HTTP \(httpResponse.statusCode)")
+            let message =
+                httpResponse.statusCode == 401 || httpResponse.statusCode == 403
+                ? "Sign-in expired — reconnect to the server and retry"
+                : "Server returned HTTP \(httpResponse.statusCode)"
+            try? FileManager.default.removeItem(at: location)
+            Task { [downloadRepository] in
+                try? await downloadRepository.updateState(
+                    id: downloadID, state: .failed, errorMessage: message)
+            }
             return
         }
 

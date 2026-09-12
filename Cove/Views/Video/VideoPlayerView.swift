@@ -293,14 +293,21 @@ struct VideoPlayerView: View {
             )
         }
 
+        // Read the session off the coordinator at call time rather than capturing
+        // it: auto-play swaps in a new episode's stream — and a new session —
+        // without these callbacks being re-wired.
         videoManager.onPlaybackStart = { item, position in
-            try? await provider.reportPlaybackStart(item: item, position: position)
+            try? await provider.reportPlaybackStart(
+                item: item, position: position, session: coordinator.streamInfo?.session)
         }
         videoManager.onPlaybackProgress = { item, position in
-            try? await provider.reportPlaybackProgress(item: item, position: position)
+            try? await provider.reportPlaybackProgress(
+                item: item, position: position, isPaused: false,
+                session: coordinator.streamInfo?.session)
         }
         videoManager.onPlaybackStopped = { [appState] item, position in
-            try? await provider.reportPlaybackStopped(item: item, position: position)
+            try? await provider.reportPlaybackStopped(
+                item: item, position: position, session: coordinator.streamInfo?.session)
             appState.userDataStore?.updatePlaybackPosition(
                 itemId: item.id,
                 position: position,

@@ -231,7 +231,7 @@ struct DownloadsView: View {
 
             LazyVStack(spacing: 0) {
                 ForEach(vm.activeDownloads) { item in
-                    DownloadRowView(item: item) { action, item in
+                    DownloadRowView(item: item, diskBytes: vm.bytesOnDisk[item.id]) { action, item in
                         handleAction(action, item, vm: vm)
                     }
                     .padding(.horizontal)
@@ -244,7 +244,7 @@ struct DownloadsView: View {
                 }
 
                 ForEach(vm.failedDownloads) { item in
-                    DownloadRowView(item: item) { action, item in
+                    DownloadRowView(item: item, diskBytes: vm.bytesOnDisk[item.id]) { action, item in
                         handleAction(action, item, vm: vm)
                     }
                     .padding(.horizontal)
@@ -293,7 +293,7 @@ struct DownloadsView: View {
                             itemToDelete = item
                         } label: {
                             Label(
-                                "Remove Download (\(item.totalBytes.formatted(.byteCount(style: .file))))",
+                                "Remove Download (\(vm.diskUsage(of: [item]).formatted(.byteCount(style: .file))))",
                                 systemImage: "trash")
                         }
                     }
@@ -336,9 +336,7 @@ struct DownloadsView: View {
                     .buttonStyle(.plain)
                     .contextMenu {
                         Button(role: .destructive) {
-                            let totalSize = group.episodes.reduce(Int64(0)) {
-                                $0 + $1.totalBytes
-                            }
+                            let totalSize = vm.diskUsage(of: group.episodes)
                             seriesToDelete = (
                                 seriesId: group.series.itemId,
                                 title: group.series.title ?? "Unknown Series",
@@ -394,9 +392,7 @@ struct DownloadsView: View {
                             .buttonStyle(.plain)
                             .contextMenu {
                                 Button(role: .destructive) {
-                                    let totalSize = albumGroup.tracks.reduce(Int64(0)) {
-                                        $0 + $1.totalBytes
-                                    }
+                                    let totalSize = vm.diskUsage(of: albumGroup.tracks)
                                     albumToDelete = (
                                         albumId: albumGroup.album.itemId,
                                         title: albumGroup.album.title ?? "Unknown Album",

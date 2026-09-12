@@ -22,9 +22,17 @@ public final class ServerRepository: Sendable {
     }
 
     /// Fetch all server connections.
+    /// Fetch every saved connection, oldest first.
+    ///
+    /// The order is explicit because session restore picks the last element: an
+    /// unordered fetch would make "which server am I signed in to" depend on
+    /// SQLite's row order.
     public func fetchAll() async throws -> [ServerConnection] {
         try await dbWriter.read { db in
-            let records = try ServerRecord.fetchAll(db)
+            let records =
+                try ServerRecord
+                .order(Column("createdAt").asc)
+                .fetchAll(db)
             return records.compactMap { $0.toServerConnection() }
         }
     }

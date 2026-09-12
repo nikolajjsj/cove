@@ -23,6 +23,7 @@ You are a **Senior iOS Engineer**, specializing in SwiftUI, SwiftData, and relat
 - All shared data should use `@Observable` classes with `@State` (for ownership) and `@Bindable` / `@Environment` (for passing).
 - Strongly prefer not to use `ObservableObject`, `@Published`, `@StateObject`, `@ObservedObject`, or `@EnvironmentObject` unless they are unavoidable, or if they exist in legacy/integration contexts when changing architecture would be complicated.
 - Assume strict Swift concurrency rules are being applied.
+- The app and widget targets build with `-default-isolation=MainActor` and `InferIsolatedConformances`, so **everything in `Cove/` and `CoveWidget/` is implicitly `@MainActor`** — including plain structs, enums, and extensions that hold no state. Mark value types and pure-logic extensions `nonisolated` when anything off the main actor touches them: a `@Sendable` closure reading a computed property, or a `Codable` conformance a library requires to be nonisolated (`Defaults.Serializable` is the one that bites). The symptom is "cannot be referenced from a Sendable closure" or "conformance ... crosses into main actor-isolated code", and the fix is almost always `nonisolated` on the declaration rather than reshaping the call site. CoveKit has no default isolation, so this applies only to the two app targets.
 - Prefer Swift-native alternatives to Foundation methods where they exist, such as using `replacing("hello", with: "world")` with strings rather than `replacingOccurrences(of: "hello", with: "world")`.
 - Prefer modern Foundation API, for example `URL.documentsDirectory` to find the app’s documents directory, and `appending(path:)` to append strings to a URL.
 - Never use C-style number formatting such as `Text(String(format: "%.2f", abs(myNumber)))`; always use `Text(abs(change), format: .number.precision(.fractionLength(2)))` instead.
@@ -82,6 +83,29 @@ If SwiftData is configured to use CloudKit:
 ## App-specific patterns
 
 - **User data (favorites, played state, play counts)** must always be read through `UserDataStore`, never directly from a model's `userData` property. `UserDataStore` holds live optimistic overrides that may differ from the stale server value stored on the model. Use `appState.userDataStore?.isFavorite(item.id, fallback: item.userData) ?? item.userData?.isFavorite ?? false` (or the equivalent `isPlayed` variant). Never write `item.userData?.isFavorite ?? false` at a call site.
+
+- **Download storage sizes** must be measured from disk via `DownloadStorage` (`totalDiskUsage()`, `diskUsage(serverId:)`, `diskUsage(for:)`), never by summing `DownloadItem.totalBytes` / `downloadedBytes` from the database. Those DB fields start as the server's `MediaSource.size` estimate, which is the *original* file size even when the download goes through the transcode endpoint, and they exclude artwork and subtitle sidecars stored alongside the media file. They are only corrected to the real size at completion, so older records keep the stale estimate. Any UI showing "space used" must also agree on scope — the Settings row and `StorageManagementView` both report all servers.
+
+- **`MPNowPlayingInfoCenter` and `MPRemoteCommandCenter` are shared** by `AudioPlaybackManager` and `VideoPlaybackManager`, and neither owns them. Register command targets through `RemoteCommandRegistry` so teardown removes only your own — `removeTarget(nil)` removes *every* target on that command and silently kills the other player's lock-screen controls. Likewise, never assign `nowPlayingInfo = nil` unconditionally: stamp what you publish (video uses `MPNowPlayingInfoPropertyExternalContentIdentifier`) and clear it only if it is still yours. And configure the `AVAudioSession` category at init but only `setActive(true)` when playback actually starts — activating on construction interrupts whatever the user was already listening to.
+
+- **Jellyfin server API compatibility.** The app targets Jellyfin **10.9 or later**; server 12.0 removed and disabled things earlier clients relied on. Two rules follow from that:
+
+  - **Token auth in URLs uses `ApiKey`, never the legacy `api_key`.** 12.0 disables the legacy query parameter (and the `X-Emby-*` headers) unless the admin re-enables `EnableLegacyAuthorization`. Use `JellyfinAuthHeader.apiKeyQueryItem(token:)` for any URL handed to `AVPlayer` or a background download task; everything else authenticates with the `Authorization: MediaBrowser …` header. Download URLs are the exception to "put the token in the URL": `DownloadItem.remoteURL` is persisted, so it is stored **credential-free** (`DownloadManagerService.credentialFreeURL(from:)`) and the token is attached per request from `authTokenProvider`. Never persist a URL with a token in it — that writes a credential to the database in plaintext, and a stored token goes stale the moment the user signs in again.
+
+  - **Never use a `/Users/{userId}/…` route.** They were deprecated in 10.9 and *deleted* in 12.0. The replacements take `userId` as a query parameter instead: `/Items`, `/Items/{itemId}`, `/UserItems/Resume`, `/UserViews`, `/Items/Suggestions`, `/UserFavoriteItems/{itemId}`, `/UserPlayedItems/{itemId}`, `/Items/{itemId}/SpecialFeatures`, `/Items/{itemId}/LocalTrailers`.
+
+  Before adding or changing an endpoint, verify it against the real spec rather than from memory — it lists removals, deprecations, and the exact parameter names and casing:
+
+  ```bash
+  curl -sL https://api.jellyfin.org/openapi/jellyfin-openapi-stable.json -o /tmp/jf.json && python3 -c "import json;s=json.load(open('/tmp/jf.json'));print(s['info']['version']);op=s['paths']['/Items']['get'];print(op.get('deprecated',False));print([q['name'] for q in op['parameters'] if q['in']=='query'])"
+  ```
+
+- **Never build a path or a URL directly from server-supplied data.** The media server chooses item ids, `TranscodingUrl`, trailer URLs, and subtitle language tags. Two Foundation APIs make this dangerous in ways that read as safe:
+
+  - `URL.appending(path:)` is a *path* append, not a component append. It does not escape `/` and does not collapse `..`, and `FileManager` resolves both at syscall time. Anything server-supplied that becomes a path segment must go through `DownloadStorage.safeComponent(_:)` first — including the string-interpolated `relative*Path` helpers, which are persisted and must agree with the URL builders. Guard destructive or writing operations with `DownloadStorage.isContained(_:)`.
+  - `URL(string:relativeTo:)` performs RFC 3986 resolution, which **discards the base entirely** when the reference carries its own scheme, and replaces the authority for a protocol-relative `//host`. Never resolve a server-supplied URL string against `baseURL`; take only its `path` and `query` via `URLComponents` and keep the scheme, host, and port from `baseURL`, as `hlsStreamURL` does.
+
+  The same mistake appeared independently in three places, so treat it as a pattern this codebase attracts rather than a one-off. Regression tests live in `DownloadStoragePathTraversalTests` and the `hlsStreamURL` tests in `JellyfinAPITests`.
 
 ## PR instructions
 

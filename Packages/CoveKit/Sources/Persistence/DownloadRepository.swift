@@ -182,6 +182,23 @@ public final class DownloadRepository: Sendable {
         }
     }
 
+    /// Replace the stored remote URL for a download.
+    ///
+    /// Used to scrub credentials out of rows written before download URLs were
+    /// stored token-free.
+    ///
+    /// - Returns: `true` if a row was updated.
+    @discardableResult
+    public func updateRemoteURL(id: String, remoteURL: String) async throws -> Bool {
+        try await dbWriter.write { db in
+            guard var record = try DownloadRecord.fetchOne(db, key: id) else { return false }
+            guard record.remoteURL != remoteURL else { return false }
+            record.remoteURL = remoteURL
+            try record.update(db)
+            return true
+        }
+    }
+
     /// Mark a download as completed with the local file path.
     ///
     /// Sets the state to `.completed`, progress to 1.0, and records the completion timestamp.
@@ -227,9 +244,15 @@ public final class DownloadRepository: Sendable {
     }
 
     // MARK: - Observation
+    //
+    // GRDB's default ValueObservation scheduler delivers onChange on the main
+    // actor, so these are @MainActor: starting one from a nonisolated context
+    // hops actors implicitly, which strict concurrency flags. The only caller is
+    // a @MainActor view model.
 
     /// Observe all downloads for a server, emitting updates whenever the data changes.
     /// Uses GRDB's `ValueObservation` for real-time database observation.
+    @MainActor
     public func observeAll(serverId: String) -> AsyncStream<[DownloadItem]> {
         let observation = ValueObservation.tracking { db in
             try DownloadRecord
@@ -241,8 +264,14 @@ public final class DownloadRepository: Sendable {
         return AsyncStream { continuation in
             let cancellable = observation.start(
                 in: dbWriter,
-                onError: { error in
-                    // On error, don't finish the stream — just skip this update
+                onError: { [logger] error in
+                    // GRDB stops the observation after reporting an error, so the
+                    // stream must end too — otherwise the consumer's `for await`
+                    // waits forever on a dead observation and the UI silently
+                    // freezes on stale data.
+                    logger.error(
+                        "Download observation failed: \(error.localizedDescription)")
+                    continuation.finish()
                 },
                 onChange: { records in
                     let items = records.compactMap { $0.toDownloadItem() }
@@ -257,6 +286,7 @@ public final class DownloadRepository: Sendable {
     }
 
     /// Observe only active downloads (downloading, queued, paused) and failed downloads.
+    @MainActor
     public func observeActive(serverId: String) -> AsyncStream<[DownloadItem]> {
         let activeStates = [
             DownloadState.downloading.rawValue,
@@ -276,7 +306,13 @@ public final class DownloadRepository: Sendable {
         return AsyncStream { continuation in
             let cancellable = observation.start(
                 in: dbWriter,
-                onError: { _ in },
+                onError: { [logger] error in
+                    // See observeAll: a failed observation never resumes, so end
+                    // the stream rather than hanging the consumer.
+                    logger.error(
+                        "Download observation failed: \(error.localizedDescription)")
+                    continuation.finish()
+                },
                 onChange: { records in
                     let items = records.compactMap { $0.toDownloadItem() }
                     continuation.yield(items)
@@ -290,6 +326,7 @@ public final class DownloadRepository: Sendable {
     }
 
     /// Observe a single download by item ID and server ID.
+    @MainActor
     public func observeOne(itemId: ItemID, serverId: String) -> AsyncStream<DownloadItem?> {
         let observation = ValueObservation.tracking { db in
             try DownloadRecord
@@ -301,7 +338,13 @@ public final class DownloadRepository: Sendable {
         return AsyncStream { continuation in
             let cancellable = observation.start(
                 in: dbWriter,
-                onError: { _ in },
+                onError: { [logger] error in
+                    // See observeAll: a failed observation never resumes, so end
+                    // the stream rather than hanging the consumer.
+                    logger.error(
+                        "Download observation failed: \(error.localizedDescription)")
+                    continuation.finish()
+                },
                 onChange: { record in
                     continuation.yield(record?.toDownloadItem())
                 }
@@ -314,6 +357,7 @@ public final class DownloadRepository: Sendable {
     }
 
     /// Observe all downloads belonging to a specific group.
+    @MainActor
     public func observeGroup(groupId: String) -> AsyncStream<[DownloadItem]> {
         let observation = ValueObservation.tracking { db in
             try DownloadRecord
@@ -325,7 +369,13 @@ public final class DownloadRepository: Sendable {
         return AsyncStream { continuation in
             let cancellable = observation.start(
                 in: dbWriter,
-                onError: { _ in },
+                onError: { [logger] error in
+                    // See observeAll: a failed observation never resumes, so end
+                    // the stream rather than hanging the consumer.
+                    logger.error(
+                        "Download observation failed: \(error.localizedDescription)")
+                    continuation.finish()
+                },
                 onChange: { records in
                     let items = records.compactMap { $0.toDownloadItem() }
                     continuation.yield(items)

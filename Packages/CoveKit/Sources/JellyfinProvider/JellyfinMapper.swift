@@ -442,40 +442,15 @@ enum JellyfinMapper {
 
     // MARK: - Helpers
 
+    /// Parse a Jellyfin timestamp.
+    ///
+    /// Jellyfin emits several ISO 8601 shapes for the same field — `Z` or a
+    /// `+HH:MM` offset, and anywhere from zero to seven fractional-second digits.
+    /// The bare `.iso8601` strategy accepts all of them; chaining the component
+    /// modifiers (`.time(includingFractionalSeconds:)`, `.timeZone(separator:)`)
+    /// over-constrains the parse and rejects every real Jellyfin timestamp, so
+    /// don't reintroduce them.
     static func parseDate(_ string: String) -> Date? {
-        // Try ISO 8601 with fractional seconds first
-        if let date = try? Date(
-            string,
-            strategy: .iso8601.dateTimeSeparator(.standard).timeSeparator(.colon).timeZone(
-                separator: .omitted
-            ).time(includingFractionalSeconds: true))
-        {
-            return date
-        }
-        // Fall back to ISO 8601 without fractional seconds
-        if let date = try? Date(
-            string,
-            strategy: .iso8601.dateTimeSeparator(.standard).timeSeparator(.colon).timeZone(
-                separator: .omitted))
-        {
-            return date
-        }
-        // Try with timezone separator (e.g. +00:00)
-        if let date = try? Date(
-            string,
-            strategy: .iso8601.dateTimeSeparator(.standard).timeSeparator(.colon).timeZone(
-                separator: .colon
-            ).time(includingFractionalSeconds: true))
-        {
-            return date
-        }
-        if let date = try? Date(
-            string,
-            strategy: .iso8601.dateTimeSeparator(.standard).timeSeparator(.colon).timeZone(
-                separator: .colon))
-        {
-            return date
-        }
-        return nil
+        try? Date(string, strategy: .iso8601)
     }
 }

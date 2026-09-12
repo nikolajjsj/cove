@@ -305,7 +305,14 @@ struct PagedCollectionLoaderTests {
         #expect(loader.items.count == 5)
         #expect(loader.items.first?.name == "A 0")
 
-        // Reload with different data
+        // A second call without a reset is deliberately ignored, so that a `.task`
+        // re-firing on navigate-back keeps the loaded page and its scroll position.
+        await loader.loadFirstPage(pageSize: 5, Self.makeFetcher(totalItems: 3, namePrefix: "B"))
+        #expect(loader.items.count == 5)
+        #expect(loader.items.first?.name == "A 0")
+
+        // Changing the query requires an explicit reset first.
+        loader.reset()
         await loader.loadFirstPage(pageSize: 5, Self.makeFetcher(totalItems: 3, namePrefix: "B"))
         #expect(loader.items.count == 3)
         #expect(loader.items.first?.name == "B 0")

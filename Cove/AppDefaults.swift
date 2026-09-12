@@ -2,7 +2,10 @@ import Defaults
 import Foundation
 import Models
 
-extension Defaults.Keys {
+// `nonisolated`: the app target defaults to main-actor isolation, but these keys
+// are read from @Sendable closures (stream-quality resolution, the download
+// engine's WiFi-only gate) that cannot reach main-actor state.
+nonisolated extension Defaults.Keys {
 
     // MARK: - Downloads
 

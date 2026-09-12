@@ -148,6 +148,15 @@ public final class HTTPClient: Sendable {
         await responseCache.removeAll()
     }
 
+    /// Clear the URLSession's HTTP cache, which persists to disk.
+    ///
+    /// Separate from ``clearCache()``: that one only empties the in-memory
+    /// ``ResponseCache``, while this discards the ETag/Cache-Control entries
+    /// URLSession wrote to the caches directory.
+    public func clearURLCache() {
+        session.configuration.urlCache?.removeAllCachedResponses()
+    }
+
     // MARK: - Private
 
     private func execute(

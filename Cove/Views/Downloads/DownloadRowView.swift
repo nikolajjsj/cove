@@ -8,6 +8,10 @@ import SwiftUI
 /// progress, and contextual actions via swipe gestures and context menus.
 struct DownloadRowView: View {
     let item: DownloadItem
+    /// Bytes this download actually occupies on disk, measured from the file
+    /// system. `DownloadItem.totalBytes` is the server's estimate of the original
+    /// file and excludes artwork and subtitle sidecars, so it must not be shown.
+var diskBytes: Int64? = nil
     let onAction: (DownloadAction, DownloadItem) -> Void
 
     var body: some View {
@@ -129,11 +133,9 @@ struct DownloadRowView: View {
         case .completed:
             HStack(spacing: 4) {
                 Text(item.mediaType.displayLabel)
-                if item.totalBytes > 0 {
+                if let diskBytes, diskBytes > 0 {
                     Text("·")
-                    Text(
-                        ByteCountFormatter.string(
-                            fromByteCount: item.totalBytes, countStyle: .file))
+                    Text(diskBytes.formatted(.byteCount(style: .file)))
                 }
             }
 

@@ -117,18 +117,20 @@ public final class JellyfinAPIClient: Sendable {
 
     /// Fetch the media views (libraries) accessible to the given user.
     /// Unlike `getVirtualFolders`, this endpoint works for non-admin users too.
-    /// `GET /Users/{userId}/Views`
+    /// `GET /UserViews`
     public func getUserViews(userId: String) async throws -> ItemsResult {
-        let url = baseURL.appending(path: "Users/\(userId)/Views")
+        let url = baseURL.appending(path: "UserViews")
         logger.debug("Fetching user views for user \(userId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 30))
+            url: url, method: .get, headers: authHeaders,
+            queryItems: [URLQueryItem(name: "userId", value: userId)],
+            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     // MARK: - Items
 
     /// Browse items with filtering and sorting.
-    /// `GET /Users/{userId}/Items`
+    /// `GET /Items`
     public func getItems(
         userId: String,
         parentId: String? = nil,
@@ -154,9 +156,10 @@ public final class JellyfinAPIClient: Sendable {
         studios: [String]? = nil,
         cacheMaxAge: TimeInterval = 30
     ) async throws -> ItemsResult {
-        let url = baseURL.appending(path: "Users/\(userId)/Items")
+        let url = baseURL.appending(path: "Items")
 
         var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "UserId", value: userId),
             URLQueryItem(name: "Recursive", value: recursive ? "true" : "false"),
             URLQueryItem(name: "Fields", value: fields.joined(separator: ",")),
         ]
@@ -219,15 +222,18 @@ public final class JellyfinAPIClient: Sendable {
     }
 
     /// Get a single item's full details.
-    /// `GET /Users/{userId}/Items/{itemId}`
+    /// `GET /Items/{itemId}`
     public func getItem(userId: String, itemId: String) async throws -> BaseItemDto {
-        let url = baseURL.appending(path: "Users/\(userId)/Items/\(itemId)")
+        let url = baseURL.appending(path: "Items/\(itemId)")
         let fields = [
             "Overview", "Genres", "DateCreated", "UserData", "CommunityRating", "OfficialRating",
             "ProductionYear", "People", "RemoteTrailers", "ProviderIds", "Studios", "Taglines",
             "OriginalTitle", "EndDate", "MediaSources", "PremiereDate", "Chapters",
         ]
-        let queryItems = [URLQueryItem(name: "Fields", value: fields.joined(separator: ","))]
+        let queryItems = [
+            URLQueryItem(name: "UserId", value: userId),
+            URLQueryItem(name: "Fields", value: fields.joined(separator: ",")),
+        ]
         logger.debug("Fetching item \(itemId)")
         return try await httpClient.request(
             url: url, method: .get, headers: authHeaders, queryItems: queryItems,
@@ -410,7 +416,7 @@ public final class JellyfinAPIClient: Sendable {
             URLQueryItem(name: "MaxStreamingBitrate", value: String(maxStreamingBitrate)),
             URLQueryItem(name: "TranscodingContainer", value: transcodingContainer),
             URLQueryItem(name: "TranscodingProtocol", value: transcodingProtocol),
-            URLQueryItem(name: "api_key", value: token),
+            JellyfinAuthHeader.apiKeyQueryItem(token: token),
         ]
         if let audioBitRate {
             queryItems.append(URLQueryItem(name: "AudioBitRate", value: String(audioBitRate)))
@@ -426,11 +432,14 @@ public final class JellyfinAPIClient: Sendable {
     public func reportPlaybackStart(
         itemId: String,
         positionTicks: Int64,
-        mediaSourceId: String? = nil
+        mediaSourceId: String? = nil,
+        playMethod: PlayMethod = .directPlay,
+        playSessionId: String? = nil
     ) async throws {
         let url = baseURL.appending(path: "Sessions/Playing")
         let body = PlaybackStartInfo(
-            itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId)
+            itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId,
+            playMethod: playMethod, playSessionId: playSessionId)
         logger.debug("Reporting playback start for item \(itemId)")
         try await httpClient.request(
             url: url, method: .post, headers: authHeaders, body: body,
@@ -443,12 +452,14 @@ public final class JellyfinAPIClient: Sendable {
         itemId: String,
         positionTicks: Int64,
         isPaused: Bool,
-        mediaSourceId: String? = nil
+        mediaSourceId: String? = nil,
+        playMethod: PlayMethod = .directPlay,
+        playSessionId: String? = nil
     ) async throws {
         let url = baseURL.appending(path: "Sessions/Playing/Progress")
         let body = PlaybackProgressInfo(
             itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId,
-            isPaused: isPaused)
+            playMethod: playMethod, playSessionId: playSessionId, isPaused: isPaused)
         logger.debug("Reporting playback progress for item \(itemId)")
         try await httpClient.request(
             url: url, method: .post, headers: authHeaders, body: body,
@@ -460,14 +471,31 @@ public final class JellyfinAPIClient: Sendable {
     public func reportPlaybackStopped(
         itemId: String,
         positionTicks: Int64,
-        mediaSourceId: String? = nil
+        mediaSourceId: String? = nil,
+        playSessionId: String? = nil
     ) async throws {
         let url = baseURL.appending(path: "Sessions/Playing/Stopped")
         let body = PlaybackStopInfo(
-            itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId)
+            itemId: itemId, positionTicks: positionTicks, mediaSourceId: mediaSourceId,
+            playSessionId: playSessionId)
         logger.debug("Reporting playback stopped for item \(itemId)")
         try await httpClient.request(
             url: url, method: .post, headers: authHeaders, body: body,
+            cachePolicy: .networkOnly)
+    }
+
+    /// Close a live stream the server opened for a playback session.
+    /// `POST /LiveStreams/Close`
+    ///
+    /// `PlaybackInfo` is requested with `AutoOpenLiveStream`, so the server may
+    /// allocate a live stream per session. Closing it releases those resources
+    /// instead of leaving them to time out.
+    public func closeLiveStream(liveStreamId: String) async throws {
+        let url = baseURL.appending(path: "LiveStreams/Close")
+        logger.debug("Closing live stream \(liveStreamId)")
+        try await httpClient.request(
+            url: url, method: .post, headers: authHeaders,
+            queryItems: [URLQueryItem(name: "liveStreamId", value: liveStreamId)],
             cachePolicy: .networkOnly)
     }
 
@@ -534,7 +562,7 @@ public final class JellyfinAPIClient: Sendable {
         var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "static", value: staticStream ? "true" : "false"),
             URLQueryItem(name: "mediaSourceId", value: mediaSourceId),
-            URLQueryItem(name: "api_key", value: token),
+            JellyfinAuthHeader.apiKeyQueryItem(token: token),
         ]
         if let container {
             queryItems.append(URLQueryItem(name: "container", value: container))
@@ -544,17 +572,36 @@ public final class JellyfinAPIClient: Sendable {
     }
 
     /// Build an HLS transcode stream URL from a server-provided transcode path. Synchronous.
+    ///
+    /// Only the **path and query** of `transcodingPath` are used; the scheme, host,
+    /// port, and any userinfo it carries are discarded and replaced with `baseURL`'s.
+    ///
+    /// That matters because `TranscodingUrl` is chosen by the server, and RFC 3986
+    /// reference resolution ignores the base entirely when the reference has a
+    /// scheme of its own — so resolving it directly would let a compromised server
+    /// (or a malicious plugin, or a rogue reverse proxy) point playback at any host
+    /// it liked, with the access token along for the ride in the query string, or
+    /// swap the scheme for `http://` and put that token on the wire in cleartext.
+    /// Pinning the authority also keeps the path prefix of a Jellyfin hosted at
+    /// `https://example.com/jellyfin/`.
     public func hlsStreamURL(transcodingPath: String) -> URL? {
-        guard !transcodingPath.isEmpty else { return nil }
-        // The transcodingUrl from Jellyfin is a relative path like /videos/{id}/master.m3u8?...
-        // It already contains all query params including the play session
-        // We just need to prepend the base URL
-        if let baseComponents = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) {
-            let fullURLString =
-                "\(baseComponents.scheme ?? "http")://\(baseComponents.host ?? "")\(baseComponents.port.map { ":\($0)" } ?? "")\(transcodingPath)"
-            return URL(string: fullURLString)
+        guard !transcodingPath.isEmpty,
+            let sent = URLComponents(string: transcodingPath),
+            var resolved = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        else { return nil }
+
+        let basePath = resolved.path.hasSuffix("/") ? String(resolved.path.dropLast()) : resolved.path
+        let sentPath = sent.path.hasPrefix("/") ? sent.path : "/" + sent.path
+
+        resolved.path = basePath + sentPath
+var queryItems = sent.queryItems ?? []
+        queryItems.removeAll { $0.name == "api_key" || $0.name == "ApiKey" }
+        if let accessToken {
+            queryItems.append(JellyfinAuthHeader.apiKeyQueryItem(token: accessToken))
         }
-        return nil
+        resolved.queryItems = queryItems.isEmpty ? nil : queryItems
+        resolved.fragment = nil
+        return resolved.url
     }
 
     /// Build a subtitle stream URL. Synchronous.
@@ -568,7 +615,7 @@ public final class JellyfinAPIClient: Sendable {
                 path:
                     "Videos/\(itemId)/\(mediaSourceId)/Subtitles/\(subtitleIndex)/Stream.\(format)"),
             resolvingAgainstBaseURL: false)
-        urlComponents?.queryItems = [URLQueryItem(name: "api_key", value: token)]
+        urlComponents?.queryItems = [JellyfinAuthHeader.apiKeyQueryItem(token: token)]
         return urlComponents?.url
     }
 
@@ -618,7 +665,7 @@ public final class JellyfinAPIClient: Sendable {
             url: baseURL.appending(path: "Items/\(itemId)/Download"),
             resolvingAgainstBaseURL: false)
         urlComponents?.queryItems = [
-            URLQueryItem(name: "api_key", value: token)
+            JellyfinAuthHeader.apiKeyQueryItem(token: token)
         ]
         return urlComponents?.url
     }
@@ -640,7 +687,7 @@ public final class JellyfinAPIClient: Sendable {
             URLQueryItem(name: "static", value: "false"),
             URLQueryItem(name: "mediaSourceId", value: mediaSourceId),
             URLQueryItem(name: "container", value: "mp4"),
-            URLQueryItem(name: "api_key", value: token),
+            JellyfinAuthHeader.apiKeyQueryItem(token: token),
         ]
         return urlComponents?.url
     }
@@ -675,7 +722,7 @@ public final class JellyfinAPIClient: Sendable {
     // MARK: - Suggestions
 
     /// Get suggested items for a user.
-    /// `GET /Users/{userId}/Suggestions`
+    /// `GET /Items/Suggestions`
     public func getSuggestions(
         userId: String,
         mediaTypes: [String]? = ["Video"],
@@ -686,9 +733,10 @@ public final class JellyfinAPIClient: Sendable {
             "ProductionYear",
         ]
     ) async throws -> ItemsResult {
-        let url = baseURL.appending(path: "Users/\(userId)/Suggestions")
+        let url = baseURL.appending(path: "Items/Suggestions")
         var queryItems: [URLQueryItem] = [
-            URLQueryItem(name: "Fields", value: fields.joined(separator: ","))
+            URLQueryItem(name: "UserId", value: userId),
+            URLQueryItem(name: "Fields", value: fields.joined(separator: ",")),
         ]
         if let mediaTypes {
             queryItems.append(
@@ -709,29 +757,33 @@ public final class JellyfinAPIClient: Sendable {
     // MARK: - Special Features
 
     /// Get special features for an item (behind-the-scenes, deleted scenes, etc.).
-    /// `GET /Users/{userId}/Items/{itemId}/SpecialFeatures`
+    /// `GET /Items/{itemId}/SpecialFeatures`
     public func getSpecialFeatures(
         itemId: String,
         userId: String
     ) async throws -> [BaseItemDto] {
-        let url = baseURL.appending(path: "Users/\(userId)/Items/\(itemId)/SpecialFeatures")
+        let url = baseURL.appending(path: "Items/\(itemId)/SpecialFeatures")
         logger.debug("Fetching special features for \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 120))
+            url: url, method: .get, headers: authHeaders,
+            queryItems: [URLQueryItem(name: "userId", value: userId)],
+            cachePolicy: .cacheFirst(maxAge: 120))
     }
 
     // MARK: - Local Trailers
 
     /// Get local trailers for an item.
-    /// `GET /Users/{userId}/Items/{itemId}/LocalTrailers`
+    /// `GET /Items/{itemId}/LocalTrailers`
     public func getLocalTrailers(
         itemId: String,
         userId: String
     ) async throws -> [BaseItemDto] {
-        let url = baseURL.appending(path: "Users/\(userId)/Items/\(itemId)/LocalTrailers")
+        let url = baseURL.appending(path: "Items/\(itemId)/LocalTrailers")
         logger.debug("Fetching local trailers for \(itemId)")
         return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 120))
+            url: url, method: .get, headers: authHeaders,
+            queryItems: [URLQueryItem(name: "userId", value: userId)],
+            cachePolicy: .cacheFirst(maxAge: 120))
     }
 
     // MARK: - Shows (TV Series)
@@ -799,12 +851,13 @@ public final class JellyfinAPIClient: Sendable {
     }
 
     /// Get items to resume (continue watching).
-    /// `GET /Users/{userId}/Items/Resume`
+    /// `GET /UserItems/Resume`
     public func getResumeItems(userId: String, mediaTypes: [String]? = nil, limit: Int = 12)
         async throws -> ItemsResult
     {
-        let url = baseURL.appending(path: "Users/\(userId)/Items/Resume")
+        let url = baseURL.appending(path: "UserItems/Resume")
         var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "UserId", value: userId),
             URLQueryItem(name: "Fields", value: "Overview,UserData,DateCreated"),
             URLQueryItem(name: "Limit", value: String(limit)),
         ]
@@ -830,47 +883,59 @@ public final class JellyfinAPIClient: Sendable {
     }
 
     /// Mark an item as a favorite.
+    /// `POST /UserFavoriteItems/{itemId}`
     public func addFavorite(userId: String, itemId: String) async throws {
-        let url = baseURL.appending(path: "Users/\(userId)/FavoriteItems/\(itemId)")
+        let url = baseURL.appending(path: "UserFavoriteItems/\(itemId)")
         logger.debug("Adding favorite for item \(itemId)")
         try await httpClient.request(
-            url: url, method: .post, headers: authHeaders, cachePolicy: .networkOnly)
+            url: url, method: .post, headers: authHeaders,
+            queryItems: [URLQueryItem(name: "userId", value: userId)],
+            cachePolicy: .networkOnly)
         await httpClient.cache.removeAll(matching: itemId)
-        await httpClient.cache.removeAll(matching: "FavoriteItems")
+        await httpClient.cache.removeAll(matching: "IsFavorite")
     }
 
     /// Remove an item from favorites.
+    /// `DELETE /UserFavoriteItems/{itemId}`
     public func removeFavorite(userId: String, itemId: String) async throws {
-        let url = baseURL.appending(path: "Users/\(userId)/FavoriteItems/\(itemId)")
+        let url = baseURL.appending(path: "UserFavoriteItems/\(itemId)")
         logger.debug("Removing favorite for item \(itemId)")
         try await httpClient.request(
-            url: url, method: .delete, headers: authHeaders, cachePolicy: .networkOnly)
+            url: url, method: .delete, headers: authHeaders,
+            queryItems: [URLQueryItem(name: "userId", value: userId)],
+            cachePolicy: .networkOnly)
         await httpClient.cache.removeAll(matching: itemId)
-        await httpClient.cache.removeAll(matching: "FavoriteItems")
+        await httpClient.cache.removeAll(matching: "IsFavorite")
     }
 
     // MARK: - Played Status
 
     /// Mark an item as played.
+    /// `POST /UserPlayedItems/{itemId}`
     public func markPlayed(userId: String, itemId: String) async throws {
-        let url = baseURL.appending(path: "Users/\(userId)/PlayedItems/\(itemId)")
+        let url = baseURL.appending(path: "UserPlayedItems/\(itemId)")
         logger.debug("Marking item \(itemId) as played")
         try await httpClient.request(
-            url: url, method: .post, headers: authHeaders, cachePolicy: .networkOnly)
+            url: url, method: .post, headers: authHeaders,
+            queryItems: [URLQueryItem(name: "userId", value: userId)],
+            cachePolicy: .networkOnly)
         await httpClient.cache.removeAll(matching: itemId)
-        await httpClient.cache.removeAll(matching: "PlayedItems")
+        await httpClient.cache.removeAll(matching: "IsPlayed")
         await httpClient.cache.removeAll(matching: "Resume")
         await httpClient.cache.removeAll(matching: "NextUp")
     }
 
     /// Mark an item as unplayed.
+    /// `DELETE /UserPlayedItems/{itemId}`
     public func markUnplayed(userId: String, itemId: String) async throws {
-        let url = baseURL.appending(path: "Users/\(userId)/PlayedItems/\(itemId)")
+        let url = baseURL.appending(path: "UserPlayedItems/\(itemId)")
         logger.debug("Marking item \(itemId) as unplayed")
         try await httpClient.request(
-            url: url, method: .delete, headers: authHeaders, cachePolicy: .networkOnly)
+            url: url, method: .delete, headers: authHeaders,
+            queryItems: [URLQueryItem(name: "userId", value: userId)],
+            cachePolicy: .networkOnly)
         await httpClient.cache.removeAll(matching: itemId)
-        await httpClient.cache.removeAll(matching: "PlayedItems")
+        await httpClient.cache.removeAll(matching: "IsPlayed")
         await httpClient.cache.removeAll(matching: "Resume")
         await httpClient.cache.removeAll(matching: "NextUp")
     }
@@ -1073,12 +1138,17 @@ private struct PlaybackStartInfo: Encodable, Sendable {
     let positionTicks: Int64
     let mediaSourceId: String?
     let playMethod: String
+    let playSessionId: String?
 
-    init(itemId: String, positionTicks: Int64, mediaSourceId: String?) {
+    init(
+        itemId: String, positionTicks: Int64, mediaSourceId: String?,
+        playMethod: PlayMethod, playSessionId: String?
+    ) {
         self.itemId = itemId
         self.positionTicks = positionTicks
         self.mediaSourceId = mediaSourceId
-        self.playMethod = "DirectPlay"
+        self.playMethod = playMethod.rawValue
+        self.playSessionId = playSessionId
     }
 
     // All-lowercase string values so that the HTTPClient's convertToSnakeCase
@@ -1089,6 +1159,7 @@ private struct PlaybackStartInfo: Encodable, Sendable {
         case positionTicks = "positionticks"
         case mediaSourceId = "mediasourceid"
         case playMethod = "playmethod"
+        case playSessionId = "playsessionid"
     }
 }
 
@@ -1098,13 +1169,18 @@ private struct PlaybackProgressInfo: Encodable, Sendable {
     let positionTicks: Int64
     let mediaSourceId: String?
     let playMethod: String
+    let playSessionId: String?
     let isPaused: Bool
 
-    init(itemId: String, positionTicks: Int64, mediaSourceId: String?, isPaused: Bool) {
+    init(
+        itemId: String, positionTicks: Int64, mediaSourceId: String?,
+        playMethod: PlayMethod, playSessionId: String?, isPaused: Bool
+    ) {
         self.itemId = itemId
         self.positionTicks = positionTicks
         self.mediaSourceId = mediaSourceId
-        self.playMethod = "DirectPlay"
+        self.playMethod = playMethod.rawValue
+        self.playSessionId = playSessionId
         self.isPaused = isPaused
     }
 
@@ -1113,6 +1189,7 @@ private struct PlaybackProgressInfo: Encodable, Sendable {
         case positionTicks = "positionticks"
         case mediaSourceId = "mediasourceid"
         case playMethod = "playmethod"
+        case playSessionId = "playsessionid"
         case isPaused = "ispaused"
     }
 }
@@ -1122,20 +1199,22 @@ private struct PlaybackStopInfo: Encodable, Sendable {
     let itemId: String
     let positionTicks: Int64
     let mediaSourceId: String?
-    let playMethod: String
+    let playSessionId: String?
 
-    init(itemId: String, positionTicks: Int64, mediaSourceId: String?) {
+    init(
+        itemId: String, positionTicks: Int64, mediaSourceId: String?, playSessionId: String?
+    ) {
         self.itemId = itemId
         self.positionTicks = positionTicks
         self.mediaSourceId = mediaSourceId
-        self.playMethod = "DirectPlay"
+        self.playSessionId = playSessionId
     }
 
     enum CodingKeys: String, CodingKey {
         case itemId = "itemid"
         case positionTicks = "positionticks"
         case mediaSourceId = "mediasourceid"
-        case playMethod = "playmethod"
+        case playSessionId = "playsessionid"
     }
 }
 

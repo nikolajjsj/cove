@@ -125,11 +125,17 @@ where Element.ID: Hashable {
 
     // MARK: - Actions
 
-    /// Fetches the first page, replacing any previously loaded items.
+    /// Fetches the first page.
     ///
     /// The fetch closure is stored internally so that ``loadNextPage()`` and
     /// ``onItemAppeared(_:prefetchThreshold:)`` can reuse it without the
     /// caller having to pass it again.
+    ///
+    /// - Important: This is a **no-op once any item has been loaded**, so that a
+    ///   `.task` re-firing on navigate-back keeps the existing content and scroll
+    ///   position. When the query itself changes — a new sort order, a new filter —
+    ///   call ``reset()`` first, otherwise the new `fetch` closure is ignored and
+    ///   the stale results stay on screen.
     ///
     /// - Parameters:
     ///   - pageSize: Number of items per page. Defaults to `40`.

@@ -26,19 +26,59 @@ public struct DownloadStorage: Sendable {
         URL.applicationSupportDirectory.appending(path: "Downloads", directoryHint: .isDirectory)
     }
 
+    // MARK: - Path Safety
+
+    /// Reduce an untrusted identifier to a single safe path component.
+    ///
+    /// `URL.appending(path:)` is a *path* append, not a component append: it
+    /// neither escapes `/` nor collapses `..`, and `FileManager` resolves both at
+    /// syscall time. Item ids, media-type strings and subtitle language tags all
+    /// arrive from the media server, so letting any of them reach a URL unfiltered
+    /// is a directory-traversal primitive — `deleteFiles` would `removeItem` a
+    /// directory of the server's choosing, and `downloadImage` would write bytes
+    /// there.
+    ///
+    /// Jellyfin item ids are hex GUIDs and pass through unchanged. The mapping is
+    /// deterministic, so a given id always resolves to the same directory and
+    /// lookups stay consistent across launches.
+    static func safeComponent(_ raw: String) -> String {
+        let mapped = String(
+            raw.map { character in
+                if character.isASCII, character.isLetter || character.isNumber { return character }
+                if character == "-" || character == "_" { return character }
+                return "_"
+            })
+        return mapped.isEmpty ? "_" : String(mapped.prefix(128))
+    }
+
+    /// Verify a URL really lands inside the downloads tree.
+    ///
+    /// ``safeComponent(_:)`` is the primary defence; this is the backstop for
+    /// paths that arrive already assembled — notably `DownloadItem.localFilePath`,
+    /// which is persisted and so may have been written by a build that predates
+    /// the sanitiser.
+    func isContained(_ url: URL) -> Bool {
+        let base = downloadsDirectory.standardizedFileURL.path
+        let resolved = url.standardizedFileURL.path
+        // The trailing separator matters: without it a sibling `Downloads-evil`
+        // would also satisfy the prefix test.
+        return resolved == base || resolved.hasPrefix(base + "/")
+    }
+
     // MARK: - Path Helpers
 
     /// Per-server, per-type directory: `Downloads/{serverId}/{mediaType}/{itemId}/`
     public func itemDirectory(serverId: String, mediaType: MediaType, itemId: ItemID) -> URL {
         downloadsDirectory
-            .appending(path: serverId, directoryHint: .isDirectory)
-            .appending(path: mediaType.rawValue, directoryHint: .isDirectory)
-            .appending(path: itemId.rawValue, directoryHint: .isDirectory)
+            .appending(path: Self.safeComponent(serverId), directoryHint: .isDirectory)
+            .appending(path: Self.safeComponent(mediaType.rawValue), directoryHint: .isDirectory)
+            .appending(path: Self.safeComponent(itemId.rawValue), directoryHint: .isDirectory)
     }
 
     /// Server-level directory: `Downloads/{serverId}/`
     public func serverDirectory(serverId: String) -> URL {
-        downloadsDirectory.appending(path: serverId, directoryHint: .isDirectory)
+        downloadsDirectory.appending(
+            path: Self.safeComponent(serverId), directoryHint: .isDirectory)
     }
 
     /// Determines the file extension from an HTTP response.
@@ -76,19 +116,30 @@ public struct DownloadStorage: Sendable {
             mediaType: item.mediaType,
             itemId: item.itemId
         )
-        return dir.appending(path: "media.\(ext)")
+        return dir.appending(path: "media.\(Self.safeComponent(ext))")
     }
 
     /// Returns the relative path (from `downloadsDirectory`) for a given download item's media file.
     ///
     /// This is the value persisted in `DownloadItem.localFilePath`.
     public func relativeFilePath(for item: DownloadItem, fileExtension ext: String) -> String {
-        return "\(item.serverId)/\(item.mediaType.rawValue)/\(item.itemId.rawValue)/media.\(ext)"
+        return "\(Self.safeComponent(item.serverId))/\(Self.safeComponent(item.mediaType.rawValue))/\(Self.safeComponent(item.itemId.rawValue))/media.\(Self.safeComponent(ext))"
     }
 
     /// Resolves a relative local file path back to an absolute URL.
+    ///
+    /// Returns a path inside the downloads tree or nothing: `localFilePath` is
+    /// persisted, so a row written before ``safeComponent(_:)`` existed may still
+    /// carry a traversal.
     public func resolveAbsoluteURL(relativePath: String) -> URL {
-        downloadsDirectory.appending(path: relativePath)
+        let url = downloadsDirectory.appending(path: relativePath)
+        guard isContained(url) else {
+            logger.error("Refusing to resolve a path outside Downloads: \(relativePath)")
+            // A path that cannot be resolved safely must not fall back to the
+            // downloads root — callers read and delete through this.
+            return downloadsDirectory.appending(path: Self.safeComponent(relativePath))
+        }
+        return url
     }
 
     // MARK: - Directory Operations
@@ -190,14 +241,14 @@ public struct DownloadStorage: Sendable {
     public func relativePrimaryImagePath(serverId: String, mediaType: MediaType, itemId: ItemID)
         -> String
     {
-        "\(serverId)/\(mediaType.rawValue)/\(itemId.rawValue)/primary.jpg"
+        "\(Self.safeComponent(serverId))/\(Self.safeComponent(mediaType.rawValue))/\(Self.safeComponent(itemId.rawValue))/primary.jpg"
     }
 
     /// Returns the relative path (from `downloadsDirectory`) for a backdrop image.
     public func relativeBackdropImagePath(serverId: String, mediaType: MediaType, itemId: ItemID)
         -> String
     {
-        "\(serverId)/\(mediaType.rawValue)/\(itemId.rawValue)/backdrop.jpg"
+        "\(Self.safeComponent(serverId))/\(Self.safeComponent(mediaType.rawValue))/\(Self.safeComponent(itemId.rawValue))/backdrop.jpg"
     }
 
     /// Returns the relative path (from `downloadsDirectory`) for a subtitle file.
@@ -210,7 +261,7 @@ public struct DownloadStorage: Sendable {
         format: String = "vtt"
     ) -> String {
         let lang = language ?? "und"
-        return "\(serverId)/\(mediaType.rawValue)/\(itemId.rawValue)/sub_\(index)_\(lang).\(format)"
+        return "\(Self.safeComponent(serverId))/\(Self.safeComponent(mediaType.rawValue))/\(Self.safeComponent(itemId.rawValue))/sub_\(index)_\(Self.safeComponent(lang)).\(Self.safeComponent(format))"
     }
 
     /// Resolve a local image URL for offline display.
@@ -292,6 +343,11 @@ public struct DownloadStorage: Sendable {
     public func deleteFiles(for item: DownloadItem) throws {
         let dir = itemDirectory(
             serverId: item.serverId, mediaType: item.mediaType, itemId: item.itemId)
+        // removeItem is recursive; never let it run outside the downloads tree.
+        guard isContained(dir) else {
+            logger.error("Refusing to delete outside Downloads: \(dir.path)")
+            return
+        }
         let fm = FileManager.default
         if fm.fileExists(atPath: dir.path) {
             try fm.removeItem(at: dir)
@@ -321,8 +377,25 @@ public struct DownloadStorage: Sendable {
     }
 
     /// Calculate total disk usage across all downloads.
+    ///
+    /// This is the authoritative figure for "space used by downloads": it counts
+    /// media files, artwork, subtitles, and any orphaned staging files.
     public func totalDiskUsage() throws -> Int64 {
         return try directorySize(at: downloadsDirectory)
+    }
+
+    /// Calculate disk usage for a single item's directory.
+    ///
+    /// This includes everything stored alongside the media file — artwork and
+    /// subtitle sidecars — so per-item sizes add up to the server total.
+    public func diskUsage(serverId: String, mediaType: MediaType, itemId: ItemID) throws -> Int64 {
+        let dir = itemDirectory(serverId: serverId, mediaType: mediaType, itemId: itemId)
+        return try directorySize(at: dir)
+    }
+
+    /// Calculate disk usage for a single download item.
+    public func diskUsage(for item: DownloadItem) throws -> Int64 {
+        try diskUsage(serverId: item.serverId, mediaType: item.mediaType, itemId: item.itemId)
     }
 
     /// Check available disk space on the volume containing the downloads directory.
@@ -383,9 +456,9 @@ public struct DownloadStorage: Sendable {
     ) throws {
         let dir =
             downloadsDirectory
-            .appending(path: serverId, directoryHint: .isDirectory)
-            .appending(path: mediaType, directoryHint: .isDirectory)
-            .appending(path: itemId, directoryHint: .isDirectory)
+            .appending(path: Self.safeComponent(serverId), directoryHint: .isDirectory)
+            .appending(path: Self.safeComponent(mediaType), directoryHint: .isDirectory)
+            .appending(path: Self.safeComponent(itemId), directoryHint: .isDirectory)
         let fm = FileManager.default
         if fm.fileExists(atPath: dir.path) {
             try fm.removeItem(at: dir)
@@ -397,6 +470,9 @@ public struct DownloadStorage: Sendable {
     // MARK: - Private Helpers
 
     /// Recursively calculate the total size of all files within a directory.
+    ///
+    /// Hidden entries are deliberately included so that orphaned files in
+    /// `.staging` are reported as the space they actually occupy.
     private func directorySize(at url: URL) throws -> Int64 {
         let fm = FileManager.default
         guard fm.fileExists(atPath: url.path) else { return 0 }
@@ -405,31 +481,44 @@ public struct DownloadStorage: Sendable {
         guard
             let enumerator = fm.enumerator(
                 at: url,
-                includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
-                options: [.skipsHiddenFiles]
+                includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
+                options: []
             )
         else {
             return 0
         }
 
         for case let fileURL as URL in enumerator {
-            let resourceValues = try fileURL.resourceValues(forKeys: [
-                .fileSizeKey, .isDirectoryKey,
-            ])
-            if resourceValues.isDirectory == false {
-                totalSize += Int64(resourceValues.fileSize ?? 0)
+            // A single unreadable entry must not discard the whole measurement,
+            // which would make the UI report 0 bytes used.
+            guard
+                let resourceValues = try? fileURL.resourceValues(forKeys: [
+                    .fileSizeKey, .isRegularFileKey,
+                ]),
+                resourceValues.isRegularFile == true
+            else {
+                continue
             }
+            totalSize += Int64(resourceValues.fileSize ?? 0)
         }
 
         return totalSize
     }
 
-    /// Remove empty parent directories walking up from `child` towards (but not including) `stop`.
+    /// Remove empty parent directories walking up from `child` towards (but not
+    /// including) `stop`.
+    ///
+    /// Both ends are standardised first. Comparing raw paths let a `..` survive
+    /// into the prefix test, which a traversed path satisfies while actually
+    /// resolving outside `stop` — and `deletingLastPathComponent()` on a path
+    /// ending in `..` returns the same string, so the loop could neither advance
+    /// nor terminate.
     private func cleanupEmptyAncestors(of child: URL, upTo stop: URL) {
         let fm = FileManager.default
-        var current = child.deletingLastPathComponent()
+        let stop = stop.standardizedFileURL
+        var current = child.standardizedFileURL.deletingLastPathComponent()
 
-        while current.path != stop.path && current.path.hasPrefix(stop.path) {
+        while current.path != stop.path && current.path.hasPrefix(stop.path + "/") {
             do {
                 let contents = try fm.contentsOfDirectory(atPath: current.path)
                 if contents.isEmpty {

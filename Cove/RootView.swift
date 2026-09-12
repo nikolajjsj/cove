@@ -91,6 +91,21 @@ struct RootView: View {
         .preferredColorScheme(appearanceMode.colorScheme)
         .task {
             await appState.restoreSession()
+
+            // The database backs downloads, offline metadata, and saved servers.
+            // If it failed to open, say so rather than letting those features
+            // look simply broken.
+            if let databaseError = appState.databaseError {
+                ToastManager.shared.show(
+                    "Offline storage unavailable — downloads are disabled",
+                    icon: "exclamationmark.triangle",
+                    style: .error
+                )
+                appState.error = .unknown(
+                    underlying: NSError(
+                        domain: "Cove.Database", code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: databaseError]))
+            }
         }
         .toastOverlay()
     }

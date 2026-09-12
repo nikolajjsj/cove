@@ -34,6 +34,8 @@ final class AuthManager {
         guard let repo = serverRepository else { return false }
 
         do {
+            // fetchAll is ordered oldest-first, so the last row is the most
+            // recently added connection — the one the user signed in to last.
             let servers = try await repo.fetchAll()
             if let last = servers.last {
                 if provider.restore(connection: last) {

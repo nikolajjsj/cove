@@ -34,6 +34,12 @@ final class AppState {
     var isOffline = false
     var error: AppError?
 
+    /// Set when the on-device database could not be opened at launch.
+    ///
+    /// Downloads, offline metadata, and saved servers all depend on it, so this
+    /// is surfaced rather than leaving those features silently inert.
+    var databaseError: String?
+
     // MARK: - Navigation
 
     /// The currently selected tab in the app shell.
@@ -269,7 +275,9 @@ final class AppState {
 
         audioPlayer.onTrackListened = { track in
             let itemId = ItemID(track.id.rawValue)
-            try? await userDataStore?.markPlayed(itemId: itemId)
+            // Pass the track's server data so marking it played doesn't wipe its
+            // favourite state out of the override.
+            try? await userDataStore?.markPlayed(itemId: itemId, current: track.userData)
         }
     }
 
