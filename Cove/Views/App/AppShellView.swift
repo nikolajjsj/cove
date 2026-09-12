@@ -87,20 +87,29 @@ private struct SidebarShell: View {
     @Environment(DownloadCoordinator.self) private var downloadCoordinator
     @Binding var showFullPlayer: Bool
 
+    /// iOS only offers `List` an *optional* selection binding, while the shell
+    /// always has a tab selected. Bridge the two rather than dropping the list
+    /// on iOS, and ignore a deselection instead of having no tab at all.
+    private var tabSelection: Binding<AppTab?> {
+        Binding(
+            get: { appState.selectedTab },
+            set: { if let tab = $0 { appState.selectedTab = tab } }
+        )
+    }
+
     var body: some View {
         @Bindable var appState = appState
 
         NavigationSplitView {
-            #if !os(iOS)
-                List(
-                    AppTab.availableTabs(for: appState, layout: .regular),
-                    id: \.self,
-                    selection: $appState.selectedTab
-                ) { tab in
+            // Not gated on the platform: this shell is chosen by size class, so
+            // it runs on iPad as well as Mac. Excluding iOS here left iPad with
+            // a sidebar column that rendered nothing at all.
+            List(selection: tabSelection) {
+                ForEach(AppTab.availableTabs(for: appState, layout: .regular), id: \.self) { tab in
                     Label(tab.title, systemImage: tab.icon)
                 }
-                .navigationTitle("Cove")
-            #endif
+            }
+            .navigationTitle("Cove")
         } detail: {
             NavigationStack(
                 path: navigationPathBinding(for: appState.selectedTab, appState: appState)
