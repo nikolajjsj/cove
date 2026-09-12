@@ -100,6 +100,13 @@ If SwiftData is configured to use CloudKit:
   curl -sL https://api.jellyfin.org/openapi/jellyfin-openapi-stable.json -o /tmp/jf.json && python3 -c "import json;s=json.load(open('/tmp/jf.json'));print(s['info']['version']);op=s['paths']['/Items']['get'];print(op.get('deprecated',False));print([q['name'] for q in op['parameters'] if q['in']=='query'])"
   ```
 
+- **Never build a path or a URL directly from server-supplied data.** The media server chooses item ids, `TranscodingUrl`, trailer URLs, and subtitle language tags. Two Foundation APIs make this dangerous in ways that read as safe:
+
+  - `URL.appending(path:)` is a *path* append, not a component append. It does not escape `/` and does not collapse `..`, and `FileManager` resolves both at syscall time. Anything server-supplied that becomes a path segment must go through `DownloadStorage.safeComponent(_:)` first — including the string-interpolated `relative*Path` helpers, which are persisted and must agree with the URL builders. Guard destructive or writing operations with `DownloadStorage.isContained(_:)`.
+  - `URL(string:relativeTo:)` performs RFC 3986 resolution, which **discards the base entirely** when the reference carries its own scheme, and replaces the authority for a protocol-relative `//host`. Never resolve a server-supplied URL string against `baseURL`; take only its `path` and `query` via `URLComponents` and keep the scheme, host, and port from `baseURL`, as `hlsStreamURL` does.
+
+  The same mistake appeared independently in three places, so treat it as a pattern this codebase attracts rather than a one-off. Regression tests live in `DownloadStoragePathTraversalTests` and the `hlsStreamURL` tests in `JellyfinAPITests`.
+
 ## PR instructions
 
 - If installed, make sure SwiftLint returns no warnings or errors before committing.
