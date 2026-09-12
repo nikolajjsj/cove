@@ -573,28 +573,30 @@ public final class JellyfinAPIClient: Sendable {
 
     /// Build an HLS transcode stream URL from a server-provided transcode path. Synchronous.
     ///
-    /// `transcodingUrl` is server-relative (`/videos/{id}/master.m3u8?…`) and already
-    /// carries every query parameter including the play session, so it is resolved
-    /// against `baseURL` rather than re-assembled from its components. Resolving
-    /// preserves any path prefix the server is hosted under — a Jellyfin behind a
-    /// reverse proxy at `https://example.com/jellyfin/` needs that prefix kept.
+    /// Only the **path and query** of `transcodingPath` are used; the scheme, host,
+    /// port, and any userinfo it carries are discarded and replaced with `baseURL`'s.
+    ///
+    /// That matters because `TranscodingUrl` is chosen by the server, and RFC 3986
+    /// reference resolution ignores the base entirely when the reference has a
+    /// scheme of its own — so resolving it directly would let a compromised server
+    /// (or a malicious plugin, or a rogue reverse proxy) point playback at any host
+    /// it liked, with the access token along for the ride in the query string, or
+    /// swap the scheme for `http://` and put that token on the wire in cleartext.
+    /// Pinning the authority also keeps the path prefix of a Jellyfin hosted at
+    /// `https://example.com/jellyfin/`.
     public func hlsStreamURL(transcodingPath: String) -> URL? {
-        guard !transcodingPath.isEmpty else { return nil }
+        guard !transcodingPath.isEmpty,
+            let sent = URLComponents(string: transcodingPath),
+            var resolved = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        else { return nil }
 
-        // `baseURL` may or may not end in a slash; without one the last path
-        // component would be dropped when resolving a relative reference.
-        let base =
-            baseURL.absoluteString.hasSuffix("/")
-            ? baseURL
-            : URL(string: baseURL.absoluteString + "/") ?? baseURL
+        let basePath = resolved.path.hasSuffix("/") ? String(resolved.path.dropLast()) : resolved.path
+        let sentPath = sent.path.hasPrefix("/") ? sent.path : "/" + sent.path
 
-        // Strip the leading slash so the path is resolved *under* the base path
-        // instead of replacing it.
-        let relative = transcodingPath.hasPrefix("/")
-            ? String(transcodingPath.dropFirst())
-            : transcodingPath
-
-        return URL(string: relative, relativeTo: base)?.absoluteURL
+        resolved.path = basePath + sentPath
+        resolved.query = sent.query
+        resolved.fragment = nil
+        return resolved.url
     }
 
     /// Build a subtitle stream URL. Synchronous.

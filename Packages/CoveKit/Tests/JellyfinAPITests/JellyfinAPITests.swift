@@ -145,6 +145,47 @@ final class JellyfinAPITests: XCTestCase {
             "https://example.com/jf/videos/abc/master.m3u8")
     }
 
+    /// `TranscodingUrl` is chosen by the server. RFC 3986 resolution discards the
+    /// base whenever the reference carries its own scheme, so resolving it directly
+    /// would let a compromised server redirect playback — and the access token in
+    /// the query — to a host of its choosing.
+    func testHLSStreamURLPinsHostAndSchemeToTheServer() throws {
+        let client = JellyfinAPIClient(baseURL: URL(string: "https://jellyfin.example.com/jf")!)
+
+        let hostile = [
+            "https://evil.com/x.m3u8?ApiKey=TOK",
+            "http://evil.com/x.m3u8",
+            "///evil.com/x.m3u8",
+            "//evil.com/x.m3u8",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "https://user:pw@evil.com/x",
+        ]
+
+        for payload in hostile {
+            let url = try XCTUnwrap(
+                client.hlsStreamURL(transcodingPath: payload), "\(payload) produced no URL")
+            XCTAssertEqual(url.scheme, "https", "\(payload) changed the scheme")
+            XCTAssertEqual(url.host, "jellyfin.example.com", "\(payload) changed the host")
+            XCTAssertNil(url.user, "\(payload) injected userinfo")
+            XCTAssertTrue(
+                url.path.hasPrefix("/jf/"), "\(payload) escaped the base path: \(url.path)")
+        }
+    }
+
+    /// The server legitimately puts the play session in the query, so it has to
+    /// survive having the authority replaced.
+    func testHLSStreamURLKeepsTheServerSuppliedQuery() throws {
+        let client = JellyfinAPIClient(baseURL: URL(string: "https://example.com")!)
+        let url = try XCTUnwrap(
+            client.hlsStreamURL(
+                transcodingPath: "/videos/abc/master.m3u8?PlaySessionId=xyz&ApiKey=TOK"))
+
+        XCTAssertEqual(
+            url.absoluteString,
+            "https://example.com/videos/abc/master.m3u8?PlaySessionId=xyz&ApiKey=TOK")
+    }
+
     func testHLSStreamURLRejectsEmptyPath() {
         let client = JellyfinAPIClient(baseURL: URL(string: "https://example.com")!)
         XCTAssertNil(client.hlsStreamURL(transcodingPath: ""))
