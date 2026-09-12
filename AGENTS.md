@@ -107,6 +107,18 @@ If SwiftData is configured to use CloudKit:
 
   The same mistake appeared independently in three places, so treat it as a pattern this codebase attracts rather than a one-off. Regression tests live in `DownloadStoragePathTraversalTests` and the `hlsStreamURL` tests in `JellyfinAPITests`.
 
+- **Testing the playback and download engines.** Both are covered by seams that already exist — `AudioPlayerBackend`/`NowPlayingProvider` for audio, `DownloadSession`/`DownloadTaskHandle` for transfers — plus `DatabaseManager()`'s in-memory initialiser and `DownloadStorage(rootDirectory:)`, so tests run the real code against real files and the real schema rather than mocks. Download rows need a `servers` row behind them; the foreign key is enforced.
+
+  `VideoPlaybackManager` is the deliberate exception: it drives a real `AVPlayer`, which is cheap to construct and needs no window or network so long as nothing has to decode. Do not extract a protocol for it — that would mean wrapping `AVPlayerItem`, `AVMediaSelectionGroup`, and `CMTime` for no test benefit.
+
+  Three traps, each of which has already produced a test that passed for the wrong reason:
+
+  - `NotificationCenter.notifications(named:)` only starts receiving once its task body has run, so a notification posted too soon after `init` is silently missed. Settle *before* posting, not just after.
+  - `Task.yield()` does not advance the clock. Anything waiting on real I/O — a file read, a URL load — needs an actual sleep or a polling loop with a deadline.
+  - `AVPlayer` genuinely fails the dummy stream URLs these tests use, asynchronously and at unpredictable times. Never assert on a playback *error count*; assert on stop reports or specific item ids instead.
+
+  When a test covers a bug fix, verify it fails with the fix reverted. Two of the tests here passed either way until that check was run.
+
 ## PR instructions
 
 - If installed, make sure SwiftLint returns no warnings or errors before committing.
