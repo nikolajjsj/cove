@@ -85,6 +85,9 @@ final class DownloadCoordinator {
     // MARK: - Single Item Download
 
     func downloadItem(_ item: MediaItem, parentId: ItemID? = nil) async throws {
+        // First download is the first moment a completion alert means anything.
+        await DownloadNotificationPermission.requestIfNeeded()
+
         guard let downloadManager, let authManager,
             let connection = authManager.activeConnection,
             let metadataRepo = offlineMetadataRepository
@@ -136,6 +139,9 @@ final class DownloadCoordinator {
         season: Season,
         episodes: [Episode]
     ) async throws {
+        // First download is the first moment a completion alert means anything.
+        await DownloadNotificationPermission.requestIfNeeded()
+
         guard let downloadManager, let authManager,
             let connection = authManager.activeConnection,
             let metadataRepo = offlineMetadataRepository
@@ -209,6 +215,9 @@ final class DownloadCoordinator {
         album: Album,
         tracks: [Track]
     ) async throws {
+        // First download is the first moment a completion alert means anything.
+        await DownloadNotificationPermission.requestIfNeeded()
+
         guard let downloadManager, let authManager,
             let connection = authManager.activeConnection,
             let metadataRepo = offlineMetadataRepository
@@ -265,6 +274,9 @@ final class DownloadCoordinator {
         playlist: Playlist,
         tracks: [Track]
     ) async throws {
+        // First download is the first moment a completion alert means anything.
+        await DownloadNotificationPermission.requestIfNeeded()
+
         guard let downloadManager, let authManager,
             let connection = authManager.activeConnection,
             let metadataRepo = offlineMetadataRepository

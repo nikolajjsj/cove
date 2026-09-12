@@ -6,7 +6,6 @@ import Models
 import Persistence
 import os
 import SwiftUI
-import UserNotifications
 
 @main
 struct CoveApp: App {
@@ -115,9 +114,6 @@ struct CoveApp: App {
                 .environment(authManager)
                 .environment(downloadCoordinator)
                 .environment(userDataStore)
-                .task {
-                    await requestNotificationPermissions()
-                }
                 .onOpenURL { url in
                     handleDeepLink(url)
                 }
@@ -163,10 +159,4 @@ struct CoveApp: App {
         }
     }
 
-    private func requestNotificationPermissions() async {
-        let center = UNUserNotificationCenter.current()
-        let settings = await center.notificationSettings()
-        guard settings.authorizationStatus == .notDetermined else { return }
-        _ = try? await center.requestAuthorization(options: [.alert, .sound])
-    }
 }
