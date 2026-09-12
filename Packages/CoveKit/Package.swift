@@ -142,7 +142,7 @@ let package = Package(
         ),
         .testTarget(
             name: "DownloadManagerTests",
-            dependencies: ["DownloadManager"],
+            dependencies: ["DownloadManager", "Persistence"],
             path: "Tests/DownloadManagerTests"
         ),
         .testTarget(

@@ -68,11 +68,12 @@ public final class DownloadManagerService: @unchecked Sendable {
 
     // MARK: - URLSession & Delegate
 
-    /// The background URL session. Created in `init` to wire up the delegate.
-    private let urlSession: URLSession
+    /// The transfer session. A background `URLSession` in the app; a stub in tests.
+    private let session: any DownloadSession
 
     /// The delegate object (must be kept alive for the lifetime of the session).
-    private let sessionDelegate: SessionDelegate
+    /// `nil` when a session was injected — tests drive the handlers directly.
+    private let sessionDelegate: SessionDelegate?
 
     // MARK: - Protected Mutable State
 
@@ -110,12 +111,16 @@ public final class DownloadManagerService: @unchecked Sendable {
     ///   - reportRepository: Repository for offline playback reports (retained
     ///     for future integration but not directly used by the download engine).
     ///   - storage: File-system helper. Defaults to `.shared`.
+    ///   - session: The transfer session. Defaults to a background `URLSession`
+    ///     wired to this service's delegate. Tests inject a stub and call the
+    ///     `handle…` methods directly to simulate delegate callbacks.
     public init(
         downloadRepository: DownloadRepository,
         reportRepository: OfflinePlaybackReportRepository,
         storage: DownloadStorage = .shared,
         groupRepository: DownloadGroupRepository? = nil,
-        metadataRepository: OfflineMetadataRepository? = nil
+        metadataRepository: OfflineMetadataRepository? = nil,
+        session: (any DownloadSession)? = nil
     ) {
         self.downloadRepository = downloadRepository
         self.reportRepository = reportRepository
@@ -123,6 +128,12 @@ public final class DownloadManagerService: @unchecked Sendable {
         self.groupRepository = groupRepository
         self.metadataRepository = metadataRepository
         self.state = OSAllocatedUnfairLock(initialState: State())
+
+        if let session {
+            self.session = session
+            self.sessionDelegate = nil
+            return
+        }
 
         // Create the delegate first — we need it for the session.
         let delegate = SessionDelegate()
@@ -140,7 +151,7 @@ public final class DownloadManagerService: @unchecked Sendable {
         delegateQueue.qualityOfService = .utility
         delegateQueue.name = "\(AppConstants.bundleIdentifier).DownloadManagerDelegateQueue"
 
-        self.urlSession = URLSession(
+        self.session = URLSession(
             configuration: config, delegate: delegate, delegateQueue: delegateQueue)
 
         // Wire the delegate back to this service.
@@ -414,10 +425,8 @@ public final class DownloadManagerService: @unchecked Sendable {
             $0.taskToDownloadID.first(where: { $0.value == id })?.key
         }
         if let taskId = taskIdentifier {
-            let tasks = await urlSession.allTasks
-            if let task = tasks.first(where: { $0.taskIdentifier == taskId })
-                as? URLSessionDownloadTask
-            {
+            let tasks = await session.activeTasks()
+            if let task = tasks.first(where: { $0.taskIdentifier == taskId }) {
                 // Use a continuation to bridge the callback-based API
                 let resumeData: Data? = await withCheckedContinuation { continuation in
                     task.cancel(byProducingResumeData: { data in
@@ -463,7 +472,7 @@ public final class DownloadManagerService: @unchecked Sendable {
         // Cancel the URLSession task if active
         let taskId = state.withLock { $0.taskToDownloadID.first(where: { $0.value == id })?.key }
         if let taskId {
-            let tasks = await urlSession.allTasks
+            let tasks = await session.activeTasks()
             tasks.first(where: { $0.taskIdentifier == taskId })?.cancel()
             state.withLock { state in
                 state.taskToDownloadID.removeValue(forKey: taskId)
@@ -519,7 +528,7 @@ public final class DownloadManagerService: @unchecked Sendable {
         // Cancel any active task
         let taskId = state.withLock { $0.taskToDownloadID.first(where: { $0.value == id })?.key }
         if let taskId {
-            let tasks = await urlSession.allTasks
+            let tasks = await session.activeTasks()
             tasks.first(where: { $0.taskIdentifier == taskId })?.cancel()
             state.withLock { state in
                 state.taskToDownloadID.removeValue(forKey: taskId)
@@ -610,7 +619,7 @@ public final class DownloadManagerService: @unchecked Sendable {
         let items = try await downloadRepository.fetchAll(serverId: serverId)
         let itemIDs = Set(items.map(\.id))
 
-        let tasks = await urlSession.allTasks
+        let tasks = await session.activeTasks()
         state.withLock { state in
             var cancelledCount = 0
             for (taskId, downloadId) in state.taskToDownloadID where itemIDs.contains(downloadId) {
@@ -758,10 +767,10 @@ public final class DownloadManagerService: @unchecked Sendable {
         await scrubStoredCredentials()
 
         // 1. Get all tasks the background session still knows about.
-        let existingTasks = await urlSession.allTasks
+        let existingTasks = await session.activeTasks()
         var runningTaskDescriptions: [Int: String] = [:]  // taskIdentifier → original URL string
         for task in existingTasks {
-            if let url = task.originalRequest?.url?.absoluteString {
+            if let url = task.originalURL?.absoluteString {
                 runningTaskDescriptions[task.taskIdentifier] = url
             }
         }
@@ -966,15 +975,15 @@ public final class DownloadManagerService: @unchecked Sendable {
         // Check for resume data
         let resumeData = state.withLock { $0.resumeDataCache.removeValue(forKey: item.id) }
 
-        let task: URLSessionDownloadTask
+        let task: any DownloadTaskHandle
         if let resumeData {
-            task = urlSession.downloadTask(withResumeData: resumeData)
+            task = session.makeDownloadTask(resumeData: resumeData)
             logger.debug(
                 "Resuming download \(item.id) with \(resumeData.count) bytes of resume data")
         } else {
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
-            task = urlSession.downloadTask(with: request)
+            task = session.makeDownloadTask(request: request)
         }
 
         task.taskDescription = item.id  // belt-and-suspenders: store ID on the task too

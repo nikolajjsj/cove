@@ -21,9 +21,22 @@ public struct DownloadStorage: Sendable {
 
     // MARK: - Base Directory
 
-    /// Base downloads directory: `Library/Application Support/Downloads/`
+    /// Where the `Downloads` tree is rooted. `nil` means Application Support.
+    ///
+    /// Tests point this at a temporary directory so they can exercise the real
+    /// staging, move, and delete logic without touching the app's own storage.
+    private let rootDirectory: URL?
+
+    /// Creates a storage helper rooted at Application Support.
+    public init() { self.rootDirectory = nil }
+
+    /// Creates a storage helper rooted at an arbitrary directory, for tests.
+    public init(rootDirectory: URL) { self.rootDirectory = rootDirectory }
+
+    /// Base downloads directory: `<root>/Downloads/`
     public var downloadsDirectory: URL {
-        URL.applicationSupportDirectory.appending(path: "Downloads", directoryHint: .isDirectory)
+        (rootDirectory ?? URL.applicationSupportDirectory)
+            .appending(path: "Downloads", directoryHint: .isDirectory)
     }
 
     // MARK: - Path Safety
