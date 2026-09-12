@@ -146,3 +146,98 @@ final class DownloadURLCredentialTests: XCTestCase {
         XCTAssertTrue(stripped.contains("static=false"))
     }
 }
+
+/// Regression tests for CWE-22: a media server chooses `BaseItemDto.Id`, and it
+/// used to reach the file system unfiltered.
+final class DownloadStoragePathTraversalTests: XCTestCase {
+
+    private let storage = DownloadStorage.shared
+
+    // MARK: - Component sanitising
+
+    func testTraversalSequencesCannotSurviveAsAComponent() {
+        for hostile in ["..", ".", "../..", "../../../com.nikolajjsj.cove", "a/b", "a\\b", "\0"] {
+            let safe = DownloadStorage.safeComponent(hostile)
+            XCTAssertFalse(safe.contains("/"), "\(hostile) kept a separator")
+            XCTAssertFalse(safe.contains("\\"), "\(hostile) kept a separator")
+            XCTAssertNotEqual(safe, "..")
+            XCTAssertNotEqual(safe, ".")
+        }
+    }
+
+    /// Real Jellyfin ids must be untouched, or every existing download relocates.
+    func testLegitimateGUIDsPassThroughUnchanged() {
+        for id in ["a1b2c3d4e5f60718293a4b5c6d7e8f90", "A1B2C3D4-E5F6-0718-293A-4B5C6D7E8F90"] {
+            XCTAssertEqual(DownloadStorage.safeComponent(id), id)
+        }
+    }
+
+    func testSanitisingIsDeterministic() {
+        XCTAssertEqual(
+            DownloadStorage.safeComponent("../../evil"),
+            DownloadStorage.safeComponent("../../evil"))
+    }
+
+    // MARK: - The sinks
+
+    /// The original attack: an id three levels of `..` up reaches the directory
+    /// holding cove.db, which `deleteFiles` would then recursively remove.
+    func testHostileItemIDCannotEscapeTheDownloadsTree() {
+        let dir = storage.itemDirectory(
+            serverId: UUID().uuidString,
+            mediaType: .movie,
+            itemId: ItemID("../../../com.nikolajjsj.cove"))
+
+        XCTAssertTrue(storage.isContained(dir), "escaped to \(dir.standardizedFileURL.path)")
+        XCTAssertFalse(dir.path.contains(".."))
+    }
+
+    func testHostileServerIDCannotEscapeTheDownloadsTree() {
+        XCTAssertTrue(storage.isContained(storage.serverDirectory(serverId: "../../../etc")))
+    }
+
+    func testHostileRelativePathCannotEscapeOnResolve() {
+        let url = storage.resolveAbsoluteURL(relativePath: "../../../com.nikolajjsj.cove/cove.db")
+        XCTAssertTrue(url.standardizedFileURL.path.hasPrefix(
+            storage.downloadsDirectory.standardizedFileURL.path))
+    }
+
+    /// The persisted path and the URL used to write must agree, or completed
+    /// downloads become unreadable.
+    func testRelativePathMatchesTheDirectoryActuallyUsed() {
+        let item = Self.makeItem(itemId: "../../../evil")
+        let relative = storage.relativeFilePath(for: item, fileExtension: "mp4")
+        XCTAssertEqual(
+            storage.resolveAbsoluteURL(relativePath: relative).standardizedFileURL.path,
+            storage.mediaFileURL(for: item, fileExtension: "mp4").standardizedFileURL.path)
+    }
+
+    func testContainmentRejectsASiblingWithTheSamePrefix() {
+        let sibling = storage.downloadsDirectory
+            .deletingLastPathComponent()
+            .appending(path: "Downloads-evil")
+        XCTAssertFalse(storage.isContained(sibling))
+    }
+
+    private static func makeItem(itemId: String) -> DownloadItem {
+        DownloadItem(
+            id: UUID().uuidString,
+            itemId: ItemID(itemId),
+            serverId: UUID().uuidString,
+            title: "Title",
+            mediaType: .movie,
+            state: .completed,
+            progress: 1,
+            totalBytes: 1,
+            downloadedBytes: 1,
+            localFilePath: nil,
+            remoteURL: "https://example.com/stream",
+            parentId: nil,
+            artworkURL: nil,
+            errorMessage: nil,
+            createdAt: Date(),
+            completedAt: Date()
+        )
+    }
+}
+
