@@ -10,6 +10,17 @@
 # If a screenshot comes back with an "Open in Cove?" system alert on it, some
 # earlier `simctl openurl` left it behind: it survives app reinstalls, so
 # shut the device down and boot it again before re-running.
+# Two of these come back as empty states, and that is the tool's limit rather
+# than a bug: entering a search query and starting a download both need a tap,
+# and ScreenshotDriver can only sign in, pick a tab, or push an item. If you
+# want Search-with-results or Downloads-in-progress for a listing, either drive
+# those two by hand or teach the driver a -screenshotQuery / -screenshotDownload
+# argument. Downloads is a headline feature in the App Store copy, so an empty
+# shot of it undersells the app.
+#
+# The demo server also has no cover art for much of its music library, so the
+# Music tab captures with grey placeholders. Shoot that one elsewhere.
+
 set -euo pipefail
 
 OUT="${1:?usage: capture-screenshots.sh <output-dir> [device-udid]}"
