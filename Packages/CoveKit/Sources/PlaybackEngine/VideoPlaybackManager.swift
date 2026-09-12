@@ -90,6 +90,13 @@ public final class VideoPlaybackManager {
     /// point for an episode that was in fact watched to the end.
     @ObservationIgnored private var hasReportedStop = false
 
+    /// Whether a failure has already been surfaced for ``currentItem``.
+    ///
+    /// A dying stream trips both paths: the item's status goes `.failed` *and*
+    /// `AVPlayerItemFailedToPlayToEndTime` is posted. Without this the user gets
+    /// the same error twice.
+    @ObservationIgnored private var hasReportedError = false
+
     /// Tracks our own remote-command targets so teardown removes exactly those,
     /// leaving the music player's lock-screen controls working.
     @ObservationIgnored private let commands = RemoteCommandRegistry()
@@ -162,6 +169,7 @@ public final class VideoPlaybackManager {
 
         currentItem = item
         hasReportedStop = false
+        hasReportedError = false
 
         // Parse subtitle tracks from stream info as initial metadata.
         // These will be replaced by AVPlayer-discovered tracks when the asset loads.
@@ -569,11 +577,16 @@ public final class VideoPlaybackManager {
                 self.logger.error(
                     "Player item failed to play to end: \(error.localizedDescription)")
                 self.isBuffering = false
-                if let currentItem = self.currentItem {
-                    self.onPlaybackError?(currentItem, error)
-                }
+                self.reportPlaybackError(error)
             }
         }
+    }
+
+    /// Surface a playback failure, at most once per loaded item.
+    private func reportPlaybackError(_ error: any Error) {
+        guard let item = currentItem, !hasReportedError else { return }
+        hasReportedError = true
+        onPlaybackError?(item, error)
     }
 
     // MARK: - Player Item Observation
@@ -619,9 +632,7 @@ public final class VideoPlaybackManager {
                         self.logger.error("Failed URL: \(url.absoluteString)")
                     }
                     self.isBuffering = false
-                    if let currentItem = self.currentItem {
-                        self.onPlaybackError?(currentItem, error)
-                    }
+                    self.reportPlaybackError(error)
                 default:
                     break
                 }
