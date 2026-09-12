@@ -113,6 +113,7 @@ struct LibraryGridView: View {
                 ) {
                     toggleLayout()
                 }
+                MediaFilterMenu(selection: filterSelection)
                 sortMenu
             }
         }
@@ -195,22 +196,25 @@ struct LibraryGridView: View {
 
     // MARK: - Main Content
 
+    /// Bundles the filter bindings for the menu and the active-filter row.
+    private var filterSelection: MediaFilterSelection {
+        MediaFilterSelection(
+            watched: $watchedFilter,
+            favoritesOnly: $favoriteOnly,
+            decade: $selectedDecade,
+            minRating: $minRating,
+            genres: $selectedGenres,
+            availableGenres: availableGenres,
+            includesVideoFilters: isVideoLibrary
+        )
+    }
+
     @ViewBuilder
     private var mainContent: some View {
         VStack(spacing: 0) {
-            // Chip bar is always visible regardless of phase so the user can
-            // always see which filters are active and toggle them off.
-            FilterChipBar(
-                watchedFilter: $watchedFilter,
-                favoriteOnly: $favoriteOnly,
-                selectedGenres: $selectedGenres,
-                selectedDecade: $selectedDecade,
-                minRating: $minRating,
-                isVideoLibrary: isVideoLibrary,
-                availableGenres: availableGenres
-            )
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            // Only the filters actually applied are shown, so an unfiltered
+            // library gives all of its vertical space to results.
+            ActiveFilterBar(selection: filterSelection)
 
             Divider()
 
@@ -576,79 +580,3 @@ struct LibraryGridView: View {
     }
 }
 
-// MARK: - Filter Chip Bar
-
-private struct FilterChipBar: View {
-    @Binding var watchedFilter: WatchedFilter
-    @Binding var favoriteOnly: Bool
-    @Binding var selectedGenres: Set<String>
-    @Binding var selectedDecade: Decade?
-    @Binding var minRating: Double?
-    let isVideoLibrary: Bool
-    let availableGenres: [String]
-
-    var body: some View {
-        FlowLayout(spacing: 8) {
-            WatchedFilterChip(selection: $watchedFilter)
-            FavoriteChip(isOn: $favoriteOnly)
-
-            if isVideoLibrary {
-                if !availableGenres.isEmpty {
-                    GenreChip(
-                        selectedGenres: $selectedGenres,
-                        availableGenres: availableGenres
-                    )
-                }
-                DecadeChip(selection: $selectedDecade)
-                RatingChip(minRating: $minRating)
-            }
-        }
-    }
-}
-
-private struct GenreChip: View {
-    @Binding var selectedGenres: Set<String>
-    let availableGenres: [String]
-
-    private var label: String {
-        switch selectedGenres.count {
-        case 0: "Genre"
-        case 1: selectedGenres.first ?? "Genre"
-        default: "\(selectedGenres.count) Genres"
-        }
-    }
-
-    var body: some View {
-        Menu {
-            if !selectedGenres.isEmpty {
-                Button(role: .destructive) {
-                    selectedGenres.removeAll()
-                } label: {
-                    Label("Clear Genres", systemImage: "xmark.circle")
-                }
-                Divider()
-            }
-            ForEach(availableGenres, id: \.self) { genre in
-                Button {
-                    if selectedGenres.contains(genre) {
-                        selectedGenres.remove(genre)
-                    } else {
-                        selectedGenres.insert(genre)
-                    }
-                } label: {
-                    if selectedGenres.contains(genre) {
-                        Label(genre, systemImage: "checkmark")
-                    } else {
-                        Text(genre)
-                    }
-                }
-            }
-        } label: {
-            Label(label, systemImage: "tag")
-                .font(.subheadline)
-        }
-        .buttonStyle(.bordered)
-        .tint(!selectedGenres.isEmpty ? .accentColor : .secondary)
-        .buttonBorderShape(.capsule)
-    }
-}

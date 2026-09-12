@@ -34,8 +34,19 @@ struct SearchView: View {
                 saveRecentSearches()
             }
         )
-        // Scope picker appears below the search bar while searching.
         .searchable(text: $searchText, prompt: "Movies, shows, music…")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                MediaFilterMenu(
+                    selection: MediaFilterSelection(
+                        watched: $watchedFilter,
+                        favoritesOnly: $favoriteOnly,
+                        decade: $selectedDecade,
+                        minRating: $minRating
+                    )
+                )
+            }
+        }
         .onAppear {
             loadRecentSearches()
         }
@@ -91,9 +102,19 @@ private struct SearchContentView: View {
     private var trimmedQuery: String { searchText.trimmingCharacters(in: .whitespaces) }
     private var isQueryLongEnough: Bool { trimmedQuery.count >= 2 }
 
-    private var hasActiveFilters: Bool {
-        watchedFilter != .all || favoriteOnly || selectedDecade != nil || minRating != nil
+    /// Bundles the filter bindings for the menu and the active-filter row.
+    ///
+    /// Search has no library context, so genre is unavailable here.
+    private var filterSelection: MediaFilterSelection {
+        MediaFilterSelection(
+            watched: $watchedFilter,
+            favoritesOnly: $favoriteOnly,
+            decade: $selectedDecade,
+            minRating: $minRating
+        )
     }
+
+    private var hasActiveFilters: Bool { filterSelection.isActive }
 
     private var searchTaskKey: SearchKey {
         SearchKey(
@@ -109,22 +130,16 @@ private struct SearchContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Filter chips slide in from the top when the search bar is focused.
-            if isSearching {
-                SearchFilterBar(
-                    watchedFilter: $watchedFilter,
-                    favoriteOnly: $favoriteOnly,
-                    selectedDecade: $selectedDecade,
-                    minRating: $minRating
-                )
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .transition(
-                    .asymmetric(
-                        insertion: .push(from: .top).combined(with: .opacity),
-                        removal: .push(from: .bottom).combined(with: .opacity)
+            // Applied filters slide in from the top; nothing is shown until the
+            // user has actually narrowed the search.
+            if isSearching && hasActiveFilters {
+                ActiveFilterBar(selection: filterSelection)
+                    .transition(
+                        .asymmetric(
+                            insertion: .push(from: .top).combined(with: .opacity),
+                            removal: .push(from: .bottom).combined(with: .opacity)
+                        )
                     )
-                )
 
                 Divider()
                     .transition(.opacity)
@@ -391,26 +406,6 @@ private struct SearchResultsScrollView: View {
                 )
             }
             .padding(.vertical)
-        }
-    }
-}
-
-// MARK: - Filter Bar
-
-/// Two rows of equal-width chips shown while the search bar is focused.
-/// Appears with a spring push-from-top transition.
-private struct SearchFilterBar: View {
-    @Binding var watchedFilter: WatchedFilter
-    @Binding var favoriteOnly: Bool
-    @Binding var selectedDecade: Decade?
-    @Binding var minRating: Double?
-
-    var body: some View {
-        FlowLayout(spacing: 8) {
-            WatchedFilterChip(selection: $watchedFilter)
-            FavoriteChip(isOn: $favoriteOnly)
-            DecadeChip(selection: $selectedDecade)
-            RatingChip(minRating: $minRating)
         }
     }
 }
