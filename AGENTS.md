@@ -94,6 +94,14 @@ If SwiftData is configured to use CloudKit:
 
   - **Never use a `/Users/{userId}/…` route.** They were deprecated in 10.9 and *deleted* in 12.0. The replacements take `userId` as a query parameter instead: `/Items`, `/Items/{itemId}`, `/UserItems/Resume`, `/UserViews`, `/Items/Suggestions`, `/UserFavoriteItems/{itemId}`, `/UserPlayedItems/{itemId}`, `/Items/{itemId}/SpecialFeatures`, `/Items/{itemId}/LocalTrailers`.
 
+  - **There is a live 12.0 server to check against.** The public demo instance runs the version this app targets, and signing in needs no password, so a claim about 12.0 behaviour can be tested rather than argued from the spec:
+
+    ```bash
+    curl -s https://demo.jellyfin.org/stable/System/Info/Public | python3 -m json.tool | grep -i version
+    ```
+
+    Username `demo`, empty password. `Tools/capture-screenshots.sh` points the app at it. Use it to confirm a route still exists before assuming the spec and the running server agree — reading the spec is necessary but it is not the same as having talked to a 12.0 server.
+
   Before adding or changing an endpoint, verify it against the real spec rather than from memory — it lists removals, deprecations, and the exact parameter names and casing:
 
   ```bash
