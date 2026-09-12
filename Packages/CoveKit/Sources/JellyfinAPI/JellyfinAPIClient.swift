@@ -594,7 +594,12 @@ public final class JellyfinAPIClient: Sendable {
         let sentPath = sent.path.hasPrefix("/") ? sent.path : "/" + sent.path
 
         resolved.path = basePath + sentPath
-        resolved.query = sent.query
+var queryItems = sent.queryItems ?? []
+        queryItems.removeAll { $0.name == "api_key" || $0.name == "ApiKey" }
+        if let accessToken {
+            queryItems.append(JellyfinAuthHeader.apiKeyQueryItem(token: accessToken))
+        }
+        resolved.queryItems = queryItems.isEmpty ? nil : queryItems
         resolved.fragment = nil
         return resolved.url
     }
