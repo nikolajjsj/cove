@@ -123,6 +123,18 @@ If SwiftData is configured to use CloudKit:
 
 - **Never trigger a system permission prompt at launch.** Notifications, and anything else with an OS alert, are requested at the moment the feature is first used — see `DownloadNotificationPermission`, asked at the first download rather than in `CoveApp.init`. A prompt during onboarding asks the user to approve something they have no context for, and a denial there is effectively permanent.
 
+- **The app icon is generated, not exported.** Change it by editing `Tools/GenerateAppIcon.swift` and re-running it, never by editing the PNGs in `AppIcon.appiconset` — the light, dark, tinted, and macOS images all come from one set of parameters and will drift apart if touched individually. The script writes images only; `Contents.json` is hand-maintained, so adding a size means adding both an entry there and an output in the script's emit loop. Re-running with no source change reproduces every installed PNG byte-for-byte, which is the check that the two are still in sync (the script also writes `preview-*.png` for eyeballing, which are intentionally not installed — compare only `AppIcon-*`):
+
+  ```bash
+  mkdir -p /tmp/iconcheck && swift Tools/GenerateAppIcon.swift /tmp/iconcheck && for f in /tmp/iconcheck/AppIcon-*.png; do cmp -s "$f" "Cove/Assets.xcassets/AppIcon.appiconset/$(basename "$f")" || echo "DIFF $(basename "$f")"; done; echo done
+  ```
+
+  Verify a change actually reached the bundle rather than trusting a silent build — `actool` does not warn about a variant it never received:
+
+  ```bash
+  xcrun assetutil --info <DerivedData>/Build/Products/Debug-iphonesimulator/Cove.app/Assets.car | grep -i appicon
+  ```
+
 ## PR instructions
 
 - If installed, make sure SwiftLint returns no warnings or errors before committing.
