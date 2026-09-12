@@ -139,6 +139,8 @@ If SwiftData is configured to use CloudKit:
   xcrun assetutil --info <DerivedData>/Build/Products/Debug-iphonesimulator/Cove.app/Assets.car | grep -i AppIcon
   ```
 
+- **`Cove/README.md` states intent, not fact.** It is the design pitch — it lists tvOS and watchOS in its platform table, promises gapless playback and a server-agnostic backend for Plex and Navidrome, and calls the whole thing early development. Some of that is built and some is aspiration, and the file does not distinguish. Never source a feature claim from it: for anything user-facing — App Store copy, release notes, a capability list — verify against the code that would implement it (the Settings screens, `DownloadCoordinator`, `VideoPlaybackManager`, `CoveWidget`) and against the target's actual `SUPPORTED_PLATFORMS` and `TARGETED_DEVICE_FAMILY` in the pbxproj. Claiming a feature the binary does not have is an App Store rejection, not a typo.
+
 ## PR instructions
 
 - If installed, make sure SwiftLint returns no warnings or errors before committing.
