@@ -883,7 +883,7 @@ public final class VideoPlaybackManager {
         let ownerID =
             infoCenter.nowPlayingInfo?[MPNowPlayingInfoPropertyExternalContentIdentifier]
             as? String
-        if ownerID == nil || ownerID == nowPlayingOwnerID {
+if ownerID == nowPlayingOwnerID {
             infoCenter.nowPlayingInfo = nil
         }
         nowPlayingArtworkItemId = nil
