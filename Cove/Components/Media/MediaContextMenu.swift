@@ -8,26 +8,15 @@ import SwiftUI
 /// Automatically shows the appropriate actions based on `item.mediaType`:
 /// - **Movie/Episode**: Play, Mark Watched, Navigate to Series, Favorite
 /// - **Series**: Mark Watched, Favorite
-/// - **Album**: Play, Shuffle, Queue, Radio, Add to Playlist, Favorite
-/// - **Artist**: Radio, Favorite
-/// - **Track**: Queue, Radio, Add to Playlist, Navigate to Album/Artist, Favorite
 /// - **Collection** and others: Favorite
 ///
 /// Usage:
 /// ```swift
 /// LibraryItemCard(item: item)
 ///     .mediaContextMenu(item: item)
-///
-/// // For Track models (preserves artistId for "Go to Artist"):
-/// SongRow(track: track)
-///     .mediaContextMenu(track: track)
 /// ```
 struct MediaContextMenuModifier: ViewModifier {
     let item: MediaItem
-
-    /// Optional artist ID, only available when constructed from a `Track` model.
-    /// Enables the "Go to Artist" action for songs.
-    let artistId: ArtistID?
 
     /// When non-nil, a "Mark Previous Episodes as Watched" button is shown in
     /// the episode context menu. The closure is called when the user taps it.
@@ -35,29 +24,13 @@ struct MediaContextMenuModifier: ViewModifier {
 
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
-    /// Track IDs to add to a playlist. Non-nil triggers the sheet.
-    /// Using a single optional instead of separate `Bool` + `[ItemID]` state
-    /// variables avoids a race condition where the sheet content closure
-    /// captures the stale initial `[]` before the array state update is applied.
-    @State private var playlistTrackIds: [ItemID]?
 
     private var coordinator: VideoPlayerCoordinator {
         appState.videoPlayerCoordinator
     }
 
     func body(content: Content) -> some View {
-        content
-            .contextMenu { menuContent }
-            .sheet(isPresented: showPlaylistPickerBinding) {
-                PlaylistPickerSheet(trackIds: playlistTrackIds ?? [])
-            }
-    }
-
-    private var showPlaylistPickerBinding: Binding<Bool> {
-        Binding(
-            get: { playlistTrackIds != nil },
-            set: { if !$0 { playlistTrackIds = nil } }
-        )
+        content.contextMenu { menuContent }
     }
 
     // MARK: - Menu Dispatch
@@ -71,13 +44,7 @@ struct MediaContextMenuModifier: ViewModifier {
             episodeMenu
         case .series:
             seriesMenu
-        case .album:
-            albumMenu
-        case .artist:
-            artistMenu
-        case .track:
-            trackMenu
-        case .collection, .season, .genre, .book, .podcast, .playlist, .studio:
+        default:
             defaultMenu
         }
     }
@@ -136,123 +103,6 @@ struct MediaContextMenuModifier: ViewModifier {
         FavoriteToggle(itemId: item.id, userData: item.userData)
     }
 
-    // MARK: - Album Menu
-
-    @ViewBuilder
-    private var albumMenu: some View {
-        Button {
-            Task { await playAlbum(shuffle: false) }
-        } label: {
-            Label("Play", systemImage: "play.fill")
-        }
-
-        Button {
-            Task { await playAlbum(shuffle: true) }
-        } label: {
-            Label("Shuffle", systemImage: "shuffle")
-        }
-
-        Divider()
-
-        Button {
-            Task { await queueAlbum(next: true) }
-        } label: {
-            Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
-        }
-
-        Button {
-            Task { await queueAlbum(next: false) }
-        } label: {
-            Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward")
-        }
-
-        Divider()
-
-        radioButton
-
-        Button {
-            Task { await prepareAlbumTrackIds() }
-        } label: {
-            Label("Add to Playlist…", systemImage: "text.badge.plus")
-        }
-
-        Divider()
-
-        FavoriteToggle(itemId: item.id, userData: item.userData)
-    }
-
-    // MARK: - Artist Menu
-
-    @ViewBuilder
-    private var artistMenu: some View {
-        radioButton
-        Divider()
-        FavoriteToggle(itemId: item.id, userData: item.userData)
-    }
-
-    // MARK: - Track Menu
-
-    @ViewBuilder
-    private var trackMenu: some View {
-        Button {
-            appState.audioPlayer.queue.addNext(item.asTrack)
-            ToastManager.shared.show(
-                "Playing Next", icon: "text.line.first.and.arrowtriangle.forward")
-        } label: {
-            Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
-        }
-
-        Button {
-            appState.audioPlayer.queue.addToEnd(item.asTrack)
-            ToastManager.shared.show(
-                "Added to Up Next", icon: "text.line.last.and.arrowtriangle.forward")
-        } label: {
-            Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward")
-        }
-
-        Divider()
-
-        radioButton
-
-        Button {
-            playlistTrackIds = [item.id]
-        } label: {
-            Label("Add to Playlist…", systemImage: "text.badge.plus")
-        }
-
-        Divider()
-
-        if let albumId = item.albumId {
-            Button {
-                let album = MediaItem(
-                    id: albumId,
-                    title: item.albumName ?? "",
-                    mediaType: .album
-                )
-                appState.navigate(to: .music, destination: album)
-            } label: {
-                Label("Go to Album", systemImage: "square.stack")
-            }
-        }
-
-        if let artistId {
-            Button {
-                let artist = MediaItem(
-                    id: ItemID(artistId.rawValue),
-                    title: item.artistName ?? "",
-                    mediaType: .artist
-                )
-                appState.navigate(to: .music, destination: artist)
-            } label: {
-                Label("Go to Artist", systemImage: "music.mic")
-            }
-        }
-
-        Divider()
-
-        FavoriteToggle(itemId: item.id, userData: item.userData)
-    }
-
     // MARK: - Default Menu
 
     @ViewBuilder
@@ -276,46 +126,6 @@ struct MediaContextMenuModifier: ViewModifier {
             )
         }
     }
-
-    /// Start an instant-mix radio station seeded from this item.
-    private var radioButton: some View {
-        Button {
-            Task { await appState.startRadio(for: item.id) }
-        } label: {
-            Label("Start Radio", systemImage: "dot.radiowaves.left.and.right")
-        }
-    }
-
-    // MARK: - Album Actions
-
-    private func playAlbum(shuffle: Bool) async {
-        do {
-            var tracks = try await authManager.provider.tracks(album: item.id)
-            guard !tracks.isEmpty else { return }
-            if shuffle { tracks.shuffle() }
-            appState.audioPlayer.play(tracks: tracks, startingAt: 0)
-        } catch {
-            // Silently fail — the UI doesn't need an error for background queue ops
-        }
-    }
-
-    private func queueAlbum(next: Bool) async {
-        do {
-            let tracks = try await authManager.provider.tracks(album: item.id)
-            appState.queueTracks(tracks, next: next)
-        } catch {
-            // Silently fail
-        }
-    }
-
-    private func prepareAlbumTrackIds() async {
-        do {
-            let tracks = try await authManager.provider.tracks(album: item.id)
-            playlistTrackIds = tracks.map(\.id)
-        } catch {
-            // Silently fail
-        }
-    }
 }
 
 // MARK: - View Extensions
@@ -323,28 +133,10 @@ struct MediaContextMenuModifier: ViewModifier {
 extension View {
     /// Attaches a context menu appropriate for the given media item's type.
     ///
-    /// The menu automatically adapts its actions based on `item.mediaType`:
-    /// movies/episodes get video playback actions, albums/tracks get audio
-    /// queue actions, and everything gets a favorite toggle.
+    /// Movies and episodes get playback actions, series get watched state, and
+    /// everything gets a favorite toggle.
     func mediaContextMenu(item: MediaItem) -> some View {
-        modifier(MediaContextMenuModifier(item: item, artistId: nil, onMarkPreviousWatched: nil))
-    }
-
-    /// Attaches a context menu for a `Track`, preserving the artist ID
-    /// so that "Go to Artist" navigation works.
-    func mediaContextMenu(track: Track) -> some View {
-        let item = MediaItem(
-            id: ItemID(track.id.rawValue),
-            title: track.title,
-            mediaType: .track,
-            userData: track.userData,
-            artistName: track.artistName,
-            albumName: track.albumName,
-            albumId: track.albumId.map { ItemID($0.rawValue) }
-        )
-        return modifier(
-            MediaContextMenuModifier(
-                item: item, artistId: track.artistId, onMarkPreviousWatched: nil))
+        modifier(MediaContextMenuModifier(item: item, onMarkPreviousWatched: nil))
     }
 
     /// Attaches a context menu for an `Episode`, using the provided series
@@ -368,7 +160,6 @@ extension View {
             parentIndexNumber: episode.seasonNumber
         )
         return modifier(
-            MediaContextMenuModifier(
-                item: item, artistId: nil, onMarkPreviousWatched: onMarkPreviousWatched))
+            MediaContextMenuModifier(item: item, onMarkPreviousWatched: onMarkPreviousWatched))
     }
 }

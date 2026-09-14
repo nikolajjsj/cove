@@ -209,24 +209,9 @@ private struct LibrarySection: View {
         )
     }
 
-    private var isMusic: Bool {
-        library.collectionType == .music
-    }
+    private var defaultCardWidth: CGFloat { 130 }
 
-    private var defaultCardWidth: CGFloat {
-        isMusic ? 140 : 130
-    }
+    private var defaultAspectRatio: CGFloat { 2.0 / 3.0 }
 
-    private var defaultAspectRatio: CGFloat {
-        isMusic ? 1.0 : 2.0 / 3.0
-    }
-
-    private func cardWidth(for item: MediaItem) -> CGFloat {
-        switch item.mediaType {
-        case .album, .artist, .track, .playlist:
-            140  // Square cards for music
-        default:
-            130  // Portrait cards for video
-        }
-    }
+    private func cardWidth(for item: MediaItem) -> CGFloat { 130 }
 }

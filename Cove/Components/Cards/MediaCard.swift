@@ -216,7 +216,7 @@ private struct MediaCardPosterView: View {
             ZStack(alignment: .bottom) {
                 MediaImage.poster(
                     url: imageURL,
-                    aspectRatio: item.mediaType.isMusic ? 1.0 : 2.0 / 3.0,
+                    aspectRatio: 2.0 / 3.0,
                     icon: item.mediaType.placeholderIcon,
                     cornerRadius: 8
                 )

@@ -4,15 +4,15 @@ All fields counted against App Store Connect limits.
 
 ---
 
-## Subtitle  (30 / 30)
+## Subtitle  (28 / 30)
 
-Your Jellyfin library, offline
+Your Jellyfin films, offline
 
 ---
 
-## Promotional text  (139 / 170)
+## Promotional text  (140 / 170)
 
-Your films, shows and music from your own Jellyfin server. Real downloads for the flight, real playback controls, and nothing phoning home.
+Your films and shows from your own Jellyfin server. Real downloads for the flight, a library that browses offline, and nothing phoning home.
 
 ---
 
@@ -20,11 +20,11 @@ Your films, shows and music from your own Jellyfin server. Real downloads for th
 
 **Option A — includes the Jellyfin name:**
 
-jellyfin,self hosted,media server,stream,offline,download,movies,series,music,player,nas,library
+jellyfin,self hosted,media server,stream,offline,download,movies,series,tv,player,nas,library
 
 **Option B — no third-party trademarks:**
 
-self hosted,media server,stream,offline,download,movies,series,music,player,nas,library,video,tv
+self hosted,media server,stream,offline,download,movies,series,player,nas,library,video,tv,shows
 
 Notes: no spaces after commas (each costs a character). No plurals Apple already
 stems. `plex` and `emby` deliberately omitted — competitor trademarks in the
@@ -34,23 +34,20 @@ characters are better spent elsewhere.
 
 ---
 
-## Description  (2037 / 4000)
+## Description  (1857 / 4000)
 
-Cove is a media player for your own Jellyfin server. Your films, your shows, your music, on your iPhone and iPad, with nothing in between.
+Cove is a player for your own Jellyfin server. Your films and your shows, on your iPhone and iPad, with nothing in between.
 
 No accounts. No subscriptions. No middleman. Cove talks to your server and to nobody else.
 
 YOUR WHOLE LIBRARY
-Films, series, episodes, artists, albums and tracks, all where you expect them. Pick up exactly where you stopped. Search everything at once, then narrow by decade, rating, watched state or favorites without leaving your results.
-
-MUSIC THAT BEHAVES LIKE A MUSIC APP
-A real queue, background playback, and lock screen and Control Center controls that work the way they should. Your headphones and your car already know what to do.
+Films, series and episodes, all where you expect them, and all of it mirrored on your device so browsing and search work with no connection at all. Pick up exactly where you stopped. Search everything at once, then narrow by decade, rating, watched state or favorites without leaving your results.
 
 VIDEO DONE PROPERLY
 Native playback with Picture in Picture and AirPlay. Switch audio tracks and subtitles mid-scene, and style subtitles so you can actually read them, including size, color and background. Skip intros and credits automatically, or set your own skip intervals and default playback speed.
 
 TAKE IT WITH YOU
-Download anything, whether that is a film, a whole season, an album or a playlist, and watch or listen with no connection at all. Downloads keep going in the background, can be held to Wi-Fi only, and bring their artwork and metadata along so your library still looks like your library offline. Anything you watched while offline syncs back when you reconnect.
+Download anything, whether that is a film or a whole season, and watch with no connection at all. Downloads keep going in the background, can be held to Wi-Fi only, and bring their artwork and metadata along so your library still looks like your library offline. Anything you watched while offline syncs back when you reconnect.
 
 TUNED TO YOUR CONNECTION
 Separate quality settings for Wi-Fi and cellular, so a 4K remux never quietly eats your data plan. See exactly what is using space, and clear it in one place.

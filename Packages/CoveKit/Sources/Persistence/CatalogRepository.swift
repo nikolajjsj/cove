@@ -824,7 +824,6 @@ struct CatalogQuery {
         case .runtime: primary = "i.runTimeTicks \(dir) NULLS LAST"
         case .playCount: primary = "COALESCE(u.playCount, 0) \(dir)"
         case .random: return "random()"
-        case .albumArtist, .album: primary = "i.sortName COLLATE NOCASE \(dir)"
         }
         return "\(primary), i.sortName COLLATE NOCASE ASC, i.itemId ASC"
     }

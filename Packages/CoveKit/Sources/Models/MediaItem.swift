@@ -23,11 +23,6 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
     public let remoteTrailerURLs: [URL]
     public var userData: UserData?
 
-    // Audio-specific fields (populated for tracks/songs, nil for other types)
-    public let artistName: String?
-    public let albumName: String?
-    public let albumId: ItemID?
-
     // Image metadata (maps image type to its cache tag; nil or missing key means that image type doesn't exist)
     public let imageTags: [ImageType: String]?
 
@@ -67,9 +62,6 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
         people: [Person] = [],
         remoteTrailerURLs: [URL] = [],
         userData: UserData? = nil,
-        artistName: String? = nil,
-        albumName: String? = nil,
-        albumId: ItemID? = nil,
         imageTags: [ImageType: String]? = nil,
         seriesName: String? = nil,
         seriesId: ItemID? = nil,
@@ -98,9 +90,6 @@ public struct MediaItem: Identifiable, Hashable, Codable, Sendable {
         self.people = people
         self.remoteTrailerURLs = remoteTrailerURLs
         self.userData = userData
-        self.artistName = artistName
-        self.albumName = albumName
-        self.albumId = albumId
         self.imageTags = imageTags
         self.seriesName = seriesName
         self.seriesId = seriesId

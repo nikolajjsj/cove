@@ -20,8 +20,6 @@ public enum SortField: String, Codable, Hashable, Sendable {
     case criticRating
     case runtime
     case random
-    case albumArtist
-    case album
     case playCount
 }
 

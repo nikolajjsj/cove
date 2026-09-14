@@ -13,15 +13,6 @@ nonisolated extension Defaults.Keys {
     /// When `false` (the default), downloads only proceed on WiFi.
     static let downloadOverCellular = Key<Bool>("downloadOverCellular", default: false)
 
-    // MARK: - Audio Playback
-
-    /// Preferred audio streaming quality when on Wi-Fi.
-    static let audioQualityWifi = Key<AudioStreamingQuality>("audioQualityWifi", default: .auto)
-
-    /// Preferred audio streaming quality when on a cellular (expensive) connection.
-    static let audioQualityCellular = Key<AudioStreamingQuality>(
-        "audioQualityCellular", default: .medium)
-
     // MARK: - Video Playback
 
     /// Default playback speed (1.0 = normal). Persisted across sessions.
@@ -91,8 +82,6 @@ nonisolated extension Defaults.Keys {
     /// The preferred layout for video library views (grid or list).
     static let videoLibraryLayout = Key<LibraryLayoutMode>("videoLibraryLayout", default: .grid)
 
-    /// The preferred layout for music library views (grid or list).
-    static let musicLibraryLayout = Key<LibraryLayoutMode>("musicLibraryLayout", default: .grid)
 
     // MARK: - Section Customization
 
@@ -102,18 +91,10 @@ nonisolated extension Defaults.Keys {
         "homeSections",
         default: HomeSection.defaultConfigurations
     )
-
-    /// Ordered list of music library sections with visibility toggles.
-    /// Users can reorder and show/hide sections via the customization sheet.
-    static let musicSections = Key<[SectionConfig<MusicSection>]>(
-        "musicSections",
-        default: MusicSection.defaultConfigurations
-    )
 }
 
 // MARK: - Defaults Conformance
 
-extension AudioStreamingQuality: Defaults.Serializable {}
 extension StreamingQuality: Defaults.Serializable {}
 extension GridDensity: Defaults.Serializable {}
 extension LibraryLayoutMode: Defaults.Serializable {}

@@ -23,7 +23,7 @@ import SwiftUI
 /// builds entirely.
 enum ScreenshotDriver {
     private static let tabs: [String: AppTab] = [
-        "home": .home, "search": .search, "music": .music, "movies": .movies,
+        "home": .home, "search": .search, "movies": .movies,
         "tvShows": .tvShows, "downloads": .downloads, "settings": .settings,
     ]
 

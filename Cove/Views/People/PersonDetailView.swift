@@ -250,7 +250,6 @@ private enum FilmographyCategory: Hashable {
     case movies
     case series
     case episodes
-    case music
     case other
 
     init(mediaType: MediaType) {
@@ -261,15 +260,13 @@ private enum FilmographyCategory: Hashable {
             self = .series
         case .episode:
             self = .episodes
-        case .album, .track, .artist, .playlist:
-            self = .music
         default:
             self = .other
         }
     }
 
     static let displayOrder: [FilmographyCategory] = [
-        .movies, .series, .episodes, .music, .other,
+        .movies, .series, .episodes, .other,
     ]
 
     var displayTitle: String {
@@ -277,7 +274,6 @@ private enum FilmographyCategory: Hashable {
         case .movies: "Movies"
         case .series: "TV Shows"
         case .episodes: "Episodes"
-        case .music: "Music"
         case .other: "Other"
         }
     }

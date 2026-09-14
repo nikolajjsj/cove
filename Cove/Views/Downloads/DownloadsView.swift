@@ -17,7 +17,6 @@ struct DownloadsView: View {
     @State private var itemToDelete: DownloadItem?
     @State private var groupToDelete: (id: String, title: String, count: Int, size: Int64)?
     @State private var seriesToDelete: (seriesId: String, title: String, count: Int, size: Int64)?
-    @State private var albumToDelete: (albumId: String, title: String, count: Int, size: Int64)?
 
     var body: some View {
         Group {
@@ -133,26 +132,6 @@ struct DownloadsView: View {
                 )
             }
         }
-        .confirmationDialog(
-            albumToDelete.map { "Remove \($0.title)?" } ?? "Remove?",
-            isPresented: Binding(
-                get: { albumToDelete != nil }, set: { if !$0 { albumToDelete = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button("Remove All Tracks", role: .destructive) {
-                if let album = albumToDelete {
-                    Task { await viewModel?.deleteAlbumTracks(albumId: album.albumId) }
-                    albumToDelete = nil
-                }
-            }
-            Button("Cancel", role: .cancel) { albumToDelete = nil }
-        } message: {
-            if let album = albumToDelete {
-                Text(
-                    "All \(album.count) track\(album.count == 1 ? "" : "s") (\(album.size.formatted(.byteCount(style: .file)))) will be removed from your device."
-                )
-            }
-        }
         .task {
             guard let connection = authManager.activeConnection else { return }
             let vm = DownloadsViewModel(
@@ -169,13 +148,6 @@ struct DownloadsView: View {
         .navigationDestination(for: OfflineSeriesDestination.self) { destination in
             SeriesDetailView(
                 offlineSeriesId: destination.seriesId,
-                serverId: destination.serverId,
-                title: destination.title
-            )
-        }
-        .navigationDestination(for: OfflineAlbumDestination.self) { destination in
-            AlbumDetailView(
-                offlineAlbumId: destination.albumId,
                 serverId: destination.serverId,
                 title: destination.title
             )
@@ -204,11 +176,6 @@ struct DownloadsView: View {
                 // Section 3: TV Shows
                 if !vm.completedSeriesGroups.isEmpty {
                     tvShowsSection(vm)
-                }
-
-                // Section 4: Music
-                if !vm.completedMusicByArtist.isEmpty {
-                    musicSection(vm)
                 }
             }
             .padding(.bottom, 32)
@@ -361,64 +328,6 @@ struct DownloadsView: View {
         }
     }
 
-    // MARK: - Section 4: Music
-
-    private let musicColumns = [
-        GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
-    ]
-
-    @ViewBuilder
-    private func musicSection(_ vm: DownloadsViewModel) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            sectionHeader("Music")
-                .padding(.horizontal)
-
-            ForEach(vm.completedMusicByArtist, id: \.artist) { artistGroup in
-                VStack(alignment: .leading, spacing: 12) {
-                    // Artist header
-                    Text(artistGroup.artist)
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal)
-
-                    LazyVGrid(columns: musicColumns, spacing: 20) {
-                        ForEach(artistGroup.albums, id: \.album.itemId) { albumGroup in
-                            NavigationLink(
-                                value: OfflineAlbumDestination(
-                                    albumId: albumGroup.album.itemId,
-                                    serverId: albumGroup.album.serverId,
-                                    title: albumGroup.album.title ?? "Unknown Album"
-                                )
-                            ) {
-                                OfflineAlbumCard(
-                                    title: albumGroup.album.title ?? "Unknown Album",
-                                    subtitle:
-                                        "\(albumGroup.tracks.count) track\(albumGroup.tracks.count == 1 ? "" : "s")",
-                                    imageURL: vm.localPrimaryImageURL(for: albumGroup.album.itemId)
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    let totalSize = vm.diskUsage(of: albumGroup.tracks)
-                                    albumToDelete = (
-                                        albumId: albumGroup.album.itemId,
-                                        title: albumGroup.album.title ?? "Unknown Album",
-                                        count: albumGroup.tracks.count,
-                                        size: totalSize
-                                    )
-                                } label: {
-                                    Label("Remove Album", systemImage: "trash")
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-            }
-        }
-    }
-
     // MARK: - Section Header
 
     private func sectionHeader(_ title: String) -> some View {
@@ -523,33 +432,6 @@ private struct OfflinePosterCard: View {
     }
 }
 
-private struct OfflineAlbumCard: View {
-    let title: String
-    var subtitle: String? = nil
-    let imageURL: URL?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            MediaImage.artwork(url: imageURL, cornerRadius: 8)
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-
-            Text(title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .lineLimit(2, reservesSpace: true)
-                .foregroundStyle(.primary)
-
-            if let subtitle {
-                Text(subtitle)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
 // MARK: - Empty State
 
 private struct DownloadsEmptyState: View {
@@ -557,7 +439,7 @@ private struct DownloadsEmptyState: View {
         ContentUnavailableView(
             "No Downloads",
             systemImage: "arrow.down.circle",
-            description: Text("Download music, movies, and episodes to enjoy offline.")
+            description: Text("Download movies and episodes to enjoy offline.")
         )
     }
 }

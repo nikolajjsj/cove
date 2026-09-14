@@ -7,22 +7,22 @@ import SwiftUI
 
 /// A generic paged grid view for browsing media items.
 ///
-/// Consolidates the shared pattern from `AlbumListView` and `ArtistListView`.
+/// Consolidates the shared paged-grid pattern.
 /// Each call-site provides only the item type, card builder, and display strings.
 ///
 /// ```swift
 /// PagedMediaGridView(
 ///     library: library,
-///     itemType: "MusicAlbum",
+///     itemType: "Movie",
 ///     sortField: sortField,
 ///     sortOrder: sortOrder,
 ///     isFavoriteFilter: isFavoriteFilter,
-///     emptyTitle: "No Albums",
+///     emptyTitle: "No Movies",
 ///     emptyIcon: "square.stack",
-///     emptyMessage: "Your music library doesn't contain any albums yet.",
+///     emptyMessage: "This library doesn't contain any movies yet.",
 ///     entityName: "album"
 /// ) { item, imageURL in
-///     AlbumCard(item: item, imageURL: imageURL)
+///     MediaCard(item: item)
 /// }
 /// ```
 struct PagedMediaGridView<Card: View>: View {

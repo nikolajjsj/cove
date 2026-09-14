@@ -18,8 +18,7 @@
 # argument. Downloads is a headline feature in the App Store copy, so an empty
 # shot of it undersells the app.
 #
-# There is deliberately no Music shot: FeatureFlags.musicEnabled is false, so
-# the tab does not exist. Re-add one here if music is ever turned back on.
+# There is no Music shot: music was removed from the app.
 
 set -euo pipefail
 

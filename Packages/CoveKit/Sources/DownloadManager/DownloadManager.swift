@@ -287,52 +287,6 @@ public final class DownloadManagerService: @unchecked Sendable {
         return group
     }
 
-    /// Enqueue all tracks in an album as a download group.
-    ///
-    /// Creates a `DownloadGroup` for the album, saves metadata for the album and all tracks,
-    /// and enqueues each track sorted by disc/track number.
-    ///
-    /// - Parameters:
-    ///   - albumItemId: The album's Jellyfin item ID.
-    ///   - tracks: The tracks to download, as `(itemId, title, remoteURL)` tuples.
-    ///   - serverId: The server connection UUID string.
-    ///   - groupTitle: Display title for the group (album name).
-    /// - Returns: The created `DownloadGroup`.
-    @discardableResult
-    public func enqueueAlbum(
-        albumItemId: ItemID,
-        tracks: [(itemId: ItemID, title: String, remoteURL: URL, expectedBytes: Int64)],
-        serverId: String,
-        groupTitle: String
-    ) async throws -> DownloadGroup {
-        try await enqueueGroup(
-            groupItemId: albumItemId,
-            mediaType: .album,
-            children: tracks,
-            childMediaType: .track,
-            serverId: serverId,
-            groupTitle: groupTitle
-        )
-    }
-
-    /// Batch-enqueue all tracks in a playlist as a single download group.
-    @discardableResult
-    public func enqueuePlaylist(
-        playlistItemId: ItemID,
-        tracks: [(itemId: ItemID, title: String, remoteURL: URL, expectedBytes: Int64)],
-        serverId: String,
-        groupTitle: String
-    ) async throws -> DownloadGroup {
-        try await enqueueGroup(
-            groupItemId: playlistItemId,
-            mediaType: .playlist,
-            children: tracks,
-            childMediaType: .track,
-            serverId: serverId,
-            groupTitle: groupTitle
-        )
-    }
-
     /// Enqueue all episodes in a season as a download group.
     ///
     /// - Parameters:
@@ -582,8 +536,8 @@ public final class DownloadManagerService: @unchecked Sendable {
 
             // If this download belonged to a group, check whether the group is
             // now empty and clean it up automatically. This handles cases where
-            // individual items are deleted from AlbumDetailView or
-            // SeriesDetailView without going through deleteGroup().
+            // individual items are deleted from SeriesDetailView without
+            // going through deleteGroup().
             if let groupId = item.groupId {
                 let remainingInGroup =
                     (try? await downloadRepository.fetchAll(groupId: groupId)) ?? []
@@ -1245,9 +1199,6 @@ public final class DownloadManagerService: @unchecked Sendable {
         let content = UNMutableNotificationContent()
 
         switch group.mediaType {
-        case .album:
-            content.title = "Download Complete"
-            content.body = "\(group.title) is ready to listen."
         case .season, .series:
             content.title = "Download Complete"
             content.body = "\(group.title) is ready to watch."

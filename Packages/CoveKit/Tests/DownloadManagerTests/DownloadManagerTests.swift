@@ -35,7 +35,7 @@ final class DownloadStorageTests: XCTestCase {
     func testServerDirectoryIsTheParentOfEveryItemDirectory() {
         let server = storage.serverDirectory(serverId: "server-1")
         let item = storage.itemDirectory(
-            serverId: "server-1", mediaType: .track, itemId: ItemID("t1"))
+            serverId: "server-1", mediaType: .movie, itemId: ItemID("t1"))
 
         XCTAssertTrue(item.path.hasPrefix(server.path + "/"))
     }

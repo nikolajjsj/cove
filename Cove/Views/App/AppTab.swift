@@ -7,7 +7,6 @@ import SwiftUI
 enum AppTab: Hashable {
     case home
     case search
-    case music
     case movies
     case tvShows
     case downloads
@@ -17,7 +16,6 @@ enum AppTab: Hashable {
         switch self {
         case .home: "Home"
         case .search: "Search"
-        case .music: "Music"
         case .movies: "Movies"
         case .tvShows: "TV Shows"
         case .downloads: "Downloads"
@@ -29,7 +27,6 @@ enum AppTab: Hashable {
         switch self {
         case .home: "house"
         case .search: "magnifyingglass"
-        case .music: "music.note"
         case .movies: "film"
         case .tvShows: "tv"
         case .downloads: "arrow.down.circle"
@@ -44,8 +41,6 @@ enum AppTab: Hashable {
             HomeView()
         case .search:
             SearchView()
-        case .music:
-            MusicLibraryView(library: appState.libraries.first { $0.collectionType == .music })
         case .movies:
             LibraryGridView(library: appState.libraries.first { $0.collectionType == .movies })
         case .tvShows:
@@ -81,7 +76,6 @@ enum AppTab: Hashable {
     /// Returns the appropriate tabs for the given app state and layout.
     ///
     /// Tabs are dynamic — driven by the libraries available on the connected server.
-    /// If the server has no music library, the Music tab doesn't appear.
     static func availableTabs(for appState: AppState, layout: ShellLayout) -> [AppTab] {
         var tabs: [AppTab] = [.home]
 
@@ -90,9 +84,7 @@ enum AppTab: Hashable {
         switch layout {
         case .compact:
             // iPhone: limited tabs — Home, one dynamic media tab, Search, Downloads, Settings
-            if types.contains(.music) {
-                tabs.append(.music)
-            } else if types.contains(.movies) {
+            if types.contains(.movies) {
                 tabs.append(.movies)
             } else if types.contains(.tvshows) {
                 tabs.append(.tvShows)
@@ -100,7 +92,6 @@ enum AppTab: Hashable {
 
         case .regular, .tv:
             // iPad/Mac sidebar & tvOS: show all available media tabs
-            if types.contains(.music) { tabs.append(.music) }
             if types.contains(.movies) { tabs.append(.movies) }
             if types.contains(.tvshows) { tabs.append(.tvShows) }
         }

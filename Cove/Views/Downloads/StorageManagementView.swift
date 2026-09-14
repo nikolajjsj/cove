@@ -319,12 +319,8 @@ struct StorageManagementView: View {
         switch type {
         case .movie: "Movies"
         case .episode: "Episodes"
-        case .track: "Music"
-        case .album: "Albums"
         case .series: "Series"
         case .season: "Seasons"
-        case .artist: "Artists"
-        case .playlist: "Playlists"
         case .book: "Books"
         case .podcast: "Podcasts"
         case .collection: "Collections"

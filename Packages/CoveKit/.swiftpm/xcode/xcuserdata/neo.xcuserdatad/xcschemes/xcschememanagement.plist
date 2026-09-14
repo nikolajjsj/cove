@@ -9,70 +9,75 @@
 			<key>orderHint</key>
 			<integer>2</integer>
 		</dict>
-		<key>CoveUI.xcscheme_^#shared#^_</key>
+		<key>CatalogSync.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>3</integer>
 		</dict>
-		<key>DataLoading.xcscheme_^#shared#^_</key>
+		<key>CoveUI.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>4</integer>
 		</dict>
-		<key>DownloadManager.xcscheme_^#shared#^_</key>
+		<key>DataLoading.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>5</integer>
 		</dict>
-		<key>ImageService.xcscheme_^#shared#^_</key>
+		<key>DownloadManager.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>6</integer>
 		</dict>
-		<key>JellyfinAPI.xcscheme_^#shared#^_</key>
+		<key>ImageService.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>7</integer>
 		</dict>
-		<key>JellyfinProvider.xcscheme_^#shared#^_</key>
+		<key>JellyfinAPI.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>8</integer>
 		</dict>
-		<key>Keychain.xcscheme_^#shared#^_</key>
+		<key>JellyfinProvider.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>9</integer>
 		</dict>
-		<key>MediaServerKit.xcscheme_^#shared#^_</key>
+		<key>Keychain.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>10</integer>
 		</dict>
-		<key>Models.xcscheme_^#shared#^_</key>
+		<key>MediaServerKit.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>11</integer>
 		</dict>
-		<key>Networking.xcscheme_^#shared#^_</key>
+		<key>Models.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>12</integer>
 		</dict>
-		<key>OpenSubtitlesAPI.xcscheme_^#shared#^_</key>
+		<key>Networking.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>13</integer>
 		</dict>
-		<key>Persistence.xcscheme_^#shared#^_</key>
+		<key>OpenSubtitlesAPI.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>14</integer>
 		</dict>
-		<key>PlaybackEngine.xcscheme_^#shared#^_</key>
+		<key>Persistence.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
 			<integer>15</integer>
+		</dict>
+		<key>PlaybackEngine.xcscheme_^#shared#^_</key>
+		<dict>
+			<key>orderHint</key>
+			<integer>16</integer>
 		</dict>
 		<key>Utils.xcscheme_^#shared#^_</key>
 		<dict>

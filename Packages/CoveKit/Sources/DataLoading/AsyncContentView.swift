@@ -8,17 +8,17 @@ import SwiftUI
 /// switch on `loader.phase` directly instead.
 ///
 /// ```swift
-/// @State private var loader = CollectionLoader<Playlist>()
+/// @State private var loader = CollectionLoader<MediaItem>()
 ///
 /// AsyncContentView(
 ///     loader,
 ///     loadingMessage: "Loading playlists…",
-///     emptyTitle: "No Playlists",
+///     emptyTitle: "No Items",
 ///     emptySystemImage: "music.note.list",
 ///     emptyDescription: "You haven't created any playlists yet."
 /// ) { playlists in
 ///     List(playlists) { playlist in
-///         PlaylistRow(playlist: playlist)
+///         MediaListRow(item: item)
 ///     }
 /// }
 /// .task {

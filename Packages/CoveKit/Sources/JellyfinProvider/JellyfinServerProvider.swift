@@ -10,7 +10,7 @@ import os
 /// Jellyfin implementation of all MediaServerKit protocols.
 /// This is the only module that knows about Jellyfin specifics.
 public final class JellyfinServerProvider: MediaServerProvider,
-    MusicProvider, VideoProvider, TranscodingProvider,
+    VideoProvider, TranscodingProvider,
     PlaybackReportingProvider, DownloadableProvider, UserDataMutationProvider
 {
     private let logger = Logger(
@@ -343,10 +343,6 @@ public final class JellyfinServerProvider: MediaServerProvider,
                 case .movie: return "Movie"
                 case .series: return "Series"
                 case .episode: return "Episode"
-                case .album: return "MusicAlbum"
-                case .artist: return "MusicArtist"
-                case .track: return "Audio"
-                case .playlist: return "Playlist"
                 case .collection: return "BoxSet"
                 default: return nil
                 }
@@ -358,6 +354,39 @@ public final class JellyfinServerProvider: MediaServerProvider,
         )
         let items = (result.items ?? []).compactMap { JellyfinMapper.mapItem($0) }
         return SearchResults(items: items)
+    }
+
+    // MARK: - User Data & Studios
+
+    public func setFavorite(itemId: ItemID, isFavorite: Bool) async throws {
+        let (client, userId) = try authenticatedClient()
+        if isFavorite {
+            try await client.addFavorite(userId: userId, itemId: itemId.rawValue)
+        } else {
+            try await client.removeFavorite(userId: userId, itemId: itemId.rawValue)
+        }
+    }
+
+    public func setPlayed(itemId: ItemID, isPlayed: Bool) async throws {
+        let (client, userId) = try authenticatedClient()
+        if isPlayed {
+            try await client.markPlayed(userId: userId, itemId: itemId.rawValue)
+        } else {
+            try await client.markUnplayed(userId: userId, itemId: itemId.rawValue)
+        }
+    }
+
+    /// Fetch all studios for a given library.
+    public func studios(in library: MediaLibrary) async throws -> [MediaItem] {
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getStudios(
+            userId: userId,
+            parentId: library.id.rawValue
+        )
+        return (result.items ?? []).compactMap { dto -> MediaItem? in
+            guard let id = dto.id, let name = dto.name else { return nil }
+            return MediaItem(id: ItemID(id), title: name, mediaType: .studio)
+        }
     }
 
     /// Search the library with optional filter criteria applied server-side.
@@ -402,176 +431,6 @@ public final class JellyfinServerProvider: MediaServerProvider,
             startIndex: startIndex ?? 0,
             totalCount: result.totalRecordCount ?? items.count
         )
-    }
-
-    // MARK: - MusicProvider (Phase 4)
-
-    public func albums(artist: ArtistID) async throws -> [Album] {
-        let (client, userId) = try authenticatedClient()
-        let result = try await client.getItems(
-            userId: userId,
-            includeItemTypes: ["MusicAlbum"],
-            sortBy: "ProductionYear,SortName",
-            sortOrder: "Descending",
-            albumArtistIds: [artist.rawValue]
-        )
-        return (result.items ?? []).compactMap { JellyfinMapper.mapAlbum($0) }
-    }
-
-    public func tracks(album: AlbumID) async throws -> [Track] {
-        let (client, userId) = try authenticatedClient()
-        let result = try await client.getItems(
-            userId: userId,
-            parentId: album.rawValue,
-            includeItemTypes: ["Audio"],
-            sortBy: "SortName",
-            sortOrder: "Ascending"
-        )
-        return (result.items ?? []).compactMap { JellyfinMapper.mapTrack($0) }
-    }
-
-    public func playlists() async throws -> [Playlist] {
-        let (client, userId) = try authenticatedClient()
-        let result = try await client.getItems(
-            userId: userId,
-            includeItemTypes: ["Playlist"],
-            sortBy: "SortName"
-        )
-        return (result.items ?? []).compactMap { JellyfinMapper.mapPlaylist($0) }
-    }
-
-    public func lyrics(track: TrackID) async throws -> Lyrics? {
-        let (client, _) = try authenticatedClient()
-        let response = try await client.getLyrics(itemId: track.rawValue)
-        guard let lyricDtos = response.lyrics, !lyricDtos.isEmpty else { return nil }
-        let lines = lyricDtos.compactMap { dto -> LyricLine? in
-            guard let text = dto.text else { return nil }
-            // Start time from Jellyfin is in ticks (10,000,000 ticks per second)
-            let startTime: TimeInterval? = dto.start.map { JellyfinTicks.toSeconds($0) }
-            return LyricLine(startTime: startTime, text: text)
-        }
-        guard !lines.isEmpty else { return nil }
-        return Lyrics(lines: lines)
-    }
-
-    public func playlistTracks(playlist: PlaylistID) async throws -> [Track] {
-        let (client, userId) = try authenticatedClient()
-        let result = try await client.getPlaylistItems(
-            playlistId: playlist.rawValue,
-            userId: userId
-        )
-        return (result.items ?? []).compactMap { JellyfinMapper.mapTrack($0) }
-    }
-
-    public func createPlaylist(name: String, trackIds: [ItemID]) async throws -> Playlist? {
-        let (client, userId) = try authenticatedClient()
-        let response = try await client.createPlaylist(
-            userId: userId,
-            name: name,
-            trackIds: trackIds.map(\.rawValue)
-        )
-        guard let id = response.id else { return nil }
-        // Fetch the created playlist to get full metadata
-        let item = try await client.getItem(userId: userId, itemId: id)
-        return JellyfinMapper.mapPlaylist(item)
-    }
-
-    public func addToPlaylist(playlist: PlaylistID, trackIds: [ItemID]) async throws {
-        let (client, _) = try authenticatedClient()
-        try await client.addToPlaylist(
-            playlistId: playlist.rawValue,
-            trackIds: trackIds.map(\.rawValue)
-        )
-    }
-
-    public func removeFromPlaylist(playlist: PlaylistID, entryIds: [String]) async throws {
-        let (client, _) = try authenticatedClient()
-        try await client.removeFromPlaylist(
-            playlistId: playlist.rawValue,
-            entryIds: entryIds
-        )
-    }
-
-    public func renamePlaylist(playlist: PlaylistID, name: String) async throws {
-        let (client, _) = try authenticatedClient()
-        try await client.updateItem(itemId: playlist.rawValue, name: name)
-    }
-
-    public func deletePlaylist(playlist: PlaylistID) async throws {
-        let (client, _) = try authenticatedClient()
-        try await client.deleteItem(itemId: playlist.rawValue)
-    }
-
-    public func setFavorite(itemId: ItemID, isFavorite: Bool) async throws {
-        let (client, userId) = try authenticatedClient()
-        if isFavorite {
-            try await client.addFavorite(userId: userId, itemId: itemId.rawValue)
-        } else {
-            try await client.removeFavorite(userId: userId, itemId: itemId.rawValue)
-        }
-    }
-
-    public func setPlayed(itemId: ItemID, isPlayed: Bool) async throws {
-        let (client, userId) = try authenticatedClient()
-        if isPlayed {
-            try await client.markPlayed(userId: userId, itemId: itemId.rawValue)
-        } else {
-            try await client.markUnplayed(userId: userId, itemId: itemId.rawValue)
-        }
-    }
-
-    public func instantMix(for itemId: ItemID, limit: Int = 50) async throws -> [Track] {
-        let (client, userId) = try authenticatedClient()
-        let result = try await client.getInstantMix(
-            itemId: itemId.rawValue,
-            userId: userId,
-            limit: limit
-        )
-        return (result.items ?? []).compactMap { JellyfinMapper.mapTrack($0) }
-    }
-
-    /// Fetch the most-played tracks for an artist.
-    /// Uses `GET /Users/{userId}/Items?ArtistIds=&IncludeItemTypes=Audio&SortBy=PlayCount`
-    public func topTracks(artist: ArtistID, limit: Int = 5) async throws -> [Track] {
-        let (client, userId) = try authenticatedClient()
-        let result = try await client.getItems(
-            userId: userId,
-            includeItemTypes: ["Audio"],
-            sortBy: "PlayCount",
-            sortOrder: "Descending",
-            limit: limit,
-            artistIds: [artist.rawValue]
-        )
-        return (result.items ?? []).compactMap { JellyfinMapper.mapTrack($0) }
-    }
-
-    /// Fetch all studios for a given library.
-    public func studios(in library: MediaLibrary) async throws -> [MediaItem] {
-        let (client, userId) = try authenticatedClient()
-        let result = try await client.getStudios(
-            userId: userId,
-            parentId: library.id.rawValue
-        )
-        return (result.items ?? []).compactMap { dto -> MediaItem? in
-            guard let id = dto.id, let name = dto.name else { return nil }
-            return MediaItem(id: ItemID(id), title: name, mediaType: .studio)
-        }
-    }
-
-    // MARK: - Audio Streaming
-
-    /// Build a universal audio stream URL for a track.
-    ///
-    /// - Parameters:
-    ///   - track: The track to stream.
-    ///   - maxBitRate: An optional bitrate cap in bits per second. When `nil` the
-    ///     API client's default (140 Mbps) is used, which effectively means direct play.
-    public func audioStreamURL(for track: Track, maxBitRate: Int? = nil) -> URL? {
-        guard let client = state.client else { return nil }
-        if let maxBitRate {
-            return client.audioStreamURL(itemId: track.id.rawValue, maxStreamingBitrate: maxBitRate)
-        }
-        return client.audioStreamURL(itemId: track.id.rawValue)
     }
 
     // MARK: - VideoProvider (Phase 5)

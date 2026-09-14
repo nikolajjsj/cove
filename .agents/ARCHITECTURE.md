@@ -2,6 +2,8 @@
 
 ## Overview
 
+> **Music was removed in September 2026.** References to a music player, tracks, albums, artists or playlists below describe the original plan, not the app.
+
 Cove is a native Swift media client for Jellyfin servers, targeting iOS, iPadOS, and macOS. It provides a premium music player and video experience with first-class offline support. The architecture is server-agnostic — designed so additional media server backends (Plex, Navidrome, SMB, etc.) can be added in the future without touching the UI or playback layers.
 
 **Working name:** Cove (placeholder)

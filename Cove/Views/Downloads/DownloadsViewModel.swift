@@ -87,56 +87,9 @@ final class DownloadsViewModel {
         return result.sorted { ($0.series.title ?? "") < ($1.series.title ?? "") }
     }
 
-    /// Completed track downloads, grouped by artist then album.
-    /// Returns an array of (artistName, albums) where albums is [(albumMetadata, tracks)].
-    var completedMusicByArtist:
-        [(artist: String, albums: [(album: OfflineMediaMetadata, tracks: [DownloadItem])])]
-    {
-        let tracks = allDownloads.filter { $0.state == .completed && $0.mediaType == .track }
-
-        // Group tracks by album
-        var albumMap: [String: [DownloadItem]] = [:]
-        for track in tracks {
-            let trackMeta = metadataByItemId[track.itemId.rawValue]
-            let albumId = trackMeta?.albumId ?? track.parentId?.rawValue ?? "unknown"
-            albumMap[albumId, default: []].append(track)
-        }
-
-        // Group albums by artist
-        var artistAlbums: [String: [(album: OfflineMediaMetadata, tracks: [DownloadItem])]] = [:]
-
-        for (albumId, albumTracks) in albumMap {
-            let albumMeta = metadataByItemId[albumId]
-            let artistName = albumMeta?.artistName ?? "Unknown Artist"
-
-            let meta =
-                albumMeta
-                ?? OfflineMediaMetadata(
-                    itemId: albumId,
-                    serverId: serverId ?? "",
-                    mediaType: MediaType.album.rawValue,
-                    title: albumTracks.first?.title ?? "Unknown Album"
-                )
-
-            artistAlbums[artistName, default: []].append((album: meta, tracks: albumTracks))
-        }
-
-        // Sort: artists alphabetically, albums by title
-        return
-            artistAlbums
-            .map {
-                (
-                    artist: $0.key,
-                    albums: $0.value.sorted { ($0.album.title ?? "") < ($1.album.title ?? "") }
-                )
-            }
-            .sorted { $0.artist < $1.artist }
-    }
-
     /// Whether there are any completed downloads at all.
     var hasCompletedContent: Bool {
         !completedMovies.isEmpty || !completedSeriesGroups.isEmpty
-            || !completedMusicByArtist.isEmpty
     }
 
     /// Whether the entire downloads view is empty.
@@ -292,37 +245,6 @@ final class DownloadsViewModel {
         }
 
         // Clean up orphaned metadata (series, seasons without remaining downloads)
-        await downloadManager.cleanupOrphanedMetadata(serverId: serverId)
-    }
-
-    /// Delete all downloaded tracks belonging to an album.
-    func deleteAlbumTracks(albumId: String) async {
-        guard let serverId else { return }
-
-        let tracks = allDownloads.filter { dl in
-            dl.state == .completed
-                && dl.mediaType == .track
-                && (dl.parentId?.rawValue == albumId
-                    || metadataByItemId[dl.itemId.rawValue]?.albumId == albumId)
-        }
-
-        let groupIds = Set(tracks.compactMap(\.groupId))
-        let trackIds = Set(tracks.map(\.id))
-
-        for track in tracks {
-            try? await downloadManager.deleteDownload(id: track.id)
-        }
-
-        for groupId in groupIds {
-            let remaining = allDownloads.filter {
-                $0.groupId == groupId && !trackIds.contains($0.id)
-            }
-            if remaining.isEmpty {
-                try? await downloadManager.deleteGroup(id: groupId)
-            }
-        }
-
-        // Clean up orphaned metadata (album metadata without remaining downloads)
         await downloadManager.cleanupOrphanedMetadata(serverId: serverId)
     }
 

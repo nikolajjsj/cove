@@ -18,14 +18,8 @@ enum NavigationRouter {
             SeriesDetailView(item: item)
         case .collection:
             CollectionDetailView(item: item)
-        case .artist:
-            ArtistDetailView(artistItem: item)
-        case .album:
-            AlbumDetailView(albumItem: item)
         case .genre:
-            GenreDetailView(genreItem: item, library: nil)
-        case .track:
-            SongDetailView(item: item)
+            VideoGenreDetailView(genreName: item.title, library: nil)
         case .studio:
             Text(item.title)
                 .navigationTitle(item.title)
@@ -38,54 +32,13 @@ enum NavigationRouter {
     /// Returns the appropriate detail view for a given media library.
     @ViewBuilder
     static func destination(for library: MediaLibrary) -> some View {
-        switch library.collectionType {
-        case .music:
-            MusicLibraryView(library: library)
-        default:
-            LibraryGridView(library: library)
-        }
-    }
-
-    /// Returns the detail view for a given album.
-    @ViewBuilder
-    static func destination(for album: Album) -> some View {
-        AlbumDetailView(albumItem: MediaItem(id: album.id, title: album.title, mediaType: .album))
-    }
-
-    /// Returns the detail view for a given playlist.
-    @ViewBuilder
-    static func destination(for playlist: Playlist) -> some View {
-        PlaylistDetailView(playlist: playlist)
+        LibraryGridView(library: library)
     }
 
     /// Returns the detail view for a given person.
     @ViewBuilder
     static func destination(for person: Person) -> some View {
         PersonDetailView(person: person)
-    }
-
-    /// Returns the browsing view for a music "See All" route.
-    @ViewBuilder
-    static func destination(for route: MusicBrowseRoute, appState: AppState) -> some View {
-        let library = appState.libraries.first { $0.collectionType == .music }
-        switch route {
-        case .allArtists:
-            ArtistListView(library: library)
-                .navigationTitle("Artists")
-                .largeNavigationTitle()
-        case .allAlbums:
-            AlbumListView(library: library)
-                .navigationTitle("Albums")
-                .largeNavigationTitle()
-        case .allGenres:
-            GenreListView(library: library)
-                .navigationTitle("Genres")
-                .largeNavigationTitle()
-        case .allPlaylists:
-            PlaylistListView()
-                .navigationTitle("Playlists")
-                .largeNavigationTitle()
-        }
     }
 
     /// Returns the detail view for a video genre route.
@@ -106,12 +59,6 @@ enum NavigationRouter {
         StudioDetailView(studioName: route.studio, library: library)
     }
 
-    /// Returns the detail view for a smart playlist preset.
-    @ViewBuilder
-    static func destination(for preset: SmartPlaylist, appState: AppState) -> some View {
-        let library = appState.libraries.first { $0.collectionType == .music }
-        SmartPlaylistDetailView(preset: preset, library: library)
-    }
 }
 
 // MARK: - Navigation Destinations Modifier
@@ -127,26 +74,14 @@ private struct NavigationDestinations: ViewModifier {
             .navigationDestination(for: MediaLibrary.self) { library in
                 NavigationRouter.destination(for: library)
             }
-            .navigationDestination(for: Album.self) { album in
-                NavigationRouter.destination(for: album)
-            }
-            .navigationDestination(for: Playlist.self) { playlist in
-                NavigationRouter.destination(for: playlist)
-            }
             .navigationDestination(for: Person.self) { person in
                 NavigationRouter.destination(for: person)
-            }
-            .navigationDestination(for: MusicBrowseRoute.self) { route in
-                NavigationRouter.destination(for: route, appState: appState)
             }
             .navigationDestination(for: VideoGenreRoute.self) { route in
                 NavigationRouter.destination(for: route, appState: appState)
             }
             .navigationDestination(for: StudioRoute.self) { route in
                 NavigationRouter.destination(for: route, appState: appState)
-            }
-            .navigationDestination(for: SmartPlaylist.self) { preset in
-                NavigationRouter.destination(for: preset, appState: appState)
             }
             .navigationDestination(for: SearchSeeAllRoute.self) { route in
                 SearchSeeAllView(

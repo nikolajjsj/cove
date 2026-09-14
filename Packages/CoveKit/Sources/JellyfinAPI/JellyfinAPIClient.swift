@@ -151,8 +151,6 @@ public final class JellyfinAPIClient: Sendable {
         personIds: [String]? = nil,
         years: [Int]? = nil,
         minCommunityRating: Double? = nil,
-        albumArtistIds: [String]? = nil,
-        artistIds: [String]? = nil,
         studios: [String]? = nil,
         cacheMaxAge: TimeInterval = 30
     ) async throws -> ItemsResult {
@@ -200,14 +198,6 @@ public final class JellyfinAPIClient: Sendable {
         if let minCommunityRating {
             queryItems.append(
                 URLQueryItem(name: "MinCommunityRating", value: minCommunityRating.formatted()))
-        }
-        if let albumArtistIds, !albumArtistIds.isEmpty {
-            queryItems.append(
-                URLQueryItem(name: "AlbumArtistIds", value: albumArtistIds.joined(separator: ",")))
-        }
-        if let artistIds, !artistIds.isEmpty {
-            queryItems.append(
-                URLQueryItem(name: "ArtistIds", value: artistIds.joined(separator: ",")))
         }
         if let studios, !studios.isEmpty {
             queryItems.append(
@@ -313,72 +303,6 @@ public final class JellyfinAPIClient: Sendable {
             URLQueryItem(name: "quality", value: "90"),
         ])
         return url
-    }
-
-    // MARK: - Artists
-
-    /// List album artists.
-    /// `GET /Artists/AlbumArtists`
-    public func getAlbumArtists(
-        userId: String,
-        parentId: String? = nil,
-        sortBy: String? = nil,
-        sortOrder: String? = nil,
-        limit: Int? = nil,
-        startIndex: Int? = nil,
-        searchTerm: String? = nil
-    ) async throws -> ItemsResult {
-        let url = baseURL.appending(path: "Artists/AlbumArtists")
-        var queryItems: [URLQueryItem] = [
-            URLQueryItem(name: "UserId", value: userId),
-            URLQueryItem(name: "Fields", value: "Overview,Genres,DateCreated,UserData,SortName"),
-        ]
-        if let parentId { queryItems.append(URLQueryItem(name: "ParentId", value: parentId)) }
-        if let sortBy { queryItems.append(URLQueryItem(name: "SortBy", value: sortBy)) }
-        if let sortOrder { queryItems.append(URLQueryItem(name: "SortOrder", value: sortOrder)) }
-        if let limit { queryItems.append(URLQueryItem(name: "Limit", value: String(limit))) }
-        if let startIndex {
-            queryItems.append(URLQueryItem(name: "StartIndex", value: String(startIndex)))
-        }
-        if let searchTerm {
-            queryItems.append(URLQueryItem(name: "SearchTerm", value: searchTerm))
-        }
-        logger.debug("Fetching album artists for user \(userId)")
-        return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 120))
-    }
-
-    /// List all artists.
-    /// `GET /Artists`
-    public func getArtists(
-        userId: String,
-        parentId: String? = nil,
-        sortBy: String? = nil,
-        sortOrder: String? = nil,
-        limit: Int? = nil,
-        startIndex: Int? = nil,
-        searchTerm: String? = nil
-    ) async throws -> ItemsResult {
-        let url = baseURL.appending(path: "Artists")
-        var queryItems: [URLQueryItem] = [
-            URLQueryItem(name: "UserId", value: userId),
-            URLQueryItem(name: "Fields", value: "Overview,Genres,DateCreated,UserData,SortName"),
-        ]
-        if let parentId { queryItems.append(URLQueryItem(name: "ParentId", value: parentId)) }
-        if let sortBy { queryItems.append(URLQueryItem(name: "SortBy", value: sortBy)) }
-        if let sortOrder { queryItems.append(URLQueryItem(name: "SortOrder", value: sortOrder)) }
-        if let limit { queryItems.append(URLQueryItem(name: "Limit", value: String(limit))) }
-        if let startIndex {
-            queryItems.append(URLQueryItem(name: "StartIndex", value: String(startIndex)))
-        }
-        if let searchTerm {
-            queryItems.append(URLQueryItem(name: "SearchTerm", value: searchTerm))
-        }
-        logger.debug("Fetching artists for user \(userId)")
-        return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 120))
     }
 
     /// Fetch genres for a library.
@@ -915,15 +839,6 @@ public final class JellyfinAPIClient: Sendable {
 
     // MARK: - Music Features
 
-    /// Fetch lyrics for a track.
-    /// Returns the raw lyrics response from `/Audio/{itemId}/Lyrics`.
-    public func getLyrics(itemId: String) async throws -> LyricsResponse {
-        let url = baseURL.appending(path: "Audio/\(itemId)/Lyrics")
-        logger.debug("Fetching lyrics for item \(itemId)")
-        return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, cachePolicy: .cacheFirst(maxAge: 120))
-    }
-
     /// Mark an item as a favorite.
     /// `POST /UserFavoriteItems/{itemId}`
     public func addFavorite(userId: String, itemId: String) async throws {
@@ -1030,96 +945,6 @@ public final class JellyfinAPIClient: Sendable {
         await httpClient.cache.removeAll(matching: "IsPlayed")
         await httpClient.cache.removeAll(matching: "Resume")
         await httpClient.cache.removeAll(matching: "NextUp")
-    }
-
-    /// Fetch an instant mix (radio) seeded from an item.
-    public func getInstantMix(
-        itemId: String,
-        userId: String,
-        limit: Int = 50
-    ) async throws -> ItemsResult {
-        let url = baseURL.appending(path: "Items/\(itemId)/InstantMix")
-        let queryItems = [
-            URLQueryItem(name: "UserId", value: userId),
-            URLQueryItem(name: "Limit", value: String(limit)),
-            URLQueryItem(
-                name: "Fields", value: "Overview,Genres,DateCreated,UserData,ProductionYear"),
-        ]
-        logger.debug("Fetching instant mix for item \(itemId)")
-        return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 30))
-    }
-
-    // MARK: - Playlist CRUD
-
-    /// Create a new playlist.
-    public func createPlaylist(
-        userId: String,
-        name: String,
-        trackIds: [String] = []
-    ) async throws -> CreatePlaylistResponse {
-        let url = baseURL.appending(path: "Playlists")
-        let body = CreatePlaylistRequest(
-            name: name,
-            userId: userId,
-            ids: trackIds,
-            mediaType: "Audio",
-            isPublic: false
-        )
-        let rawBody = try Self.pascalCaseEncoder.encode(body)
-        logger.debug("Creating playlist '\(name)'")
-        return try await httpClient.request(
-            url: url, method: .post, headers: authHeaders, rawBody: rawBody)
-    }
-
-    /// Add tracks to an existing playlist.
-    public func addToPlaylist(
-        playlistId: String,
-        trackIds: [String]
-    ) async throws {
-        let url = baseURL.appending(path: "Playlists/\(playlistId)/Items")
-        let queryItems = [
-            URLQueryItem(name: "Ids", value: trackIds.joined(separator: ","))
-        ]
-        logger.debug("Adding \(trackIds.count) tracks to playlist \(playlistId)")
-        try await httpClient.request(
-            url: url, method: .post, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .networkOnly)
-        await httpClient.cache.removeAll(matching: playlistId)
-    }
-
-    /// Remove tracks from a playlist by their entry IDs.
-    public func removeFromPlaylist(
-        playlistId: String,
-        entryIds: [String]
-    ) async throws {
-        let url = baseURL.appending(path: "Playlists/\(playlistId)/Items")
-        let queryItems = [
-            URLQueryItem(name: "EntryIds", value: entryIds.joined(separator: ","))
-        ]
-        logger.debug("Removing \(entryIds.count) entries from playlist \(playlistId)")
-        try await httpClient.request(
-            url: url, method: .delete, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .networkOnly)
-        await httpClient.cache.removeAll(matching: playlistId)
-    }
-
-    /// Get items in a playlist.
-    public func getPlaylistItems(
-        playlistId: String,
-        userId: String
-    ) async throws -> ItemsResult {
-        let url = baseURL.appending(path: "Playlists/\(playlistId)/Items")
-        let queryItems = [
-            URLQueryItem(name: "UserId", value: userId),
-            URLQueryItem(
-                name: "Fields", value: "Overview,Genres,DateCreated,UserData,ProductionYear"),
-        ]
-        logger.debug("Fetching items for playlist \(playlistId)")
-        return try await httpClient.request(
-            url: url, method: .get, headers: authHeaders, queryItems: queryItems,
-            cachePolicy: .cacheFirst(maxAge: 30))
     }
 
     /// Update an item (e.g., rename a playlist).
@@ -1332,51 +1157,6 @@ private struct PlaybackInfoRequest: Encodable, Sendable {
 }
 
 // MARK: - Music Feature DTOs
-
-/// Response from the lyrics endpoint.
-public struct LyricsResponse: Codable, Sendable {
-    public let lyrics: [LyricLineDto]?
-
-    enum CodingKeys: String, CodingKey {
-        case lyrics = "Lyrics"
-    }
-}
-
-public struct LyricLineDto: Codable, Sendable {
-    public let start: Int64?
-    public let text: String?
-
-    enum CodingKeys: String, CodingKey {
-        case start = "Start"
-        case text = "Text"
-    }
-}
-
-/// Request body for creating a playlist.
-struct CreatePlaylistRequest: Encodable, Sendable {
-    let name: String
-    let userId: String
-    let ids: [String]
-    let mediaType: String
-    let isPublic: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case name = "Name"
-        case userId = "UserId"
-        case ids = "Ids"
-        case mediaType = "MediaType"
-        case isPublic = "IsPublic"
-    }
-}
-
-/// Response from creating a playlist.
-public struct CreatePlaylistResponse: Codable, Sendable {
-    public let id: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id = "Id"
-    }
-}
 
 /// Request body for updating an item name.
 /// Uses lowercase coding keys so the HTTPClient's `.convertToSnakeCase`

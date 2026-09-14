@@ -9,9 +9,3 @@ struct OfflineSeriesDestination: Hashable {
     let title: String
 }
 
-/// Navigation value for offline album detail.
-struct OfflineAlbumDestination: Hashable {
-    let albumId: String
-    let serverId: String
-    let title: String
-}

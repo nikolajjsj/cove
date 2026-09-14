@@ -17,8 +17,6 @@ struct SettingsView: View {
     @Default(.accentColor) var accentColorName
     @Default(.wifiStreamingQuality) var wifiStreamingQuality
     @Default(.cellularStreamingQuality) var cellularStreamingQuality
-    @Default(.audioQualityWifi) var audioQualityWifi
-    @Default(.audioQualityCellular) var audioQualityCellular
     @Default(.resumePlaybackBehavior) var resumePlaybackBehavior
     @Default(.gridDensity) var gridDensity
     @Default(.appearanceMode) var appearanceMode
@@ -177,28 +175,6 @@ struct SettingsView: View {
                 }
             }
 
-            // MARK: - Audio Quality
-
-            Section("Audio Quality") {
-                Picker(selection: $audioQualityWifi) {
-                    ForEach(AudioStreamingQuality.allCases, id: \.self) { quality in
-                        Text(quality.displayName).tag(quality)
-                    }
-                } label: {
-                    Label("Wi-Fi", systemImage: "wifi")
-                }
-                .pickerStyle(.menu)
-
-                Picker(selection: $audioQualityCellular) {
-                    ForEach(AudioStreamingQuality.allCases, id: \.self) { quality in
-                        Text(quality.displayName).tag(quality)
-                    }
-                } label: {
-                    Label("Cellular", systemImage: "cellularbars")
-                }
-                .pickerStyle(.menu)
-            }
-
             // MARK: - Video Playback
 
             Section("Video Playback") {
@@ -324,7 +300,6 @@ struct SettingsView: View {
 
     private func libraryIcon(for type: CollectionType?) -> String {
         switch type {
-        case .music: "music.note"
         case .movies: "film"
         case .tvshows: "tv"
         case .books: "book"

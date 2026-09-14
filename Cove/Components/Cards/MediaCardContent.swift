@@ -7,7 +7,7 @@ import SwiftUI
 /// `Button`, or adding `.mediaContextMenu` is the caller's responsibility.
 ///
 /// ```swift
-/// // Album card style (2-line title)
+/// // Two-line title style
 /// MediaCardContent(imageURL: url, title: "Abbey Road", subtitle: "The Beatles", titleLineLimit: 2)
 ///
 /// // Song card style (1-line title)

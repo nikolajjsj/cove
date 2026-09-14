@@ -84,7 +84,6 @@ final class AppState {
     var navigationPaths: [AppTab: NavigationPath] = [
         .home: NavigationPath(),
         .search: NavigationPath(),
-        .music: NavigationPath(),
         .movies: NavigationPath(),
         .tvShows: NavigationPath(),
         .downloads: NavigationPath(),
@@ -95,8 +94,6 @@ final class AppState {
 
     let authManager: AuthManager
     let downloadCoordinator: DownloadCoordinator
-    let audioPlayer = AudioPlaybackManager()
-    let lyricsStore = LyricsStore()
     let videoPlayerCoordinator = VideoPlayerCoordinator()
     let networkMonitor = NetworkMonitor.shared
 
@@ -120,7 +117,6 @@ final class AppState {
 
         let success = await authManager.restoreSession()
         if success {
-            wireUpPlayer()
             await loadLibraries()
             startCatalogSync()
             await downloadCoordinator.syncOfflineReports()
@@ -136,14 +132,12 @@ final class AppState {
 
     /// Called after a successful connection to set up dependent services.
     func onConnected() async {
-        wireUpPlayer()
         await loadLibraries()
         startCatalogSync()
     }
 
     /// Disconnect and tear down all state.
     func onDisconnect() async {
-        audioPlayer.stop()
         catalogStatusTask?.cancel()
         catalogStatusTask = nil
         catalogSync = nil
@@ -159,12 +153,9 @@ final class AppState {
     func loadLibraries() async {
         do {
             let fetched = try await authManager.provider.libraries()
-            // Dropping music here is what hides it everywhere else: the Music
-            // tab, the Home rails and the Settings list are all derived from
-            // this array. See FeatureFlags.musicEnabled.
-            libraries = FeatureFlags.musicEnabled
-                ? fetched
-                : fetched.filter { $0.collectionType != .music }
+            // Cove does not do music, and has no playlist screens. Dropping those
+            // libraries here removes them from every place the list is read.
+            libraries = fetched.filter { $0.collectionType != .music && $0.collectionType != .playlists }
             libraryLoadFailed = false
             // Persist only on success. An empty list on a 5xx is not "no libraries".
             if let repository = catalogRepository, let scope = currentCatalogScope {
@@ -370,154 +361,6 @@ final class AppState {
         isRetryingLibraries = false
     }
 
-    // MARK: - Player Wiring
-
-    /// Configure the audio player's URL resolvers and playback reporting callbacks
-    /// to use the current server provider.
-    /// Called after a successful connection or session restore.
-    func wireUpPlayer() {
-        let provider = authManager.provider
-        let connection = authManager.activeConnection
-        let coordinator = downloadCoordinator
-        let networkMonitor = self.networkMonitor
-        let userDataStore = self.userDataStore
-
-        audioPlayer.streamURLResolver = { (track: Track) -> URL? in
-            // Try local file first (sync check via DownloadStorage)
-            if let connection {
-                let storage = DownloadStorage.shared
-                let dir = storage.itemDirectory(
-                    serverId: connection.id.uuidString,
-                    mediaType: .track,
-                    itemId: track.id
-                )
-                let fm = FileManager.default
-                if let contents = try? fm.contentsOfDirectory(
-                    at: dir, includingPropertiesForKeys: nil),
-                    let mediaFile = contents.first(where: {
-                        $0.lastPathComponent.hasPrefix("media.")
-                    })
-                {
-                    return mediaFile
-                }
-            }
-            // Determine quality based on network type (expensive = cellular)
-            let quality: AudioStreamingQuality =
-                networkMonitor.isExpensive
-                ? Defaults[.audioQualityCellular]
-                : Defaults[.audioQualityWifi]
-            // Fall back to remote stream with the selected quality
-            return provider.audioStreamURL(for: track, maxBitRate: quality.maxBitRate)
-        }
-
-        audioPlayer.artworkURLResolver = { track in
-            // Try local artwork first
-            if let connection,
-                let albumId = track.albumId
-            {
-                let storage = DownloadStorage.shared
-                let imageURL = storage.primaryImageURL(
-                    serverId: connection.id.uuidString,
-                    mediaType: .album,
-                    itemId: albumId
-                )
-                if FileManager.default.fileExists(atPath: imageURL.path) {
-                    return imageURL
-                }
-            }
-            // Fall back to remote
-            let itemId = track.albumId ?? track.id
-            return provider.imageURL(
-                for: itemId,
-                type: .primary,
-                maxSize: CGSize(width: 600, height: 600)
-            )
-        }
-
-        // MARK: Favourite state for the lock screen heart
-
-        audioPlayer.favoriteStateProvider = { [weak self] track in
-            guard let self else { return track.userData?.isFavorite ?? false }
-            let itemId = ItemID(track.id.rawValue)
-            return self.userDataStore?.isFavorite(itemId, fallback: track.userData)
-                ?? track.userData?.isFavorite ?? false
-        }
-
-        audioPlayer.onToggleFavorite = { [weak self] track in
-            guard let self else { return }
-            let itemId = ItemID(track.id.rawValue)
-            do {
-                guard
-                    let newValue = try await self.userDataStore?.toggleFavorite(
-                        itemId: itemId,
-                        current: track.userData
-                    )
-                else { return }
-                // Keep the lock screen heart in sync after the toggle.
-                self.audioPlayer.updateFavoriteState(isFavorite: newValue)
-                ToastManager.shared.show(
-                    newValue ? "Added to Favorites" : "Removed from Favorites",
-                    icon: newValue ? "heart.fill" : "heart"
-                )
-            } catch {
-                ToastManager.shared.show(
-                    "Couldn't update favorite",
-                    icon: "exclamationmark.triangle",
-                    style: .error
-                )
-            }
-        }
-
-        // MARK: Playback Reporting
-
-        // Session start/progress are live-session signals with no offline meaning;
-        // the durable position goes through the user-data outbox on stop.
-        audioPlayer.onPlaybackStart = { track, position in
-            guard networkMonitor.isConnected else { return }
-            let item = Self.mediaItem(from: track)
-            try? await provider.reportPlaybackStart(item: item, position: position)
-        }
-
-        audioPlayer.onPlaybackProgress = { track, position, isPaused in
-            guard networkMonitor.isConnected else { return }
-            let item = Self.mediaItem(from: track)
-            try? await provider.reportPlaybackProgress(
-                item: item, position: position, isPaused: isPaused)
-        }
-
-        audioPlayer.onPlaybackStopped = { track, position in
-            let item = Self.mediaItem(from: track)
-            // The position lands locally either way; the outbox carries it if the
-            // live report below cannot be sent.
-            await userDataStore?.updatePlaybackPosition(
-                itemId: item.id, position: position, runtime: item.runtime, currentData: track.userData)
-            if networkMonitor.isConnected {
-                try? await provider.reportPlaybackStopped(item: item, position: position)
-            }
-            // Offline: updatePlaybackPosition above already queued it in the outbox.
-        }
-
-        audioPlayer.onTrackListened = { track in
-            let itemId = ItemID(track.id.rawValue)
-            // Pass the track's server data so marking it played doesn't wipe its
-            // favourite state out of the override.
-            try? await userDataStore?.markPlayed(itemId: itemId, current: track.userData)
-        }
-    }
-
-    /// Convert a `Track` to a `MediaItem` for playback reporting.
-    private static func mediaItem(from track: Track) -> MediaItem {
-        MediaItem(
-            id: ItemID(track.id.rawValue),
-            title: track.title,
-            mediaType: .track,
-            userData: track.userData,
-            artistName: track.artistName,
-            albumName: track.albumName,
-            albumId: track.albumId.map { ItemID($0.rawValue) }
-        )
-    }
-
     // MARK: - Network Observation
 
     private func startNetworkObservation() {
@@ -582,12 +425,6 @@ final class AppState {
                 newValue ? "Added to Favorites" : "Removed from Favorites",
                 icon: newValue ? "heart.fill" : "heart"
             )
-            // If the toggled item is the currently playing track, sync the lock screen heart.
-            if let currentTrack = audioPlayer.queue.currentTrack,
-                ItemID(currentTrack.id.rawValue) == itemId
-            {
-                audioPlayer.updateFavoriteState(isFavorite: newValue)
-            }
         } catch {
             ToastManager.shared.show(
                 "Couldn't update favorite", icon: "exclamationmark.triangle", style: .error)
@@ -615,37 +452,6 @@ final class AppState {
             ToastManager.shared.show(
                 "Couldn't update watched status", icon: "exclamationmark.triangle", style: .error)
         }
-    }
-
-    /// Start an instant-mix radio station seeded from any item.
-    func startRadio(for itemId: ItemID) async {
-        do {
-            let tracks = try await authManager.provider.instantMix(for: itemId, limit: 50)
-            guard !tracks.isEmpty else { return }
-            audioPlayer.play(tracks: tracks, startingAt: 0)
-            ToastManager.shared.show("Radio started", icon: "dot.radiowaves.left.and.right")
-        } catch {
-            ToastManager.shared.show(
-                "Couldn't start radio", icon: "exclamationmark.triangle", style: .error)
-        }
-    }
-
-    /// Queue an array of tracks to play next or at the end.
-    func queueTracks(_ tracks: [Track], next: Bool) {
-        guard !tracks.isEmpty else { return }
-        for track in tracks {
-            if next {
-                audioPlayer.queue.addNext(track)
-            } else {
-                audioPlayer.queue.addToEnd(track)
-            }
-        }
-        let message = next ? "Playing Next" : "Added to Up Next"
-        let icon =
-            next
-            ? "text.line.first.and.arrowtriangle.forward"
-            : "text.line.last.and.arrowtriangle.forward"
-        ToastManager.shared.show(message, icon: icon)
     }
 }
 

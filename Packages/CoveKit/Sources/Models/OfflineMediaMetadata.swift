@@ -42,20 +42,6 @@ public struct OfflineMediaMetadata: Codable, Hashable, Sendable {
     public var seasonCount: Int?
     public var episodeCount: Int?
 
-    // MARK: - Album-specific
-    public var artistId: String?
-    public var artistName: String?
-    public var genre: String?
-    public var trackCount: Int?
-    public var duration: Double?  // TimeInterval
-
-    // MARK: - Track-specific
-    public var albumId: String?
-    public var albumName: String?
-    public var trackNumber: Int?
-    public var discNumber: Int?
-    public var codec: String?
-
     // MARK: - Offline asset paths (relative to downloads directory)
     public var primaryImagePath: String?
     public var backdropImagePath: String?
@@ -86,16 +72,6 @@ public struct OfflineMediaMetadata: Codable, Hashable, Sendable {
         status: String? = nil,
         seasonCount: Int? = nil,
         episodeCount: Int? = nil,
-        artistId: String? = nil,
-        artistName: String? = nil,
-        genre: String? = nil,
-        trackCount: Int? = nil,
-        duration: Double? = nil,
-        albumId: String? = nil,
-        albumName: String? = nil,
-        trackNumber: Int? = nil,
-        discNumber: Int? = nil,
-        codec: String? = nil,
         primaryImagePath: String? = nil,
         backdropImagePath: String? = nil,
         subtitles: [OfflineSubtitle]? = nil
@@ -124,16 +100,6 @@ public struct OfflineMediaMetadata: Codable, Hashable, Sendable {
         self.status = status
         self.seasonCount = seasonCount
         self.episodeCount = episodeCount
-        self.artistId = artistId
-        self.artistName = artistName
-        self.genre = genre
-        self.trackCount = trackCount
-        self.duration = duration
-        self.albumId = albumId
-        self.albumName = albumName
-        self.trackNumber = trackNumber
-        self.discNumber = discNumber
-        self.codec = codec
         self.primaryImagePath = primaryImagePath
         self.backdropImagePath = backdropImagePath
         self.subtitles = subtitles
@@ -160,6 +126,7 @@ public struct OfflineSubtitle: Codable, Hashable, Sendable {
 // MARK: - Convenience Builders
 
 extension OfflineMediaMetadata {
+    /// Create metadata from a `Series`.
     /// Create metadata from a `MediaItem`.
     public static func from(
         item: MediaItem,
@@ -206,47 +173,6 @@ extension OfflineMediaMetadata {
         )
     }
 
-    /// Create metadata from a `Track` and its parent identifiers.
-    public static func from(
-        track: Track,
-        serverId: String
-    ) -> OfflineMediaMetadata {
-        OfflineMediaMetadata(
-            itemId: track.id.rawValue,
-            serverId: serverId,
-            mediaType: MediaType.track.rawValue,
-            title: track.title,
-            artistId: track.artistId?.rawValue,
-            artistName: track.artistName,
-            duration: track.duration,
-            albumId: track.albumId?.rawValue,
-            albumName: track.albumName,
-            trackNumber: track.trackNumber,
-            discNumber: track.discNumber,
-            codec: track.codec
-        )
-    }
-
-    /// Create metadata from an `Album`.
-    public static func from(
-        album: Album,
-        serverId: String
-    ) -> OfflineMediaMetadata {
-        OfflineMediaMetadata(
-            itemId: album.id.rawValue,
-            serverId: serverId,
-            mediaType: MediaType.album.rawValue,
-            title: album.title,
-            productionYear: album.year,
-            artistId: album.artistId?.rawValue,
-            artistName: album.artistName,
-            genre: album.genre,
-            trackCount: album.trackCount,
-            duration: album.duration
-        )
-    }
-
-    /// Create metadata from a `Series`.
     public static func from(
         series: Series,
         serverId: String
@@ -262,24 +188,6 @@ extension OfflineMediaMetadata {
             status: series.status,
             seasonCount: series.seasonCount,
             episodeCount: series.episodeCount
-        )
-    }
-
-    /// Create metadata from a `Playlist`.
-    public static func from(
-        playlist: Playlist,
-        serverId: String
-    ) -> OfflineMediaMetadata {
-        OfflineMediaMetadata(
-            itemId: playlist.id.rawValue,
-            serverId: serverId,
-            mediaType: MediaType.playlist.rawValue,
-            title: playlist.name,
-            overview: playlist.overview,
-            dateAdded: playlist.dateAdded,
-            isFavorite: playlist.userData?.isFavorite,
-            trackCount: playlist.itemCount,
-            duration: playlist.duration
         )
     }
 

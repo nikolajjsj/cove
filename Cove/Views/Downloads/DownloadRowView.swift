@@ -284,7 +284,7 @@ struct DownloadRowView: View {
                 itemId: ItemID("item-2"),
                 serverId: "server-1",
                 title: "Yesterday",
-                mediaType: .track,
+                mediaType: .movie,
                 state: .completed,
                 progress: 1.0,
                 totalBytes: 8_500_000,

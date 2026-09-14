@@ -38,10 +38,9 @@ struct LibraryGridView: View {
 
     @Default(.gridDensity) private var gridDensity
     @Default(.videoLibraryLayout) private var videoLayout
-    @Default(.musicLibraryLayout) private var musicLayout
 
     private var layoutMode: LibraryLayoutMode {
-        isVideoLibrary ? videoLayout : musicLayout
+        videoLayout
     }
 
     // MARK: - SearchKey
@@ -411,11 +410,7 @@ struct LibraryGridView: View {
     // MARK: - Search Pagination Trigger
 
     private func toggleLayout() {
-        if isVideoLibrary {
-            videoLayout = videoLayout == .grid ? .list : .grid
-        } else {
-            musicLayout = musicLayout == .grid ? .list : .grid
-        }
+        videoLayout = videoLayout == .grid ? .list : .grid
     }
 
     private func onSearchItemAppeared(_ item: MediaItem) {
@@ -610,7 +605,6 @@ struct LibraryGridView: View {
         switch collectionType {
         case .movies: return loader.totalCount == 1 ? "movie" : "movies"
         case .tvshows: return loader.totalCount == 1 ? "show" : "shows"
-        case .music: return loader.totalCount == 1 ? "item" : "items"
         case .boxsets: return loader.totalCount == 1 ? "collection" : "collections"
         default: return loader.totalCount == 1 ? "item" : "items"
         }

@@ -61,12 +61,7 @@ struct MediaItemRail: View {
         case .landscape:
             return landscapeCardWidth
         case .portrait:
-            switch item.mediaType {
-            case .album, .artist, .track, .playlist:
-                return 140
-            default:
-                return portraitCardWidth
-            }
+            return portraitCardWidth
         }
     }
 }

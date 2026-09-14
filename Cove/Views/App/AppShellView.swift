@@ -16,17 +16,15 @@ struct AppShellView: View {
         @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
 
-    @State private var showFullPlayer = false
-
     var body: some View {
         Group {
             #if os(tvOS)
                 TVTabShell()
             #else
                 if sizeClass == .compact {
-                    CompactTabShell(showFullPlayer: $showFullPlayer)
+                    CompactTabShell()
                 } else {
-                    SidebarShell(showFullPlayer: $showFullPlayer)
+                    SidebarShell()
                 }
             #endif
         }
@@ -38,11 +36,6 @@ struct AppShellView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: appState.isOffline)
-        #if !os(tvOS)
-            .sheet(isPresented: $showFullPlayer) {
-                AudioPlayerView()
-            }
-        #endif
     }
 }
 
@@ -52,7 +45,6 @@ struct AppShellView: View {
 private struct CompactTabShell: View {
     @Environment(AppState.self) private var appState
     @Environment(DownloadCoordinator.self) private var downloadCoordinator
-    @Binding var showFullPlayer: Bool
 
     var body: some View {
         @Bindable var appState = appState
@@ -71,11 +63,6 @@ private struct CompactTabShell: View {
             }
         }
         .onAppear { appState.shellLayout = .compact }
-        .tabViewBottomAccessory(isEnabled: appState.audioPlayer.queue.currentTrack != nil) {
-            if let track = appState.audioPlayer.queue.currentTrack {
-                NowPlayingBar(showFullPlayer: $showFullPlayer, track: track)
-            }
-        }
     }
 }
 
@@ -85,7 +72,6 @@ private struct CompactTabShell: View {
 private struct SidebarShell: View {
     @Environment(AppState.self) private var appState
     @Environment(DownloadCoordinator.self) private var downloadCoordinator
-    @Binding var showFullPlayer: Bool
 
     /// iOS only offers `List` an *optional* selection binding, while the shell
     /// always has a tab selected. Bridge the two rather than dropping the list
@@ -119,22 +105,6 @@ private struct SidebarShell: View {
                 )
                 .navigationTitle(appState.selectedTab.title)
                 .withNavigationDestinations()
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
-            if let track = appState.audioPlayer.queue.currentTrack {
-                NowPlayingBar(showFullPlayer: $showFullPlayer, track: track)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .frame(height: 64)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .strokeBorder(.separator, lineWidth: 0.5)
-                    )
-                    .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 4)
             }
         }
         .onAppear { appState.shellLayout = .regular }

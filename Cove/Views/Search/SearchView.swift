@@ -35,7 +35,7 @@ struct SearchView: View {
                 saveRecentSearches()
             }
         )
-        .searchable(text: $searchText, prompt: "Movies, shows, music…")
+        .searchable(text: $searchText, prompt: "Movies, shows, episodes…")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 MediaFilterMenu(
@@ -99,7 +99,8 @@ private struct SearchContentView: View {
 
     // MARK: Derived
 
-    private static let musicTypes: Set<MediaType> = [.artist, .album, .track]
+    /// The only types this app shows. The server's search also returns music.
+    private static let visibleTypes: Set<MediaType> = [.movie, .series, .episode]
 
     private var maxPreviewItems: Int { sizeClass == .compact ? 3 : 5 }
 
@@ -224,13 +225,10 @@ private struct SearchContentView: View {
                     minCommunityRating: minRating
                 )
             }
-            // Search hits the server directly rather than going through the
-            // library list, so it needs its own guard.
-            let visible = FeatureFlags.musicEnabled
-                ? fetched
-                : SearchResults(
-                    items: fetched.items.filter { !Self.musicTypes.contains($0.mediaType) }
-                )
+            // The server's search returns every type it knows; keep the ones the
+            // app has screens for.
+            let visible = SearchResults(
+                items: fetched.items.filter { Self.visibleTypes.contains($0.mediaType) })
             results = visible
             if !visible.items.isEmpty { onSearch(trimmedQuery) }
         } catch {
@@ -408,27 +406,6 @@ private struct SearchResultsScrollView: View {
                     title: "Episodes",
                     items: results.items(ofType: .episode),
                     mediaType: .episode,
-                    query: query,
-                    maxItems: maxPreviewItems
-                )
-                SearchResultsSection(
-                    title: "Artists",
-                    items: results.items(ofType: .artist),
-                    mediaType: .artist,
-                    query: query,
-                    maxItems: maxPreviewItems
-                )
-                SearchResultsSection(
-                    title: "Albums",
-                    items: results.items(ofType: .album),
-                    mediaType: .album,
-                    query: query,
-                    maxItems: maxPreviewItems
-                )
-                SearchResultsSection(
-                    title: "Songs",
-                    items: results.items(ofType: .track),
-                    mediaType: .track,
                     query: query,
                     maxItems: maxPreviewItems
                 )

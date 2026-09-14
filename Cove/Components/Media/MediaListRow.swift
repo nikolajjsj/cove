@@ -77,22 +77,15 @@ struct MediaListRow: View {
         return progress
     }
 
-    /// Poster aspect ratio: square for music, portrait for video content.
-    private var posterAspectRatio: Double {
-        item.mediaType.isMusic ? 1.0 : 2.0 / 3.0
-    }
+    /// Poster aspect ratio: portrait for video content.
+    private var posterAspectRatio: Double { 2.0 / 3.0 }
 
     /// Thumbnail height derived from aspect ratio and a fixed 56pt width.
-    private var thumbnailHeight: CGFloat {
-        item.mediaType.isMusic ? 56 : 84
-    }
+    private var thumbnailHeight: CGFloat { 84 }
 
     /// Image URL sized appropriately for the thumbnail.
     private var imageURL: URL? {
-        let maxSize =
-            item.mediaType.isMusic
-            ? CGSize(width: 120, height: 120)
-            : CGSize(width: 120, height: 180)
+        let maxSize = CGSize(width: 120, height: 180)
         return authManager.provider.imageURL(
             for: item,
             type: .primary,
@@ -134,8 +127,6 @@ struct MediaListRowInfo: View {
             return seriesSubtitle
         case .episode:
             return episodeSubtitle
-        case .album, .artist, .track:
-            return musicSubtitle
         default:
             return genericSubtitle
         }
@@ -178,17 +169,6 @@ struct MediaListRowInfo: View {
             parts.append(series)
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
-
-    /// Artist name or album name for music items.
-    private var musicSubtitle: String? {
-        if let artist = item.artistName, !artist.isEmpty {
-            return artist
-        }
-        if let album = item.albumName, !album.isEmpty {
-            return album
-        }
-        return nil
     }
 
     /// Year as a fallback for other media types.
@@ -333,30 +313,6 @@ struct MediaListRowProgressRing: View {
         .environment(_previewStore)
     }
 
-    #Preview("Music — Album") {
-        List {
-            MediaListRow(
-                item: MediaItem(
-                    id: ItemID("6"),
-                    title: "Abbey Road",
-                    mediaType: .album,
-                    artistName: "The Beatles"
-                )
-            )
-
-            MediaListRow(
-                item: MediaItem(
-                    id: ItemID("7"),
-                    title: "OK Computer",
-                    mediaType: .album,
-                    artistName: "Radiohead"
-                )
-            )
-        }
-        .environment(_previewState.authManager)
-        .environment(_previewStore)
-    }
-
     #Preview("Mixed List") {
         List {
             MediaListRow(
@@ -405,14 +361,6 @@ struct MediaListRowProgressRing: View {
                 )
             )
 
-            MediaListRow(
-                item: MediaItem(
-                    id: ItemID("a1"),
-                    title: "Abbey Road",
-                    mediaType: .album,
-                    artistName: "The Beatles"
-                )
-            )
         }
         .environment(_previewState.authManager)
         .environment(_previewStore)

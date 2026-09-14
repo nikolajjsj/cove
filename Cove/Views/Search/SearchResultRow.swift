@@ -39,8 +39,6 @@ struct SearchResultRow: View {
             }
         case .episode:
             episodeSubtitle
-        case .track:
-            trackSubtitle
         default:
             item.mediaType.displayLabel
         }
@@ -59,14 +57,4 @@ struct SearchResultRow: View {
         return parts.isEmpty ? "Episode" : parts.joined(separator: " · ")
     }
 
-    private var trackSubtitle: String {
-        var parts: [String] = []
-        if let artistName = item.artistName {
-            parts.append(artistName)
-        }
-        if let albumName = item.albumName {
-            parts.append(albumName)
-        }
-        return parts.isEmpty ? "Song" : parts.joined(separator: " · ")
-    }
 }

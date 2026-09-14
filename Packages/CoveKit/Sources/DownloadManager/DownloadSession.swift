@@ -3,7 +3,7 @@ import Foundation
 /// A single transfer — as much of `URLSessionDownloadTask` as the engine uses.
 ///
 /// Exists so `DownloadManagerService` can be driven by a stub in tests, the same
-/// way `AudioPlayerBackend` lets `AudioPlaybackManager` be tested without a real
+/// way a protocol seam lets the playback engine be tested without a real
 /// media pipeline. A background `URLSession` cannot be exercised from a unit test:
 /// it needs a real network, real files, and delivers its callbacks on its own
 /// schedule.

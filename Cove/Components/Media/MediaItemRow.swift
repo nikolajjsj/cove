@@ -58,13 +58,7 @@ struct MediaItemRow<Trailing: View>: View {
     // MARK: - Body
 
     var aspectRatio: Double {
-        if mediaType.isMusic {
-            return 1.0
-        } else if mediaType == .episode {
-            return 16 / 9
-        } else {
-            return 2.0 / 3.0
-        }
+        mediaType == .episode ? 16 / 9 : 2.0 / 3.0
     }
 
     var body: some View {
@@ -79,11 +73,11 @@ struct MediaItemRow<Trailing: View>: View {
                 )
                 .frame(
                     width: thumbnailWidth,
-                    height: mediaType.isMusic ? thumbnailWidth : thumbnailWidth * 1.5
+                    height: thumbnailWidth * 1.5
                 )
                 .clipped()
 
-                if isPlayed && !mediaType.isMusic {
+                if isPlayed {
                     WatchedBadge(font: .caption2)
                 }
             }
@@ -163,13 +157,6 @@ extension MediaItemRow where Trailing == EmptyView {
                 subtitle: "2008–2013",
                 mediaType: .series,
                 metadata: ["TV-MA"]
-            )
-
-            MediaItemRow(
-                imageURL: nil,
-                title: "Abbey Road",
-                subtitle: "The Beatles",
-                mediaType: .album
             )
         }
     }
