@@ -45,6 +45,9 @@ struct SettingsView: View {
         ("Green", "green", .green),
     ]
 
+    @State private var pendingEdits = 0
+    @State private var showDisconnectConfirmation = false
+
     var body: some View {
         List {
             // MARK: - Connected Server
@@ -53,9 +56,37 @@ struct SettingsView: View {
                 Section("Connected Server") {
                     LabeledContent("Name", value: connection.name)
                     LabeledContent("URL", value: connection.url.absoluteString)
+                    CatalogSyncStatusRow()
                     Button("Disconnect", role: .destructive) {
+                        Task {
+                            // Discarding intent silently is the one thing the
+                            // outbox exists to prevent. Ask first.
+                            pendingEdits = await appState.pendingOutboxCount()
+                            if pendingEdits > 0 {
+                                showDisconnectConfirmation = true
+                            } else {
+                                await appState.onDisconnect()
+                            }
+                        }
+                    }
+                }
+                .confirmationDialog(
+                    "\(pendingEdits) change\(pendingEdits == 1 ? "" : "s") haven't reached your server yet.",
+                    isPresented: $showDisconnectConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Send Changes, Then Disconnect") {
+                        Task {
+                            await appState.flushOutbox()
+                            await appState.onDisconnect()
+                        }
+                    }
+                    Button("Disconnect Anyway", role: .destructive) {
                         Task { await appState.onDisconnect() }
                     }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("They were made while offline. Sending them needs a connection to the server.")
                 }
             }
 
@@ -302,5 +333,44 @@ struct SettingsView: View {
         case .boxsets: "rectangle.stack"
         default: "folder"
         }
+    }
+}
+
+// MARK: - Sync Status
+
+/// "Library synced 4 min ago · 3 changes waiting" — the honest one-liner.
+private struct CatalogSyncStatusRow: View {
+    @Environment(AppState.self) private var appState
+    @State private var pending = 0
+
+    var body: some View {
+        LabeledContent("Library") {
+            HStack(spacing: 6) {
+                if appState.catalogSyncStatus.isBusy {
+                    ProgressView().controlSize(.small)
+                }
+                Text(statusText)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+            }
+        }
+        .task(id: appState.catalogSyncStatus) {
+            pending = await appState.pendingOutboxCount()
+        }
+    }
+
+    private var statusText: String {
+        var parts: [String] = []
+        switch appState.catalogSyncStatus {
+        case .bootstrapping(let name, let done, let total):
+            parts.append(total > 0 ? "Syncing \(name) \(done) of \(total)" : "Syncing \(name)")
+        case .syncing: parts.append("Syncing")
+        case .failed(let message): parts.append("Couldn't sync: \(message)")
+        case .idle: parts.append("Up to date")
+        }
+        if pending > 0 {
+            parts.append("\(pending) change\(pending == 1 ? "" : "s") waiting")
+        }
+        return parts.joined(separator: " · ")
     }
 }

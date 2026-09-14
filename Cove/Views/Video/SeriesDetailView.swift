@@ -10,20 +10,24 @@ import SwiftUI
 
 struct SeriesDetailView: View {
     let item: MediaItem
-    /// When non-nil, the view operates in offline mode using local storage.
-    private let offlineServerId: String?
+    /// Reached from the Downloads screen: list only episodes that are on this
+    /// device. Everything else — data, artwork, playback — is the normal path;
+    /// the catalogue answers offline and a download is preferred for playback
+    /// whenever one exists, in either mode.
+    private let showsOnlyDownloaded: Bool
 
     init(item: MediaItem) {
         self.item = item
-        self.offlineServerId = nil
+        self.showsOnlyDownloaded = false
     }
 
     init(offlineSeriesId: String, serverId: String, title: String) {
         self.item = MediaItem(id: ItemID(offlineSeriesId), title: title, mediaType: .series)
-        self.offlineServerId = serverId
+        self.showsOnlyDownloaded = true
     }
 
-    private var isOffline: Bool { offlineServerId != nil }
+    /// No connection right now. Gates server-only sections, never data.
+    private var isOffline: Bool { appState.isOffline }
 
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
@@ -50,9 +54,8 @@ struct SeriesDetailView: View {
     @State private var downloadError: String?
     @State private var showDownloadError = false
 
-    // Offline state
-    @State private var offlineSeriesMetadata: OfflineMediaMetadata?
-    @State private var offlineEpisodeMetadata: [String: OfflineMediaMetadata] = [:]
+    // Completed downloads for this series, for badges, delete actions and
+    // preferring the local file at play time.
     @State private var offlineEpisodeDownloads: [DownloadItem] = []
     @State private var showDeleteSeriesConfirmation = false
     @State private var episodeToDelete: DownloadItem?
@@ -128,24 +131,14 @@ struct SeriesDetailView: View {
                                 isLoadingEpisodes: isLoadingEpisodes,
                                 episodesError: episodesError,
                                 episodes: episodes,
-                                isOffline: isOffline,
+                                isOffline: !offlineEpisodeDownloads.isEmpty,
                                 isFirstSeason: seasons.first?.id == selectedSeason?.id,
                                 offlineEpisodeDownloads: offlineEpisodeDownloads,
                                 seriesId: item.id,
                                 seriesName: item.title,
                                 thumbnailURL: { episodeThumbnailURL(for: $0) },
                                 progress: { episodeProgress(for: $0) },
-                                onPlay: { episode in
-                                    if let serverId = offlineServerId {
-                                        playOfflineEpisode(episode, serverId: serverId)
-                                    } else {
-                                        coordinator.playEpisode(
-                                            id: episode.id,
-                                            title: episode.title,
-                                            using: authManager.provider
-                                        )
-                                    }
-                                },
+                                onPlay: { episode in playPreferringLocal(episode) },
                                 onRequestDelete: { dl in episodeToDelete = dl },
                                 onMarkPreviousWatched: { episode in
                                     Task { await markEpisodesBeforePlayed(episode) }
@@ -182,7 +175,7 @@ struct SeriesDetailView: View {
         .ignoresSafeArea(edges: .top)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
-            if !isOffline {
+            if !showsOnlyDownloaded {
                 ToolbarItem(placement: .topBarTrailing) {
                     if downloadCoordinator.downloadManager != nil && !seasons.isEmpty {
                         Button {
@@ -197,7 +190,7 @@ struct SeriesDetailView: View {
 
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    if !isOffline {
+                    if true {
                         FavoriteToggle(itemId: item.id, userData: item.userData)
 
                         Button {
@@ -215,7 +208,7 @@ struct SeriesDetailView: View {
                         }
                     }
 
-                    if isOffline {
+                    if !offlineEpisodeDownloads.isEmpty {
                         Button(role: .destructive) {
                             showDeleteSeriesConfirmation = true
                         } label: {
@@ -287,13 +280,12 @@ struct SeriesDetailView: View {
             }
         }
         .task {
+            await loadDownloads()
             await loadSeasons()
-            if !isOffline {
-                await appState.loadDetail(item, into: detailLoader)
-            }
+            await appState.loadDetail(item, into: detailLoader)
         }
         .onChange(of: appState.videoPlayerCoordinator.isPresented) { wasPresented, isPresented in
-            if wasPresented && !isPresented && !isOffline {
+            if wasPresented && !isPresented {
                 Task {
                     // Allow time for the playback stop report to reach the server
                     try? await Task.sleep(for: .seconds(2))
@@ -344,151 +336,102 @@ struct SeriesDetailView: View {
     private func loadSeasons() async {
         isLoadingSeasons = true
         seasonsError = nil
-
-        if let serverId = offlineServerId {
-            await loadOfflineSeasons(serverId: serverId)
-        } else {
-            do {
-                // The catalogue holds Season rows for every synced TV library, so
-                // this works offline and does not change when the connection does.
-                let loadedSeasons: [Season]
-                if let local = await appState.localCatalog(),
-                    let fromCatalog = try? await local.repository.seasons(seriesId: item.id.rawValue, scope: local.scope),
-                    !fromCatalog.isEmpty
-                {
-                    loadedSeasons = fromCatalog
-                } else {
-                    loadedSeasons = try await authManager.provider.seasons(series: item.id)
-                }
-                seasons = loadedSeasons.sorted { $0.seasonNumber < $1.seasonNumber }
-                if let first = seasons.first {
-                    selectedSeason = first
-                    await loadEpisodes(for: first)
-                }
-            } catch {
-                seasonsError = error.localizedDescription
+        do {
+            // The catalogue holds Season rows for every synced TV library, so
+            // this works offline and does not change when the connection does.
+            let loadedSeasons: [Season]
+            if let local = await appState.localCatalog(),
+                let fromCatalog = try? await local.repository.seasons(seriesId: item.id.rawValue, scope: local.scope),
+                !fromCatalog.isEmpty
+            {
+                loadedSeasons = fromCatalog
+            } else {
+                loadedSeasons = try await authManager.provider.seasons(series: item.id)
             }
+            seasons = loadedSeasons.sorted { $0.seasonNumber < $1.seasonNumber }
+            if showsOnlyDownloaded {
+                // Only seasons with something on this device.
+                let downloadedSeasonNumbers = Set(offlineEpisodeDownloads.compactMap { dl in
+                    episodesBySeasonNumberHint[dl.itemId.rawValue]
+                })
+                if !downloadedSeasonNumbers.isEmpty {
+                    seasons = seasons.filter { downloadedSeasonNumbers.contains($0.seasonNumber) }
+                }
+            }
+            if let first = seasons.first {
+                selectedSeason = first
+                await loadEpisodes(for: first)
+            }
+        } catch {
+            seasonsError = error.localizedDescription
         }
         isLoadingSeasons = false
     }
 
-    private func loadOfflineSeasons(serverId: String) async {
-        guard let metadataRepo = downloadCoordinator.offlineMetadataRepository,
-            let dm = downloadCoordinator.downloadManager
+    /// Completed episode downloads for this series. Loaded in every mode: they
+    /// drive the badges, the delete actions, and preferring the local file.
+    private func loadDownloads() async {
+        guard let dm = downloadCoordinator.downloadManager,
+            let connection = authManager.activeConnection
         else { return }
-
-        // Load series metadata
-        offlineSeriesMetadata = try? await metadataRepo.fetch(
-            itemId: item.id.rawValue, serverId: serverId
-        )
-
-        // Load all episode metadata for this series
-        let allMeta = (try? await metadataRepo.fetchAll(serverId: serverId)) ?? []
-        var epMetaMap: [String: OfflineMediaMetadata] = [:]
-        for m in allMeta
-        where m.mediaType == MediaType.episode.rawValue
-            && (m.seriesId == item.id.rawValue)
-        {
-            epMetaMap[m.itemId] = m
-        }
-        offlineEpisodeMetadata = epMetaMap
-
-        // Load completed episode downloads
-        let allDownloads = (try? await dm.downloads(for: serverId)) ?? []
-        offlineEpisodeDownloads = allDownloads.filter { dl in
-            dl.mediaType == .episode
-                && dl.state == .completed
+        let all = (try? await dm.downloads(for: connection.id.uuidString)) ?? []
+        offlineEpisodeDownloads = all.filter { dl in
+            dl.mediaType == .episode && dl.state == .completed
                 && (dl.parentId?.rawValue == item.id.rawValue
-                    || epMetaMap[dl.itemId.rawValue]?.seriesId == item.id.rawValue)
-        }
-
-        // Derive Season objects from the episode metadata
-        let seasonNumbers = Set(
-            offlineEpisodeDownloads.compactMap { dl in
-                epMetaMap[dl.itemId.rawValue]?.seasonNumber
-            })
-        seasons = seasonNumbers.sorted().map { num in
-            Season(
-                id: SeasonID("offline-season-\(num)"),
-                seriesId: item.id,
-                seasonNumber: num,
-                title: num == 0 ? "Specials" : "Season \(num)"
-            )
-        }
-
-        if let first = seasons.first {
-            selectedSeason = first
-            loadOfflineEpisodes(for: first)
+                    || episodeSeriesHint[dl.itemId.rawValue] == item.id.rawValue)
         }
     }
+
+    /// Season number per downloaded episode, from the catalogue, so the
+    /// downloads-only view can hide seasons with nothing on the device.
+    private var episodesBySeasonNumberHint: [String: Int] { downloadedEpisodeHints.seasons }
+    private var episodeSeriesHint: [String: String] { downloadedEpisodeHints.series }
+    @State private var downloadedEpisodeHints: (seasons: [String: Int], series: [String: String]) = ([:], [:])
 
     private func loadEpisodes(for season: Season) async {
         isLoadingEpisodes = true
         episodesError = nil
-
-        if offlineServerId != nil {
-            loadOfflineEpisodes(for: season)
-        } else {
-            do {
-                let loaded: [Episode]
-                if let local = await appState.localCatalog(),
-                    let fromCatalog = try? await local.repository.episodes(seasonId: season.id.rawValue, scope: local.scope),
-                    !fromCatalog.isEmpty
-                {
-                    loaded = fromCatalog
-                } else {
-                    loaded = try await authManager.provider.episodes(season: season.id)
-                }
-                episodes = loaded.sorted { ($0.episodeNumber ?? 0) < ($1.episodeNumber ?? 0) }
-            } catch {
-                episodesError = error.localizedDescription
-                episodes = []
+        do {
+            let loaded: [Episode]
+            if let local = await appState.localCatalog(),
+                let fromCatalog = try? await local.repository.episodes(seasonId: season.id.rawValue, scope: local.scope),
+                !fromCatalog.isEmpty
+            {
+                loaded = fromCatalog
+            } else {
+                loaded = try await authManager.provider.episodes(season: season.id)
             }
+            var sorted = loaded.sorted { ($0.episodeNumber ?? 0) < ($1.episodeNumber ?? 0) }
+            if showsOnlyDownloaded {
+                let downloaded = Set(offlineEpisodeDownloads.map(\.itemId))
+                sorted = sorted.filter { downloaded.contains($0.id) }
+            }
+            // Remember which series and season each downloaded episode belongs
+            // to, for the next loadDownloads / season filter.
+            var hints = downloadedEpisodeHints
+            for ep in sorted {
+                if let n = ep.seasonNumber { hints.seasons[ep.id.rawValue] = n }
+                if let sid = ep.seriesId { hints.series[ep.id.rawValue] = sid.rawValue }
+            }
+            downloadedEpisodeHints = hints
+            episodes = sorted
+        } catch {
+            episodesError = error.localizedDescription
+            episodes = []
         }
         isLoadingEpisodes = false
-    }
-
-    private func loadOfflineEpisodes(for season: Season) {
-        let seasonEps = offlineEpisodeDownloads.filter { dl in
-            offlineEpisodeMetadata[dl.itemId.rawValue]?.seasonNumber == season.seasonNumber
-        }
-        episodes = seasonEps.compactMap { dl -> Episode? in
-            guard let meta = offlineEpisodeMetadata[dl.itemId.rawValue] else { return nil }
-            return Episode(
-                id: EpisodeID(meta.itemId),
-                seriesId: meta.seriesId.map { SeriesID($0) },
-                seasonId: meta.seasonId.map { SeasonID($0) },
-                episodeNumber: meta.episodeNumber,
-                seasonNumber: meta.seasonNumber,
-                title: meta.title ?? "Unknown Episode",
-                overview: meta.overview,
-                runtime: meta.runTimeTicks.map { TimeInterval($0) / 10_000_000.0 }
-            )
-        }.sorted { ($0.episodeNumber ?? 0) < ($1.episodeNumber ?? 0) }
     }
 
     private func selectSeason(_ season: Season) {
         guard season.id != selectedSeason?.id else { return }
         selectedSeason = season
-        if offlineServerId != nil {
-            loadOfflineEpisodes(for: season)
-        } else {
-            Task {
-                await loadEpisodes(for: season)
-            }
-        }
+        Task { await loadEpisodes(for: season) }
     }
 
     // MARK: - Image Helpers
 
     private func backdropURL(for item: MediaItem) -> URL? {
-        if offlineServerId != nil {
-            if let path = offlineSeriesMetadata?.backdropImagePath {
-                return DownloadStorage.shared.localImageURL(relativePath: path)
-            }
-            return nil
-        }
-        return authManager.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .backdrop,
             maxSize: CGSize(width: 1280, height: 720)
@@ -496,13 +439,7 @@ struct SeriesDetailView: View {
     }
 
     private var posterURL: URL? {
-        if offlineServerId != nil {
-            if let path = offlineSeriesMetadata?.primaryImagePath {
-                return DownloadStorage.shared.localImageURL(relativePath: path)
-            }
-            return nil
-        }
-        return authManager.provider.imageURL(
+        authManager.provider.imageURL(
             for: item,
             type: .primary,
             maxSize: CGSize(width: 300, height: 450)
@@ -510,35 +447,26 @@ struct SeriesDetailView: View {
     }
 
     private func episodeThumbnailURL(for episode: Episode) -> URL? {
-        if offlineServerId != nil {
-            if let meta = offlineEpisodeMetadata[episode.id.rawValue],
-                let path = meta.primaryImagePath
-            {
-                return DownloadStorage.shared.localImageURL(relativePath: path)
-            }
-            return nil
-        }
-        return authManager.provider.imageURL(
+        authManager.provider.imageURL(
             for: episode.id,
             type: .primary,
             maxSize: CGSize(width: 320, height: 180)
         )
     }
 
-    // MARK: - Offline Playback
+    // MARK: - Playback
 
-    private func playOfflineEpisode(_ episode: Episode, serverId: String) {
-        guard let dm = downloadCoordinator.downloadManager,
+    /// A downloaded episode plays from disk, online or not; anything else streams.
+    private func playPreferringLocal(_ episode: Episode) {
+        if let dm = downloadCoordinator.downloadManager,
             let dl = offlineEpisodeDownloads.first(where: { $0.itemId == episode.id }),
             let localURL = dm.localFileURL(for: dl)
-        else {
-            // Fallback to network
-            coordinator.playEpisode(
-                id: episode.id, title: episode.title, using: authManager.provider)
+        {
+            let mediaItem = MediaItem(id: episode.id, title: episode.title, mediaType: .episode)
+            coordinator.playLocal(item: mediaItem, localFileURL: localURL)
             return
         }
-        let mediaItem = MediaItem(id: episode.id, title: episode.title, mediaType: .episode)
-        coordinator.playLocal(item: mediaItem, localFileURL: localURL)
+        coordinator.playEpisode(id: episode.id, title: episode.title, using: authManager.provider)
     }
 
     // MARK: - Offline Deletion
@@ -548,13 +476,15 @@ struct SeriesDetailView: View {
         for ep in offlineEpisodeDownloads {
             try? await dm.deleteDownload(id: ep.id)
         }
+        await loadDownloads()
         await loadSeasons()
     }
 
     private func deleteOfflineEpisode(_ dl: DownloadItem) async {
         guard let dm = downloadCoordinator.downloadManager else { return }
         try? await dm.deleteDownload(id: dl.id)
-        await loadSeasons()
+        await loadDownloads()
+        if let selectedSeason { await loadEpisodes(for: selectedSeason) }
     }
 
     // MARK: - Bindings

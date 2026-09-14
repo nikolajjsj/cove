@@ -2,11 +2,13 @@ import DataLoading
 import JellyfinProvider
 import MediaServerKit
 import Models
+import Persistence
 import SwiftUI
 
 struct VideoGenreListView: View {
     let library: MediaLibrary?
     @Environment(AuthManager.self) private var authManager
+    @Environment(AppState.self) private var appState
     @State private var loader = CollectionLoader<MediaItem>()
     @State private var searchText = ""
 
@@ -92,6 +94,13 @@ struct VideoGenreListView: View {
         }
 
         let provider = authManager.provider
+        if let local = await appState.localCatalog(for: library) {
+            await loader.load {
+                try await local.repository.genres(libraryId: library.id.rawValue, scope: local.scope)
+                    .map { MediaItem(id: ItemID($0), title: $0, mediaType: .genre) }
+            }
+            return
+        }
 
         await loader.load {
             try await provider.genres(in: library)

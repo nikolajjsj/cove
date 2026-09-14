@@ -513,6 +513,19 @@ struct LibraryGridView: View {
         }
     }
 
+    /// One page of in-library search: the FTS index when the catalogue can answer,
+    /// the server otherwise. Same filters either way.
+    private func searchPage(library: MediaLibrary, sort: SortOptions, filter: FilterOptions)
+        async throws -> PagedResult<MediaItem>
+    {
+        if let local = await appState.localCatalog(for: library) {
+            return try await local.repository.pagedItems(
+                libraryId: library.id.rawValue, itemTypes: library.includeItemTypes,
+                sort: sort, filter: filter, scope: local.scope)
+        }
+        return try await authManager.provider.pagedItems(in: library, sort: sort, filter: filter)
+    }
+
     // MARK: - Search Filter
 
     /// Builds a consistent `FilterOptions` for search requests, capturing all
@@ -556,9 +569,7 @@ struct LibraryGridView: View {
         let filter = currentSearchFilter(query: query, startIndex: 0)
 
         do {
-            let result = try await authManager.provider.pagedItems(
-                in: library, sort: sort, filter: filter
-            )
+            let result = try await searchPage(library: library, sort: sort, filter: filter)
             searchResults = result.items
             searchTotalCount = result.totalCount
             searchHasMore = result.hasMore
@@ -579,9 +590,7 @@ struct LibraryGridView: View {
         let filter = currentSearchFilter(query: query, startIndex: searchResults.count)
 
         do {
-            let result = try await authManager.provider.pagedItems(
-                in: library, sort: sort, filter: filter
-            )
+            let result = try await searchPage(library: library, sort: sort, filter: filter)
             let existingIDs = Set(searchResults.map(\.id))
             let newItems = result.items.filter { !existingIDs.contains($0.id) }
             searchResults.append(contentsOf: newItems)

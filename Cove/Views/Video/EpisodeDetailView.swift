@@ -3,6 +3,7 @@ import ImageService
 import JellyfinProvider
 import MediaServerKit
 import Models
+import Persistence
 import PlaybackEngine
 import SwiftUI
 
@@ -282,12 +283,29 @@ private struct MoreEpisodesSection: View {
         guard let currentEpisodeNumber = item.indexNumber else { return }
 
         do {
-            let seasons = try await provider.seasons(series: seriesId)
+            let local = await appState.localCatalog()
+            let seasons: [Season]
+            if let local,
+                let fromCatalog = try? await local.repository.seasons(seriesId: seriesId.rawValue, scope: local.scope),
+                !fromCatalog.isEmpty
+            {
+                seasons = fromCatalog
+            } else {
+                seasons = try await provider.seasons(series: seriesId)
+            }
             let matchingSeason = seasons.first { $0.seasonNumber == item.parentIndexNumber }
 
             guard let season = matchingSeason else { return }
 
-            let allEpisodes = try await provider.episodes(season: season.id)
+            let allEpisodes: [Episode]
+            if let local,
+                let fromCatalog = try? await local.repository.episodes(seasonId: season.id.rawValue, scope: local.scope),
+                !fromCatalog.isEmpty
+            {
+                allEpisodes = fromCatalog
+            } else {
+                allEpisodes = try await provider.episodes(season: season.id)
+            }
             let sorted = allEpisodes.sorted { ($0.episodeNumber ?? 0) < ($1.episodeNumber ?? 0) }
 
             // Filter to 2 episodes before and 2 after the current one, excluding the current

@@ -133,6 +133,14 @@ If SwiftData is configured to use CloudKit:
   and never seen. Sort ascending on a monotonic key so additions land past the cursor,
   and treat offset paging as best-effort rather than a guarantee that every row was seen.
 
+- **Resolve the simulator app container after `simctl install`, never before.** Installing
+  can move the data container, and a `sqlite3` pointed at the old path fails without
+  stopping a script. Pattern: `install` → `get_app_container` → query. The local catalogue
+  lives at `<container>/Library/Application Support/com.nikolajjsj.cove/cove.db`; the tables
+  `catalog_items`, `catalog_user_data`, `sync_state`, `user_data_outbox` and
+  `catalog_item_details` are the fastest way to see what sync actually did, and pointing
+  `servers.url` at `https://127.0.0.1:9` is a faithful offline simulation (restore it after).
+
 - **Never build a path or a URL directly from server-supplied data.** The media server chooses item ids, `TranscodingUrl`, trailer URLs, and subtitle language tags. Two Foundation APIs make this dangerous in ways that read as safe:
 
   - `URL.appending(path:)` is a *path* append, not a component append. It does not escape `/` and does not collapse `..`, and `FileManager` resolves both at syscall time. Anything server-supplied that becomes a path segment must go through `DownloadStorage.safeComponent(_:)` first — including the string-interpolated `relative*Path` helpers, which are persisted and must agree with the URL builders. Guard destructive or writing operations with `DownloadStorage.isContained(_:)`.

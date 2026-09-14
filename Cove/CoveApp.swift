@@ -1,3 +1,4 @@
+import BackgroundTasks
 import CatalogSync
 import Defaults
 import DownloadManager
@@ -113,6 +114,19 @@ struct CoveApp: App {
         _downloadCoordinator = State(initialValue: downloadCoordinator)
         _appState = State(initialValue: appState)
         _userDataStore = State(initialValue: userDataStore)
+
+        // Daily reconcile + full user-data sweep while the app is not in use.
+        // Registration must happen before the app finishes launching, so here.
+        BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: AppState.backgroundRefreshIdentifier, using: nil
+        ) { task in
+            guard let refresh = task as? BGAppRefreshTask else { return }
+            let work = Task { @MainActor in
+                await appState.performBackgroundRefresh()
+                refresh.setTaskCompleted(success: true)
+            }
+            refresh.expirationHandler = { work.cancel() }
+        }
     }
 
     var body: some Scene {
@@ -134,7 +148,11 @@ struct CoveApp: App {
                     #endif
                 }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .active { appState.catalogForegrounded() }
+                    switch phase {
+                    case .active: appState.catalogForegrounded()
+                    case .background: appState.scheduleBackgroundRefresh()
+                    default: break
+                    }
                 }
         }
     }

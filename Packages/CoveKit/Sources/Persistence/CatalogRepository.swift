@@ -400,6 +400,22 @@ public final class CatalogRepository: Sendable {
         ).items
     }
 
+    /// Paged scope-wide search with a total, for See All.
+    public func searchPaged(term: String, filter: FilterOptions, scope: Scope) async throws -> PagedResult<MediaItem> {
+        let full = FilterOptions(
+            genres: filter.genres, years: filter.years, isFavorite: filter.isFavorite,
+            isPlayed: filter.isPlayed, limit: filter.limit ?? 40, startIndex: filter.startIndex ?? 0,
+            searchTerm: term, includeItemTypes: filter.includeItemTypes ?? ["Movie", "Series", "Episode"],
+            minCommunityRating: filter.minCommunityRating)
+        let query = CatalogQuery(libraryId: nil, itemTypes: full.includeItemTypes,
+                                 sort: SortOptions(field: .name, order: .ascending), filter: full, scope: scope)
+        return try await database.dbWriter.read { db in
+            let total = try Int.fetchOne(db, sql: query.countSQL, arguments: query.arguments) ?? 0
+            let items = try Row.fetchAll(db, sql: query.pageSQL, arguments: query.pageArguments).map(Self.mediaItem(from:))
+            return PagedResult(items: items, startIndex: full.startIndex ?? 0, totalCount: total)
+        }
+    }
+
     /// Scope-wide search over the FTS index, with the same filters the grid has.
     public func search(term: String, filter: FilterOptions, scope: Scope) async throws -> [MediaItem] {
         let full = FilterOptions(

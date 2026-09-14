@@ -1,6 +1,7 @@
 import JellyfinProvider
 import MediaServerKit
 import Models
+import Persistence
 import SwiftUI
 
 struct SearchSeeAllView: View {
@@ -9,6 +10,7 @@ struct SearchSeeAllView: View {
     let title: String
 
     @Environment(AuthManager.self) private var authManager
+    @Environment(AppState.self) private var appState
     @State private var items: [MediaItem] = []
     @State private var isLoading = true
     @State private var isLoadingMore = false
@@ -84,12 +86,7 @@ struct SearchSeeAllView: View {
         items = []
 
         do {
-            let result = try await authManager.provider.searchPaged(
-                query: query,
-                includeItemTypes: includeItemTypes,
-                limit: pageSize,
-                startIndex: 0
-            )
+            let result = try await page(startIndex: 0)
             items = result.items
             totalCount = result.totalCount
             hasMore = result.hasMore
@@ -105,12 +102,7 @@ struct SearchSeeAllView: View {
         isLoadingMore = true
 
         do {
-            let result = try await authManager.provider.searchPaged(
-                query: query,
-                includeItemTypes: includeItemTypes,
-                limit: pageSize,
-                startIndex: items.count
-            )
+            let result = try await page(startIndex: items.count)
             let existingIDs = Set(items.map(\.id))
             let newItems = result.items.filter { !existingIDs.contains($0.id) }
             items.append(contentsOf: newItems)
@@ -126,6 +118,23 @@ struct SearchSeeAllView: View {
     // MARK: - Helpers
 
     /// Maps our MediaType to Jellyfin's IncludeItemTypes strings.
+    /// One page: the FTS index when the catalogue can answer, the server otherwise.
+    /// Music types are never in the catalogue, so they always go to the server.
+    private func page(startIndex: Int) async throws -> PagedResult<MediaItem> {
+        let types = includeItemTypes
+        let catalogTypes: Set<String> = ["Movie", "Series", "Episode"]
+        if let types, types.allSatisfy(catalogTypes.contains),
+            let local = await appState.localCatalog()
+        {
+            return try await local.repository.searchPaged(
+                term: query,
+                filter: FilterOptions(limit: pageSize, startIndex: startIndex, includeItemTypes: types),
+                scope: local.scope)
+        }
+        return try await authManager.provider.searchPaged(
+            query: query, includeItemTypes: types, limit: pageSize, startIndex: startIndex)
+    }
+
     private var includeItemTypes: [String]? {
         switch mediaType {
         case .movie: ["Movie"]

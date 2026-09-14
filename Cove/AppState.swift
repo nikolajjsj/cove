@@ -1,3 +1,4 @@
+import BackgroundTasks
 import CatalogSync
 import DataLoading
 import Defaults
@@ -330,6 +331,26 @@ final class AppState {
         _ = try? await repository.evictDetails(budgetBytes: 200 * 1024 * 1024, scope: scope)
     }
 
+    static let backgroundRefreshIdentifier = "com.nikolajjsj.cove.catalog-refresh"
+
+    /// Ask for a refresh roughly a day out. iOS decides when, if at all; the
+    /// foreground path covers everything this does, so nothing depends on it.
+    func scheduleBackgroundRefresh() {
+        guard authManager.isAuthenticated else { return }
+        let request = BGAppRefreshTaskRequest(identifier: Self.backgroundRefreshIdentifier)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 24 * 60 * 60)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    /// The daily pass: flush, bidirectional reconcile, full user-data sweep, evict.
+    func performBackgroundRefresh() async {
+        guard authManager.isAuthenticated, let engine = catalogSync else { return }
+        await flushOutbox()
+        await engine.reconcileAll(libraries: catalogLibraries)
+        await evictDetailCache()
+        scheduleBackgroundRefresh()
+    }
+
     /// Foreground: pick up whatever changed while the app was away.
     func catalogForegrounded() {
         guard authManager.isAuthenticated else { return }
@@ -449,27 +470,19 @@ final class AppState {
 
         // MARK: Playback Reporting
 
+        // Session start/progress are live-session signals with no offline meaning;
+        // the durable position goes through the user-data outbox on stop.
         audioPlayer.onPlaybackStart = { track, position in
+            guard networkMonitor.isConnected else { return }
             let item = Self.mediaItem(from: track)
-            if networkMonitor.isConnected {
-                try? await provider.reportPlaybackStart(item: item, position: position)
-            } else {
-                let ticks = JellyfinTicks.fromSeconds(position)
-                await coordinator.queueOfflinePlaybackReport(
-                    itemId: item.id, positionTicks: ticks, eventType: .start)
-            }
+            try? await provider.reportPlaybackStart(item: item, position: position)
         }
 
         audioPlayer.onPlaybackProgress = { track, position, isPaused in
+            guard networkMonitor.isConnected else { return }
             let item = Self.mediaItem(from: track)
-            if networkMonitor.isConnected {
-                try? await provider.reportPlaybackProgress(
-                    item: item, position: position, isPaused: isPaused)
-            } else {
-                let ticks = JellyfinTicks.fromSeconds(position)
-                await coordinator.queueOfflinePlaybackReport(
-                    itemId: item.id, positionTicks: ticks, eventType: .progress)
-            }
+            try? await provider.reportPlaybackProgress(
+                item: item, position: position, isPaused: isPaused)
         }
 
         audioPlayer.onPlaybackStopped = { track, position in
@@ -480,11 +493,8 @@ final class AppState {
                 itemId: item.id, position: position, runtime: item.runtime, currentData: track.userData)
             if networkMonitor.isConnected {
                 try? await provider.reportPlaybackStopped(item: item, position: position)
-            } else {
-                let ticks = JellyfinTicks.fromSeconds(position)
-                await coordinator.queueOfflinePlaybackReport(
-                    itemId: item.id, positionTicks: ticks, eventType: .stopped)
             }
+            // Offline: updatePlaybackPosition above already queued it in the outbox.
         }
 
         audioPlayer.onTrackListened = { track in
