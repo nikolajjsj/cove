@@ -108,6 +108,16 @@ If SwiftData is configured to use CloudKit:
   curl -sL https://api.jellyfin.org/openapi/jellyfin-openapi-stable.json -o /tmp/jf.json && python3 -c "import json;s=json.load(open('/tmp/jf.json'));print(s['info']['version']);op=s['paths']['/Items']['get'];print(op.get('deprecated',False));print([q['name'] for q in op['parameters'] if q['in']=='query'])"
   ```
 
+- **`minDateLastSaved` carries additions and edits, never deletions.** `/Items` takes
+  `minDateLastSaved` and `minDateLastSavedForUser`, and both really do filter — verified
+  against the 12.0 demo server, where a future cutoff returns 0 rows and an epoch cutoff
+  returns everything. They are the only delta mechanism the API offers; there is no
+  changes-or-tombstones endpoint. So anything that caches items locally cannot stay
+  correct on deltas alone: an item removed from the server is never mentioned again and
+  lingers until something reconciles ids directly. Budget for a periodic id-only sweep —
+  roughly a third the payload of a fielded fetch — rather than discovering the phantoms
+  when playback fails.
+
 - **Never build a path or a URL directly from server-supplied data.** The media server chooses item ids, `TranscodingUrl`, trailer URLs, and subtitle language tags. Two Foundation APIs make this dangerous in ways that read as safe:
 
   - `URL.appending(path:)` is a *path* append, not a component append. It does not escape `/` and does not collapse `..`, and `FileManager` resolves both at syscall time. Anything server-supplied that becomes a path segment must go through `DownloadStorage.safeComponent(_:)` first — including the string-interpolated `relative*Path` helpers, which are persisted and must agree with the URL builders. Guard destructive or writing operations with `DownloadStorage.isContained(_:)`.
