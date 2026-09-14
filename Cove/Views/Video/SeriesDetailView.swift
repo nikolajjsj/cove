@@ -420,7 +420,7 @@ struct SeriesDetailView: View {
         authManager.provider.imageURL(
             for: item,
             type: .backdrop,
-            maxSize: CGSize(width: 1280, height: 720)
+            maxSize: ArtworkSize.backdrop
         )
     }
 
@@ -428,7 +428,7 @@ struct SeriesDetailView: View {
         authManager.provider.imageURL(
             for: item,
             type: .primary,
-            maxSize: CGSize(width: 300, height: 450)
+            maxSize: ArtworkSize.poster
         )
     }
 
@@ -436,7 +436,7 @@ struct SeriesDetailView: View {
         authManager.provider.imageURL(
             for: episode.id,
             type: .primary,
-            maxSize: CGSize(width: 320, height: 180)
+            maxSize: ArtworkSize.landscape
         )
     }
 

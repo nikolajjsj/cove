@@ -61,7 +61,7 @@ private struct HeroImageView: View {
     let fallbackImageURL: URL?
 
     var body: some View {
-        LazyImage(url: imageURL) { state in
+        LazyImage(request: imageURL.map { ImageService.request(for: $0) }) { state in
             if let image = state.image {
                 image
                     .resizable()
@@ -70,7 +70,7 @@ private struct HeroImageView: View {
                 HeroLoadingPlaceholder()
             } else if let fallbackImageURL {
                 // Primary failed — try the fallback URL (e.g. primary poster).
-                LazyImage(url: fallbackImageURL) { primaryState in
+                LazyImage(request: ImageService.request(for: fallbackImageURL)) { primaryState in
                     if let image = primaryState.image {
                         image
                             .resizable()

@@ -105,7 +105,7 @@ struct MediaCard: View {
         authManager.provider.imageURL(
             for: item,
             type: .primary,
-            maxSize: CGSize(width: 300, height: 450)
+            maxSize: ArtworkSize.poster
         )
     }
 
@@ -119,18 +119,18 @@ struct MediaCard: View {
             return authManager.provider.imageURL(
                 for: item,
                 type: .primary,
-                maxSize: CGSize(width: 480, height: 270)
+                maxSize: ArtworkSize.landscape
             )
         default:
             return authManager.provider.imageURL(
                 for: item,
                 type: .backdrop,
-                maxSize: CGSize(width: 480, height: 270)
+                maxSize: ArtworkSize.landscape
             )
                 ?? authManager.provider.imageURL(
                     for: item,
                     type: .primary,
-                    maxSize: CGSize(width: 480, height: 270)
+                    maxSize: ArtworkSize.landscape
                 )
         }
     }

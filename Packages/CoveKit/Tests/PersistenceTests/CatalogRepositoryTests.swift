@@ -289,6 +289,21 @@ final class CatalogRepositoryTests: XCTestCase {
         XCTAssertEqual(refetched?.isStale, false)
     }
 
+    // MARK: Artwork manifest
+
+    func testArtworkRowsCarryTagsNewestFirstAndSkipUntaggedItems() async throws {
+        try await repo.upsert([entry("old", name: "Old", created: 0), entry("new", name: "New", created: 100)], scope: scope)
+        let bare = CatalogEntry(id: "bare", libraryId: lib, type: "Movie", mediaType: .movie, name: "Bare", sortName: "Bare",
+                                dateCreated: Date(timeIntervalSince1970: 1_600_000_000 + 200))
+        try await repo.upsert([bare], scope: scope)
+        let rows = try await repo.artworkRows(scope: scope, offset: 0, limit: 10)
+        XCTAssertEqual(rows.map(\.itemId), ["new", "old"], "no tags, nothing to fetch")
+        XCTAssertEqual(rows.first?.imageTags[.primary], "tag-new")
+        XCTAssertEqual(rows.first?.type, "Movie")
+        let page = try await repo.artworkRows(scope: scope, offset: 1, limit: 10)
+        XCTAssertEqual(page.map(\.itemId), ["old"])
+    }
+
     // MARK: Collections
 
     func testCollectionMembersKeepServerOrderAndCascadeWithTheBoxSet() async throws {

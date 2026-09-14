@@ -54,7 +54,7 @@ struct PagedMediaGridView<Card: View>: View {
         emptyIcon: String,
         emptyMessage: String,
         entityName: String,
-        imageSize: CGSize = CGSize(width: 300, height: 300),
+        imageSize: CGSize = ArtworkSize.poster,
         @ViewBuilder card: @escaping (MediaItem, URL?) -> Card
     ) {
         self.library = library

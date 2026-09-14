@@ -289,7 +289,7 @@ struct VideoPlayerView: View {
             provider.imageURL(
                 for: item,
                 type: .primary,
-                maxSize: CGSize(width: 600, height: 340)
+                maxSize: ArtworkSize.landscape
             )
         }
 
@@ -489,7 +489,7 @@ struct VideoPlayerView: View {
         authManager.provider.imageURL(
             for: item,
             type: .primary,
-            maxSize: CGSize(width: 320, height: 180)
+            maxSize: ArtworkSize.landscape
         )
     }
 }

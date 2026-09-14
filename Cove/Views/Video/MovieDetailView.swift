@@ -165,7 +165,7 @@ struct MovieDetailView: View {
         authManager.provider.imageURL(
             for: item,
             type: .backdrop,
-            maxSize: CGSize(width: 1280, height: 720)
+            maxSize: ArtworkSize.backdrop
         )
     }
 
@@ -173,7 +173,7 @@ struct MovieDetailView: View {
         authManager.provider.imageURL(
             for: item,
             type: .primary,
-            maxSize: CGSize(width: 300, height: 450)
+            maxSize: ArtworkSize.poster
         )
     }
 

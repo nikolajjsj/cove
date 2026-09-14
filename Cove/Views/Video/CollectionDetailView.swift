@@ -224,7 +224,7 @@ extension CollectionDetailView {
         authManager.provider.imageURL(
             for: item,
             type: .backdrop,
-            maxSize: CGSize(width: 1280, height: 720)
+            maxSize: ArtworkSize.backdrop
         )
     }
 
@@ -232,7 +232,7 @@ extension CollectionDetailView {
         authManager.provider.imageURL(
             for: item,
             type: .primary,
-            maxSize: CGSize(width: 600, height: 900)
+            maxSize: ArtworkSize.poster
         )
     }
 }

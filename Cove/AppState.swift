@@ -109,6 +109,8 @@ final class AppState {
     let downloadCoordinator: DownloadCoordinator
     let videoPlayerCoordinator = VideoPlayerCoordinator()
     let networkMonitor = NetworkMonitor.shared
+    /// Keeps the catalogue's artwork on disk when the user asks for it.
+    let artworkCache = ArtworkCache()
 
     // MARK: - Init
 
@@ -122,6 +124,10 @@ final class AppState {
 
         // The player resolves episodes through the catalogue, never the server.
         videoPlayerCoordinator.itemResolver = { [weak self] id in await self?.item(id: id) }
+        // The prefetcher builds URLs the way every view does, so they match.
+        artworkCache.urlBuilder = { item, type, size in
+            authManager.provider.imageURL(for: item, type: type, maxSize: size)
+        }
     }
 
     // MARK: - Session Lifecycle
@@ -162,6 +168,7 @@ final class AppState {
 
     /// Disconnect and tear down all state.
     func onDisconnect() async {
+        artworkCache.cancel()
         catalogStatusTask?.cancel()
         catalogStatusTask = nil
         catalogSync = nil
@@ -275,7 +282,20 @@ final class AppState {
             if libraries != before { catalogGeneration += 1 }
             await engine.syncIfNeeded(libraries: catalogLibraries)
             await evictDetailCache()
+            prefetchArtworkIfEnabled()
         }
+    }
+
+    /// Kick the artwork prefetch after a pass, if the user keeps artwork offline.
+    func prefetchArtworkIfEnabled() {
+        guard let catalog else { return }
+        artworkCache.runIfEnabled(repository: catalog.repository, scope: catalog.scope)
+    }
+
+    /// The user asked for it now (Settings), enabled or not yet.
+    func prefetchArtworkNow() {
+        guard let catalog else { return }
+        artworkCache.run(repository: catalog.repository, scope: catalog.scope)
     }
 
     /// Send pending user-data edits to the server. Safe to call any time; a no-op
@@ -361,6 +381,7 @@ final class AppState {
         await flushOutbox()
         await engine.reconcileAll(libraries: catalogLibraries)
         await evictDetailCache()
+        prefetchArtworkIfEnabled()
         scheduleBackgroundRefresh()
     }
 
@@ -381,6 +402,7 @@ final class AppState {
     func refreshCatalog() async {
         guard let engine = catalogSync else { return }
         await engine.reconcileAll(libraries: catalogLibraries)
+        prefetchArtworkIfEnabled()
     }
 
     /// Retry the library sync with visual feedback for the UI.

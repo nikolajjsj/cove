@@ -25,7 +25,7 @@ struct SearchResultRow: View {
         authManager.provider.imageURL(
             for: item,
             type: .primary,
-            maxSize: CGSize(width: 150, height: 225)
+            maxSize: ArtworkSize.poster
         )
     }
 

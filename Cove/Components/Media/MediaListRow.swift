@@ -85,7 +85,7 @@ struct MediaListRow: View {
 
     /// Image URL sized appropriately for the thumbnail.
     private var imageURL: URL? {
-        let maxSize = CGSize(width: 120, height: 180)
+        let maxSize = ArtworkSize.poster
         return authManager.provider.imageURL(
             for: item,
             type: .primary,

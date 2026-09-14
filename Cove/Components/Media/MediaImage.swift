@@ -51,7 +51,7 @@ struct MediaImage: View {
     // MARK: - Body
 
     var body: some View {
-        LazyImage(url: url) { state in
+        LazyImage(request: url.map { ImageService.request(for: $0) }) { state in
             if let image = state.image {
                 image
                     .resizable()

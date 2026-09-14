@@ -273,6 +273,34 @@ public final class CatalogRepository: Sendable {
         }
     }
 
+    // MARK: - Artwork manifest
+
+    /// What the prefetcher needs to build every artwork URL: id, server type and
+    /// the image tags — nothing else. Newest first, so a fresh library's most
+    /// recent additions are the first to be cached.
+    public struct ArtworkRow: Sendable {
+        public let itemId: String
+        public let type: String
+        public let imageTags: [ImageType: String]
+    }
+
+    public func artworkRows(scope: Scope, offset: Int, limit: Int) async throws -> [ArtworkRow] {
+        try await database.dbWriter.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT itemId, type, imageTags FROM catalog_items
+                    WHERE serverId = ? AND userId = ? AND imageTags IS NOT NULL
+                    ORDER BY dateCreated DESC, itemId LIMIT ? OFFSET ?
+                    """,
+                arguments: [scope.serverId, scope.userId, limit, offset]
+            ).compactMap { row in
+                guard let tags = CatalogItemRecord.decodeImageTags(row["imageTags"]) else { return nil }
+                return ArtworkRow(itemId: row["itemId"], type: row["type"], imageTags: tags)
+            }
+        }
+    }
+
     // MARK: - Collections
 
     /// Replace a BoxSet's members, in the server's order. Ids the catalogue does

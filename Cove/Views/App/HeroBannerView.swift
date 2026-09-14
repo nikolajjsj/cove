@@ -232,10 +232,10 @@ private struct BannerBackdropImage: View {
 
     var body: some View {
         let backdropURL = authManager.provider.imageURL(
-            for: item, type: .backdrop, maxSize: CGSize(width: 1280, height: 720)
+            for: item, type: .backdrop, maxSize: ArtworkSize.backdrop
         )
         let primaryURL = authManager.provider.imageURL(
-            for: item, type: .primary, maxSize: CGSize(width: 600, height: 900)
+            for: item, type: .primary, maxSize: ArtworkSize.poster
         )
         MediaImage(
             url: backdropURL ?? primaryURL,

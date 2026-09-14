@@ -160,7 +160,7 @@ struct EpisodeDetailView: View {
         let episodeImage = authManager.provider.imageURL(
             for: item,
             type: .primary,
-            maxSize: CGSize(width: 1280, height: 720)
+            maxSize: ArtworkSize.backdrop
         )
         if episodeImage != nil {
             return episodeImage
@@ -170,7 +170,7 @@ struct EpisodeDetailView: View {
             return authManager.provider.imageURL(
                 for: seriesId,
                 type: .backdrop,
-                maxSize: CGSize(width: 1280, height: 720)
+                maxSize: ArtworkSize.backdrop
             )
         }
         return nil
@@ -311,7 +311,7 @@ private struct MoreEpisodesSection: View {
         provider.imageURL(
             for: episode.id,
             type: .primary,
-            maxSize: CGSize(width: 320, height: 180)
+            maxSize: ArtworkSize.landscape
         )
     }
 

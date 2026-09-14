@@ -13,6 +13,17 @@ nonisolated extension Defaults.Keys {
     /// When `false` (the default), downloads only proceed on WiFi.
     static let downloadOverCellular = Key<Bool>("downloadOverCellular", default: false)
 
+    // MARK: - Artwork
+
+    /// Keep every poster, thumbnail and backdrop in the catalogue on disk, so the
+    /// library looks the same offline. Off, artwork is cached as it is seen and
+    /// trimmed to 500 MB.
+    static let keepArtworkOffline = Key<Bool>("keepArtworkOffline", default: false)
+
+    /// Whether the artwork prefetch may run on cellular. Off by default: a whole
+    /// library's artwork is hundreds of megabytes.
+    static let artworkOverCellular = Key<Bool>("artworkOverCellular", default: false)
+
     // MARK: - Video Playback
 
     /// Default playback speed (1.0 = normal). Persisted across sessions.

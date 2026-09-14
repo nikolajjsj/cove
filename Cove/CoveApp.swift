@@ -18,7 +18,7 @@ struct CoveApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        ImageService.configure()
+        ImageService.configure(keepsAllArtwork: Defaults[.keepArtworkOffline])
 
         // 1. Set up persistence layer
         //

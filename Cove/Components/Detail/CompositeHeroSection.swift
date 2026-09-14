@@ -95,7 +95,7 @@ private struct CompositeBackdropImageView: View {
     let backdropURL: URL?
 
     var body: some View {
-        LazyImage(url: backdropURL) { state in
+        LazyImage(request: backdropURL.map { ImageService.request(for: $0) }) { state in
             if let image = state.image {
                 image
                     .resizable()
