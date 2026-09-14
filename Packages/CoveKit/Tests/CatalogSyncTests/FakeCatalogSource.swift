@@ -23,6 +23,15 @@ final class FakeCatalogSource: CatalogSyncSource, @unchecked Sendable {
     var idRequests = 0
     var entryRequests: [[String]] = []
 
+    /// What `/UserViews` would return.
+    var libraryList: [MediaLibrary] = []
+    /// Full items by id, for the detail tier.
+    var details: [String: MediaItem] = [:]
+    var detailRequests: [String] = []
+    /// BoxSet id → member ids, in server order.
+    var collectionMembers: [String: [String]] = [:]
+    var collectionRequests: [String] = []
+
     /// User-data sweep state. Tests set these directly to model other clients.
     var resumeSet: [CatalogUserDataRow] = []
     var favorites: Set<String> = []
@@ -74,6 +83,21 @@ final class FakeCatalogSource: CatalogSyncSource, @unchecked Sendable {
         return ids.compactMap { items[$0]?.entry }
     }
 
+    // MARK: libraries, detail, collections
+
+    func libraries() async throws -> [MediaLibrary] { libraryList }
+
+    func catalogDetail(id: String) async throws -> MediaItem {
+        detailRequests.append(id)
+        guard let item = details[id] else { throw AppError.itemNotFound(id: ItemID(id)) }
+        return item
+    }
+
+    func collectionMemberIds(collectionId: String) async throws -> [String] {
+        collectionRequests.append(collectionId)
+        return collectionMembers[collectionId] ?? []
+    }
+
     // MARK: sweeps
 
     func resumeUserData() async throws -> [CatalogUserDataRow] { resumeSet }
@@ -110,6 +134,14 @@ final class FakeCatalogSource: CatalogSyncSource, @unchecked Sendable {
 
 enum Fixture {
     static let library = "lib-movies"
+    static let collections = "lib-boxsets"
+
+    static func boxSet(_ n: Int, name: String? = nil) -> CatalogEntry {
+        CatalogEntry(
+            id: "b\(n)", libraryId: collections, type: "BoxSet", mediaType: .collection,
+            name: name ?? "Set \(n)", sortName: name ?? "Set \(n)",
+            dateCreated: Date(timeIntervalSince1970: 1_600_000_000 + Double(n)))
+    }
 
     static func movie(_ n: Int, created: TimeInterval = 0, name: String? = nil, genres: [String] = [], year: Int? = nil, favorite: Bool = false, played: Bool = false, position: TimeInterval = 0) -> CatalogEntry {
         CatalogEntry(

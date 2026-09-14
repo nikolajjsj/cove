@@ -247,6 +247,134 @@ final class CatalogSyncEngineTests: XCTestCase {
     func testItemTypesPerCollection() {
         XCTAssertEqual(CatalogSyncEngine.itemTypes(for: .movies), ["Movie"])
         XCTAssertEqual(CatalogSyncEngine.itemTypes(for: .tvshows), ["Series", "Season", "Episode"])
+        XCTAssertEqual(CatalogSyncEngine.itemTypes(for: nil), ["Movie", "Series", "Season", "Episode"], "mixed libraries sync everything the video screens show")
         XCTAssertNil(CatalogSyncEngine.itemTypes(for: .music))
+        XCTAssertNil(CatalogSyncEngine.itemTypes(for: .playlists))
     }
+
+    // MARK: Libraries, detail, collections — the engine is the only door to the server
+
+    func testRefreshLibrariesKeepsCatalogueShapesAndDropsVanished() async throws {
+        source.libraryList = [
+            MediaLibrary(id: ItemID("mov"), name: "Movies", collectionType: .movies),
+            MediaLibrary(id: ItemID("mus"), name: "Music", collectionType: .music),
+            MediaLibrary(id: ItemID("mix"), name: "Mixed", collectionType: nil),
+        ]
+        let kept = try await engine.refreshLibraries()
+        XCTAssertEqual(kept.map(\.name), ["Movies", "Mixed"], "music has no catalogue shape")
+        let saved = try await repo.libraries(scope: scope)
+        XCTAssertEqual(saved.map(\.id.rawValue), ["mov", "mix"])
+
+        // Movies vanishes from the server; its rows go with it.
+        try await repo.upsert([Fixture.movie(1)].map { e in var c = e; c.libraryId = "mov"; return c }, scope: scope)
+        source.libraryList.removeFirst()
+        _ = try await engine.refreshLibraries()
+        let after = try await repo.libraries(scope: scope)
+        XCTAssertEqual(after.map(\.id.rawValue), ["mix"])
+        let rows = try await repo.count(libraryId: "mov", scope: scope)
+        XCTAssertEqual(rows, 0)
+    }
+
+    func testRefreshLibrariesFailureLeavesSavedListAlone() async throws {
+        try await repo.saveLibraries([MediaLibrary(id: ItemID("mov"), name: "Movies", collectionType: .movies)], scope: scope)
+        let failing = FailingSource()
+        let engine = CatalogSyncEngine(source: failing, repository: repo, scope: scope)
+        do {
+            _ = try await engine.refreshLibraries()
+            XCTFail("expected a throw")
+        } catch {}
+        let saved = try await repo.libraries(scope: scope)
+        XCTAssertEqual(saved.count, 1, "an unreachable server is not 'no libraries'")
+    }
+
+    func testFetchDetailCachesAndOverlaysCatalogueUserData() async throws {
+        source.add(Fixture.movie(1))
+        await engine.syncIfNeeded(libraries: [library])
+        // The user favourited it offline: an outbox row is pending, the catalogue
+        // already says favourite. The server's JSON still says it is not.
+        try await db.dbWriter.write { d in
+            try d.execute(sql: "UPDATE catalog_user_data SET isFavorite = 1 WHERE itemId = 'm1'")
+            try d.execute(sql: """
+                INSERT INTO user_data_outbox (id, serverId, userId, itemId, field, value, occurredAt, attempts)
+                VALUES ('o1','srv','usr','m1','favorite','true', CURRENT_TIMESTAMP, 0)
+                """)
+        }
+        var full = MediaItem(id: ItemID("m1"), title: "Movie 1", overview: "Long", mediaType: .movie)
+        full.userData = UserData(isFavorite: false)
+        source.details["m1"] = full
+
+        let item = try await engine.fetchDetail(itemId: "m1")
+        XCTAssertEqual(item.overview, "Long")
+        XCTAssertEqual(item.userData?.isFavorite, true, "the pending edit wins over the fetched JSON")
+        let cached = try await repo.cachedDetail(id: "m1", scope: scope)
+        XCTAssertEqual(cached?.item.overview, "Long")
+        XCTAssertEqual(cached?.isStale, false)
+        XCTAssertEqual(source.detailRequests, ["m1"])
+    }
+
+    func testDeltaMarksCachedDetailStaleWhenServerEditsTheItem() async throws {
+        source.add(Fixture.movie(1), savedAt: source.serverClock.addingTimeInterval(-3600))
+        await engine.syncIfNeeded(libraries: [library])
+        source.details["m1"] = MediaItem(id: ItemID("m1"), title: "Movie 1", overview: "v1", mediaType: .movie)
+        _ = try await engine.fetchDetail(itemId: "m1")
+        // Let the clock move so syncedAt lands after the detail's updatedAt.
+        try await Task.sleep(for: .milliseconds(20))
+
+        // Another client renames the movie; the delta re-delivers it.
+        source.add(Fixture.movie(1, name: "Movie 1 (Director's Cut)"), savedAt: source.serverClock.addingTimeInterval(60))
+        source.serverClock = source.serverClock.addingTimeInterval(120)
+        await engine.syncIfNeeded(libraries: [library])
+
+        let cached = try await repo.cachedDetail(id: "m1", scope: scope)
+        XCTAssertEqual(cached?.isStale, true, "the row was re-synced after the detail was fetched")
+        XCTAssertEqual(cached?.item.overview, "v1", "the stale copy still renders while the refresh runs")
+    }
+
+    func testCollectionMembershipSyncsOnBootstrapAndRefreshesOnReconcile() async throws {
+        let collections = CatalogSyncEngine.Library(id: Fixture.collections, name: "Collections", itemTypes: ["BoxSet"])
+        for n in 1...3 { source.add(Fixture.movie(n)) }
+        source.add(Fixture.boxSet(1))
+        source.collectionMembers["b1"] = ["m2", "m1", "zz-not-synced"]
+
+        await engine.syncIfNeeded(libraries: [library, collections])
+
+        let members = try await repo.collectionItems(collectionId: "b1", scope: scope)
+        XCTAssertEqual(members.map(\.id.rawValue), ["m2", "m1"], "server order, unknown ids joined away")
+        XCTAssertEqual(source.collectionRequests, ["b1"], "bootstrap's closing reconcile asks once")
+
+        // Membership changes without the BoxSet itself changing; reconcile catches it.
+        source.collectionMembers["b1"] = ["m3"]
+        await engine.reconcileAll(libraries: [library, collections])
+        let after = try await repo.collectionItems(collectionId: "b1", scope: scope)
+        XCTAssertEqual(after.map(\.id.rawValue), ["m3"])
+    }
+
+    func testDeltaRefreshesOnlyTheCollectionsTheServerChanged() async throws {
+        let collections = CatalogSyncEngine.Library(id: Fixture.collections, name: "Collections", itemTypes: ["BoxSet"])
+        source.add(Fixture.boxSet(1), savedAt: source.serverClock.addingTimeInterval(-3600))
+        source.add(Fixture.boxSet(2), savedAt: source.serverClock.addingTimeInterval(-3600))
+        await engine.syncIfNeeded(libraries: [collections])
+        source.collectionRequests = []
+
+        source.add(Fixture.boxSet(2, name: "Set 2 renamed"), savedAt: source.serverClock.addingTimeInterval(60))
+        source.serverClock = source.serverClock.addingTimeInterval(120)
+        await engine.syncIfNeeded(libraries: [collections])
+        XCTAssertEqual(source.collectionRequests, ["b2"])
+    }
+}
+
+/// Every call fails as if the server were down.
+private final class FailingSource: CatalogSyncSource, @unchecked Sendable {
+    private var error: any Error { AppError.serverUnreachable(url: URL(string: "https://down")!) }
+    func libraries() async throws -> [MediaLibrary] { throw error }
+    func catalogDetail(id: String) async throws -> MediaItem { throw error }
+    func collectionMemberIds(collectionId: String) async throws -> [String] { throw error }
+    func catalogPage(libraryId: String, itemTypes: [String], startIndex: Int, limit: Int) async throws -> CatalogPage { throw error }
+    func catalogChanges(libraryId: String, itemTypes: [String], since: Date, startIndex: Int, limit: Int) async throws -> CatalogPage { throw error }
+    func catalogIds(libraryId: String, itemTypes: [String], startIndex: Int, limit: Int) async throws -> CatalogIdPage { throw error }
+    func catalogEntries(ids: [String], libraryId: String) async throws -> [CatalogEntry] { throw error }
+    func resumeUserData() async throws -> [CatalogUserDataRow] { throw error }
+    func favoriteIds() async throws -> Set<String> { throw error }
+    func recentlyPlayedUserData(limit: Int) async throws -> [CatalogUserDataRow] { throw error }
+    func userDataPage(libraryId: String, itemTypes: [String], startIndex: Int, limit: Int) async throws -> (rows: [CatalogUserDataRow], totalCount: Int) { throw error }
 }

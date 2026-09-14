@@ -265,6 +265,52 @@ final class CatalogRepositoryTests: XCTestCase {
     func testDetailMissingIsNil() async throws {
         let d = try await repo.detail(id: "nope", scope: scope)
         XCTAssertNil(d)
+        let c = try await repo.cachedDetail(id: "nope", scope: scope)
+        XCTAssertNil(c)
+    }
+
+    func testCachedDetailIsStaleOnlyAfterTheRowIsResynced() async throws {
+        try await repo.upsert([entry("a", name: "A")], scope: scope)
+        try await repo.saveDetail(fullItem("a", overview: "x"), scope: scope)
+        let fresh = try await repo.cachedDetail(id: "a", scope: scope)
+        XCTAssertEqual(fresh?.isStale, false)
+        // A user-data sweep does not touch the catalogue row: still fresh.
+        try await repo.upsertUserData([("a", UserData(isPlayed: true))], scope: scope)
+        let afterSweep = try await repo.cachedDetail(id: "a", scope: scope)
+        XCTAssertEqual(afterSweep?.isStale, false)
+        // A catalogue upsert does.
+        try await Task.sleep(for: .milliseconds(20))
+        try await repo.upsert([entry("a", name: "A renamed")], scope: scope)
+        let afterSync = try await repo.cachedDetail(id: "a", scope: scope)
+        XCTAssertEqual(afterSync?.isStale, true)
+        // Saving a new detail clears it.
+        try await repo.saveDetail(fullItem("a", overview: "y"), scope: scope)
+        let refetched = try await repo.cachedDetail(id: "a", scope: scope)
+        XCTAssertEqual(refetched?.isStale, false)
+    }
+
+    // MARK: Collections
+
+    func testCollectionMembersKeepServerOrderAndCascadeWithTheBoxSet() async throws {
+        try await repo.upsert([entry("a", name: "A"), entry("b", name: "B")], scope: scope)
+        let set = CatalogEntry(id: "s1", libraryId: "sets", type: "BoxSet", mediaType: .collection,
+                               name: "Set", sortName: "Set", dateCreated: Date(timeIntervalSince1970: 1_600_000_000))
+        try await repo.upsert([set], scope: scope)
+        try await repo.replaceCollectionMembers(collectionId: "s1", itemIds: ["b", "ghost", "a"], scope: scope)
+        let members = try await repo.collectionItems(collectionId: "s1", scope: scope)
+        XCTAssertEqual(members.map(\.id.rawValue), ["b", "a"])
+        let ids = try await repo.collectionIds(libraryId: "sets", scope: scope)
+        XCTAssertEqual(ids, ["s1"])
+
+        try await repo.replaceCollectionMembers(collectionId: "s1", itemIds: ["a"], scope: scope)
+        let replaced = try await repo.collectionItems(collectionId: "s1", scope: scope)
+        XCTAssertEqual(replaced.map(\.id.rawValue), ["a"], "replace, not merge")
+
+        try await repo.delete(itemIds: ["s1"], scope: scope)
+        let rows = try await db.dbWriter.read { d in
+            try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM catalog_collection_items WHERE collectionId = 's1'") ?? -1
+        }
+        XCTAssertEqual(rows, 0, "membership goes with the BoxSet")
     }
 
     func testEvictionIsLRUAndSparesPinnedAndDownloaded() async throws {

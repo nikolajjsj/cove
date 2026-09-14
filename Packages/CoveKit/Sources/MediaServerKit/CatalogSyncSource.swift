@@ -7,6 +7,17 @@ import Models
 /// backend implements this once and the engine, the repository and every view
 /// stay untouched — which is the whole point of the local-first design.
 public protocol CatalogSyncSource: Sendable {
+    /// The user's libraries, in the server's order. The engine decides which of
+    /// them have a catalogue shape.
+    func libraries() async throws -> [MediaLibrary]
+
+    /// One item in full — overview, people, streams, chapters. The detail tier's
+    /// single on-demand read.
+    func catalogDetail(id: String) async throws -> MediaItem
+
+    /// The ids in a BoxSet, in the server's order. Membership is not on the item.
+    func collectionMemberIds(collectionId: String) async throws -> [String]
+
     /// One page of the full catalogue for a library, oldest `DateCreated` first so
     /// additions land past the cursor rather than shifting the unread tail.
     func catalogPage(

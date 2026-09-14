@@ -4,6 +4,27 @@ import MediaServerKit
 import Models
 
 extension JellyfinServerProvider: CatalogSyncSource {
+    // `libraries()` is the MediaServerProvider method; it satisfies this protocol too.
+
+    public func catalogDetail(id: String) async throws -> MediaItem {
+        try await item(id: ItemID(id))
+    }
+
+    public func collectionMemberIds(collectionId: String) async throws -> [String] {
+        let (client, userId) = try authenticatedClient()
+        let (result, _) = try await client.getCatalogItems(
+            userId: userId,
+            queryItems: [
+                URLQueryItem(name: "ParentId", value: collectionId),
+                URLQueryItem(name: "Fields", value: ""),
+                URLQueryItem(name: "EnableImages", value: "false"),
+                URLQueryItem(name: "EnableUserData", value: "false"),
+                URLQueryItem(name: "SortBy", value: "SortName"),
+                URLQueryItem(name: "SortOrder", value: "Ascending"),
+            ])
+        return (result.items ?? []).compactMap(\.id)
+    }
+
     public func catalogPage(
         libraryId: String, itemTypes: [String], startIndex: Int, limit: Int
     ) async throws -> CatalogPage {

@@ -113,19 +113,56 @@ public actor CatalogSyncEngine {
         }
     }
 
-    /// Libraries that vanished from the server, after `/UserViews` succeeded.
-    /// An empty list on a 5xx is not "no libraries" — the caller only passes a
-    /// list it actually received.
-    public func removeLibraries(notIn current: [Library], known: [String]) async {
-        let currentIds = Set(current.map(\.id))
-        for id in known where !currentIds.contains(id) {
-            do {
-                try await repository.deleteLibrary(libraryId: id, scope: scope)
-                logger.info("Removed vanished library \(id)")
-            } catch {
-                logger.error("Failed removing library \(id): \(error.localizedDescription)")
-            }
+    // MARK: - Libraries
+
+    /// The library list is catalogue data like everything else: fetched here,
+    /// saved, and read by the app from the repository. Libraries with no
+    /// catalogue shape (music, playlists, books) are dropped — the app has no
+    /// screens for them and nothing would ever fill their rows. A library that
+    /// vanished from the server takes its rows with it. Throws when the server
+    /// cannot be reached; the saved list is untouched then, because an empty
+    /// answer on a 5xx is not "no libraries".
+    public func refreshLibraries() async throws -> [MediaLibrary] {
+        let known = try await repository.libraries(scope: scope)
+        let fetched = try await source.libraries()
+        let kept = fetched.filter { Self.itemTypes(for: $0.collectionType) != nil }
+        try await repository.saveLibraries(kept, scope: scope)
+        let keptIds = Set(kept.map(\.id.rawValue))
+        for library in known where !keptIds.contains(library.id.rawValue) {
+            try await repository.deleteLibrary(libraryId: library.id.rawValue, scope: scope)
+            logger.info("Removed vanished library \(library.name)")
         }
+        return kept
+    }
+
+    // MARK: - Detail tier
+
+    /// Fetch one item in full and cache it. This is the catalogue's only
+    /// on-demand server read, and it lives here so the app has a single door to
+    /// the server for catalogue data. User data on the result comes from the
+    /// catalogue's own table — the outbox-protected truth — not the fetched JSON.
+    public func fetchDetail(itemId: String, pinned: Bool = false) async throws -> MediaItem {
+        var item = try await source.catalogDetail(id: itemId)
+        try await repository.saveDetail(item, pinned: pinned, scope: scope)
+        if let userData = try await repository.userData(itemId: itemId, scope: scope) {
+            item.userData = userData
+        }
+        return item
+    }
+
+    // MARK: - Collections
+
+    /// BoxSet membership is many-to-many and not on the item, so it is its own
+    /// pass: one request per collection, replacing the member list wholesale.
+    /// Reconcile runs it for every collection in the library; delta only for the
+    /// collections the server said it changed.
+    func syncCollections(ids: [String]) async throws {
+        for id in ids {
+            try Task.checkCancellation()
+            let members = try await source.collectionMemberIds(collectionId: id)
+            try await repository.replaceCollectionMembers(collectionId: id, itemIds: members, scope: scope)
+        }
+        if !ids.isEmpty { logger.info("Collections: refreshed \(ids.count) member lists") }
     }
 
     // MARK: - Bootstrap
@@ -193,6 +230,7 @@ public actor CatalogSyncEngine {
         var index = 0
         var candidate: Date?
         var total = 0
+        var changedCollections: [String] = []
 
         repeat {
             try Task.checkCancellation()
@@ -212,9 +250,12 @@ public actor CatalogSyncEngine {
             }
             let entries = page.entries.map { e in var c = e; c.libraryId = library.id; return c }
             try await repository.upsert(entries, scope: scope)
+            changedCollections += entries.filter { $0.type == "BoxSet" }.map(\.id)
             index += page.entries.count
             if page.entries.isEmpty { break }
         } while index < total
+
+        try await syncCollections(ids: changedCollections)
 
         // Only now. A pass that failed on page 7 of 9 never reaches this line and
         // re-runs from the old cursor; upserts make the repeat harmless.
@@ -258,6 +299,7 @@ public actor CatalogSyncEngine {
             logger.info("Reconcile \(library.name): removed \(outcome.phantoms.count) phantoms")
         }
         try await repository.markSeen(itemIds: Array(serverIds), at: seenAt ?? Date(), scope: scope)
+        try await syncCollections(ids: repository.collectionIds(libraryId: library.id, scope: scope))
 
         var state = try await repository.syncState(scope: scope, key: Self.reconcileKey(library.id))
         state.lastRunAt = Date()
@@ -352,14 +394,16 @@ public actor CatalogSyncEngine {
     static let userDataKey = "userData"
     static let fullUserDataKey = "userData:full"
 
-    /// The server type strings a library contributes. Music is excluded upstream by
-    /// the caller (FeatureFlags); this is about shape, not policy.
+    /// The server type strings a library contributes. Nil means the app has no
+    /// screens for the library and it is dropped from the list entirely; a mixed
+    /// library (no collection type) syncs everything the video screens can show.
     public static func itemTypes(for collectionType: CollectionType?) -> [String]? {
         switch collectionType {
         case .movies: return ["Movie"]
         case .tvshows: return ["Series", "Season", "Episode"]
         case .boxsets: return ["BoxSet"]
-        default: return nil
+        case .none: return ["Movie", "Series", "Season", "Episode"]
+        case .music, .books, .homevideos, .playlists, .unknown: return nil
         }
     }
 }

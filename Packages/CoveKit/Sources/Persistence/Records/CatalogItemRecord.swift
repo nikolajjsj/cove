@@ -29,6 +29,8 @@ public struct CatalogItemRecord: Codable, FetchableRecord, PersistableRecord, Se
     public var seriesName: String?
     public var imageTags: String?
     public var lastSeenInReconcile: Date?
+    /// When this row last came from the server. See migration 007.
+    public var syncedAt: Date?
 
     public init(entry: CatalogEntry, serverId: String, userId: String) {
         self.serverId = serverId
@@ -54,6 +56,7 @@ public struct CatalogItemRecord: Codable, FetchableRecord, PersistableRecord, Se
         self.seriesName = entry.seriesName
         self.imageTags = Self.encodeImageTags(entry.imageTags)
         self.lastSeenInReconcile = nil
+        self.syncedAt = Date()
     }
 
     // Upserting must not clobber the reconcile stamp; the conflict clause below
@@ -66,7 +69,7 @@ public struct CatalogItemRecord: Codable, FetchableRecord, PersistableRecord, Se
         "libraryId", "parentId", "seriesId", "seasonId", "type", "mediaType", "name",
         "sortName", "productionYear", "premiereDate", "dateCreated", "runTimeTicks",
         "communityRating", "criticRating", "officialRating", "indexNumber",
-        "parentIndexNumber", "seriesName", "imageTags",
+        "parentIndexNumber", "seriesName", "imageTags", "syncedAt",
     ]
 
     static func encodeImageTags(_ tags: [ImageType: String]?) -> String? {
@@ -196,6 +199,16 @@ public struct CatalogLibraryRecord: Codable, FetchableRecord, PersistableRecord,
             id: ItemID(libraryId), name: name,
             collectionType: collectionType.flatMap(CollectionType.init(rawValue:)))
     }
+}
+
+/// A row of `catalog_collection_items`: one member of one BoxSet.
+public struct CatalogCollectionItemRecord: Codable, FetchableRecord, PersistableRecord, Sendable {
+    public static let databaseTableName = "catalog_collection_items"
+    public var serverId: String
+    public var userId: String
+    public var collectionId: String
+    public var itemId: String
+    public var sortIndex: Int
 }
 
 /// A row of `catalog_item_details`: one full `MediaItem`, JSON-encoded.

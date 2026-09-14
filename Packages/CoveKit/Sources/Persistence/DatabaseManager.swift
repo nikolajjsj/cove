@@ -397,6 +397,34 @@ public final class DatabaseManager: Sendable {
                 columns: ["serverId", "userId", "pinned", "lastAccessedAt"])
         }
 
+        migrator.registerMigration("007_catalog_collections_and_sync_stamp") { db in
+            // When a catalogue row last came from the server. The detail tier
+            // compares it with its own `updatedAt`: a row re-synced after its
+            // detail was fetched means the server changed the item and the cached
+            // JSON is stale. Nullable so existing rows read as "not stale".
+            try db.alter(table: "catalog_items") { t in
+                t.add(column: "syncedAt", .datetime)
+            }
+
+            // BoxSet membership. Many-to-many and absent from the item DTO, so it
+            // is its own table filled by its own sync pass (one request per
+            // collection). `itemId` has no FK on purpose: a member may live in a
+            // library the app does not sync, and the read joins it away.
+            try db.create(table: "catalog_collection_items") { t in
+                t.column("serverId", .text).notNull()
+                t.column("userId", .text).notNull()
+                t.column("collectionId", .text).notNull()
+                t.column("itemId", .text).notNull()
+                t.column("sortIndex", .integer).notNull().defaults(to: 0)
+                t.primaryKey(["serverId", "userId", "collectionId", "itemId"])
+                t.foreignKey(
+                    ["serverId", "userId", "collectionId"],
+                    references: "catalog_items",
+                    columns: ["serverId", "userId", "itemId"],
+                    onDelete: .cascade)
+            }
+        }
+
         try migrator.migrate(dbWriter)
         logger.info("Database migrations complete")
     }

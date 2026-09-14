@@ -101,8 +101,8 @@ public final class CatalogRepository: Sendable {
                     serverId, userId, itemId, libraryId, parentId, seriesId, seasonId, type,
                     mediaType, name, sortName, productionYear, premiereDate, dateCreated,
                     runTimeTicks, communityRating, criticRating, officialRating, indexNumber,
-                    parentIndexNumber, seriesName, imageTags, lastSeenInReconcile
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                    parentIndexNumber, seriesName, imageTags, lastSeenInReconcile, syncedAt
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
                 ON CONFLICT(serverId, userId, itemId) DO UPDATE SET \(set)
                 """,
             arguments: [
@@ -110,6 +110,7 @@ public final class CatalogRepository: Sendable {
                 r.type, r.mediaType, r.name, r.sortName, r.productionYear, r.premiereDate,
                 r.dateCreated, r.runTimeTicks, r.communityRating, r.criticRating,
                 r.officialRating, r.indexNumber, r.parentIndexNumber, r.seriesName, r.imageTags,
+                r.syncedAt,
             ])
     }
 
@@ -269,6 +270,55 @@ public final class CatalogRepository: Sendable {
                 sql: "SELECT * FROM catalog_libraries WHERE serverId = ? AND userId = ? ORDER BY sortIndex",
                 arguments: [scope.serverId, scope.userId]
             ).map(\.asLibrary)
+        }
+    }
+
+    // MARK: - Collections
+
+    /// Replace a BoxSet's members, in the server's order. Ids the catalogue does
+    /// not hold (another library, an unsynced type) are stored anyway so a later
+    /// sync can light them up; `collectionItems` joins them away until then.
+    public func replaceCollectionMembers(collectionId: String, itemIds: [String], scope: Scope) async throws {
+        try await database.dbWriter.write { db in
+            try db.execute(
+                sql: "DELETE FROM catalog_collection_items WHERE serverId = ? AND userId = ? AND collectionId = ?",
+                arguments: [scope.serverId, scope.userId, collectionId])
+            for (index, id) in itemIds.enumerated() {
+                try CatalogCollectionItemRecord(
+                    serverId: scope.serverId, userId: scope.userId, collectionId: collectionId,
+                    itemId: id, sortIndex: index
+                ).insert(db, onConflict: .replace)
+            }
+        }
+    }
+
+    /// A BoxSet's members that the catalogue knows, in the server's order.
+    public func collectionItems(collectionId: String, scope: Scope) async throws -> [MediaItem] {
+        try await database.dbWriter.read { db in
+            try Row.fetchAll(
+                db,
+                sql: CatalogQuery.selectSQL + """
+                     JOIN catalog_collection_items c
+                       ON c.serverId = i.serverId AND c.userId = i.userId AND c.itemId = i.itemId
+                     WHERE i.serverId = ? AND i.userId = ? AND c.collectionId = ?
+                     ORDER BY c.sortIndex
+                    """,
+                arguments: [scope.serverId, scope.userId, collectionId]
+            ).map(Self.mediaItem(from:))
+        }
+    }
+
+    /// Every BoxSet the catalogue holds, optionally within one library — the set
+    /// whose membership the sync engine refreshes.
+    public func collectionIds(libraryId: String? = nil, scope: Scope) async throws -> [String] {
+        try await database.dbWriter.read { db in
+            var sql = "SELECT itemId FROM catalog_items WHERE serverId = ? AND userId = ? AND type = 'BoxSet'"
+            var args: [any DatabaseValueConvertible] = [scope.serverId, scope.userId]
+            if let libraryId {
+                sql += " AND libraryId = ?"
+                args.append(libraryId)
+            }
+            return try String.fetchAll(db, sql: sql, arguments: StatementArguments(args))
         }
     }
 
@@ -454,6 +504,31 @@ public final class CatalogRepository: Sendable {
             }
             return item
         }
+    }
+
+    /// A cached detail and whether the server has changed the item since.
+    public struct CachedDetail: Sendable {
+        public let item: MediaItem
+        /// The catalogue row was re-synced after this detail was fetched, so the
+        /// server saved new metadata for the item and the JSON is behind it.
+        public let isStale: Bool
+    }
+
+    /// `detail(id:)` plus the staleness verdict, in one call, for the view path.
+    public func cachedDetail(id: String, scope: Scope) async throws -> CachedDetail? {
+        guard let item = try await detail(id: id, scope: scope) else { return nil }
+        let stale = try await database.dbWriter.read { db in
+            // Both columns are GRDB datetime text in UTC, so string order is time order.
+            try Bool.fetchOne(
+                db,
+                sql: """
+                    SELECT i.syncedAt > d.updatedAt FROM catalog_item_details d
+                    JOIN catalog_items i ON i.serverId = d.serverId AND i.userId = d.userId AND i.itemId = d.itemId
+                    WHERE d.serverId = ? AND d.userId = ? AND d.itemId = ?
+                    """,
+                arguments: [scope.serverId, scope.userId, id]) ?? false
+        }
+        return CachedDetail(item: item, isStale: stale)
     }
 
     /// Save a full item. `pinned` is an explicit pin; a live download protects a
