@@ -141,6 +141,15 @@ If SwiftData is configured to use CloudKit:
   `catalog_item_details` are the fastest way to see what sync actually did, and pointing
   `servers.url` at `https://127.0.0.1:9` is a faithful offline simulation (restore it after).
 
+- **User-data writes go through `UserDataStore`, never `provider.setPlayed` / `setFavorite`
+  from a view.** The store applies the change to the local catalogue and queues it in the
+  outbox in one transaction; a direct provider call fails offline and leaves the catalogue
+  disagreeing with the server until the next sweep. It compiles and looks right, which is how
+  the series "mark watched" path shipped that way. For whole series or seasons use
+  `setPlayedRecursively` — one outbox row, every child episode updated locally. Check with
+  `grep -rn "provider\.set\(Played\|Favorite\)" Cove/Views Cove/Components`; the only
+  acceptable hits are `else` fallbacks for a nil store.
+
 - **Never build a path or a URL directly from server-supplied data.** The media server chooses item ids, `TranscodingUrl`, trailer URLs, and subtitle language tags. Two Foundation APIs make this dangerous in ways that read as safe:
 
   - `URL.appending(path:)` is a *path* append, not a component append. It does not escape `/` and does not collapse `..`, and `FileManager` resolves both at syscall time. Anything server-supplied that becomes a path segment must go through `DownloadStorage.safeComponent(_:)` first — including the string-interpolated `relative*Path` helpers, which are persisted and must agree with the URL builders. Guard destructive or writing operations with `DownloadStorage.isContained(_:)`.
