@@ -414,6 +414,215 @@ public final class CatalogRepository: Sendable {
         }
     }
 
+    // MARK: - Detail tier
+
+    /// The cached full item, with user data overlaid from `catalog_user_data`
+    /// (the truth, outbox-protected) rather than whatever the JSON captured.
+    /// Touches `lastAccessedAt` so eviction is LRU.
+    public func detail(id: String, scope: Scope) async throws -> MediaItem? {
+        try await database.dbWriter.write { db in
+            guard let record = try CatalogItemDetailRecord.fetchOne(
+                db,
+                sql: "SELECT * FROM catalog_item_details WHERE serverId = ? AND userId = ? AND itemId = ?",
+                arguments: [scope.serverId, scope.userId, id]),
+                var item = record.item
+            else { return nil }
+            try db.execute(
+                sql: "UPDATE catalog_item_details SET lastAccessedAt = ? WHERE serverId = ? AND userId = ? AND itemId = ?",
+                arguments: [Date(), scope.serverId, scope.userId, id])
+            if let ud = try CatalogUserDataRecord.fetchOne(
+                db,
+                sql: "SELECT * FROM catalog_user_data WHERE serverId = ? AND userId = ? AND itemId = ?",
+                arguments: [scope.serverId, scope.userId, id]) {
+                item.userData = ud.asUserData
+            }
+            return item
+        }
+    }
+
+    /// Save a full item. `pinned` is an explicit pin; a live download protects a
+    /// row regardless (see `evictDetails`).
+    public func saveDetail(_ item: MediaItem, pinned: Bool = false, scope: Scope) async throws {
+        let record = try CatalogItemDetailRecord(item: item, serverId: scope.serverId, userId: scope.userId, pinned: pinned)
+        try await database.dbWriter.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO catalog_item_details (serverId, userId, itemId, json, pinned, lastAccessedAt, updatedAt)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(serverId, userId, itemId) DO UPDATE SET
+                        json = excluded.json,
+                        pinned = catalog_item_details.pinned OR excluded.pinned,
+                        lastAccessedAt = excluded.lastAccessedAt,
+                        updatedAt = excluded.updatedAt
+                    """,
+                arguments: [record.serverId, record.userId, record.itemId, record.json, record.pinned, record.lastAccessedAt, record.updatedAt])
+            // Keep the user-data table in step if the item brought some and no
+            // write is pending for it.
+            if let ud = item.userData {
+                let pending = try Self.pendingOutboxFields(db, scope: scope)[item.id.rawValue] ?? []
+                let exists = try Bool.fetchOne(
+                    db,
+                    sql: "SELECT EXISTS(SELECT 1 FROM catalog_items WHERE serverId = ? AND userId = ? AND itemId = ?)",
+                    arguments: [scope.serverId, scope.userId, item.id.rawValue]) ?? false
+                if exists {
+                    try Self.upsertUserData(ud, scope: scope, itemId: item.id.rawValue, protecting: pending, db)
+                }
+            }
+        }
+    }
+
+    public func setPinned(_ pinned: Bool, itemIds: [String], scope: Scope) async throws {
+        guard !itemIds.isEmpty else { return }
+        try await database.dbWriter.write { db in
+            for chunk in itemIds.chunked(500) {
+                let marks = Array(repeating: "?", count: chunk.count).joined(separator: ",")
+                var args: [any DatabaseValueConvertible] = [pinned, scope.serverId, scope.userId]
+                args += chunk
+                try db.execute(
+                    sql: "UPDATE catalog_item_details SET pinned = ? WHERE serverId = ? AND userId = ? AND itemId IN (\(marks))",
+                    arguments: StatementArguments(args))
+            }
+        }
+    }
+
+    /// Bytes held by detail rows that eviction is allowed to remove.
+    public func evictableDetailBytes(scope: Scope) async throws -> Int {
+        try await database.dbWriter.read { db in
+            try Int.fetchOne(db, sql: Self.evictableSQL(select: "COALESCE(SUM(LENGTH(d.json)), 0)"),
+                             arguments: [scope.serverId, scope.userId]) ?? 0
+        }
+    }
+
+    /// LRU-evict unprotected detail rows until the evictable set is under `budgetBytes`.
+    /// A row is protected if it is pinned **or** a `downloads` row exists for its
+    /// item — the join is what makes forgetting to unpin harmless.
+    /// Returns the number of rows removed.
+    public func evictDetails(budgetBytes: Int, scope: Scope) async throws -> Int {
+        try await database.dbWriter.write { db in
+            var total = try Int.fetchOne(db, sql: Self.evictableSQL(select: "COALESCE(SUM(LENGTH(d.json)), 0)"),
+                                         arguments: [scope.serverId, scope.userId]) ?? 0
+            guard total > budgetBytes else { return 0 }
+            let victims = try Row.fetchAll(
+                db,
+                sql: Self.evictableSQL(select: "d.itemId, LENGTH(d.json) AS bytes") + " ORDER BY d.lastAccessedAt ASC",
+                arguments: [scope.serverId, scope.userId])
+            var removed: [String] = []
+            for row in victims {
+                guard total > budgetBytes else { break }
+                removed.append(row["itemId"])
+                total -= (row["bytes"] as Int?) ?? 0
+            }
+            for chunk in removed.chunked(500) {
+                let marks = Array(repeating: "?", count: chunk.count).joined(separator: ",")
+                var args: [any DatabaseValueConvertible] = [scope.serverId, scope.userId]
+                args += chunk
+                try db.execute(
+                    sql: "DELETE FROM catalog_item_details WHERE serverId = ? AND userId = ? AND itemId IN (\(marks))",
+                    arguments: StatementArguments(args))
+            }
+            return removed.count
+        }
+    }
+
+    private static func evictableSQL(select: String) -> String {
+        """
+        SELECT \(select) FROM catalog_item_details d
+        WHERE d.serverId = ? AND d.userId = ? AND d.pinned = 0
+          AND NOT EXISTS (SELECT 1 FROM downloads w WHERE w.serverId = d.serverId AND w.itemId = d.itemId)
+        """
+    }
+
+    // MARK: - Lookups the UI needs beyond paging
+
+    public func userData(itemId: String, scope: Scope) async throws -> UserData? {
+        try await database.dbWriter.read { db in
+            try CatalogUserDataRecord.fetchOne(
+                db,
+                sql: "SELECT * FROM catalog_user_data WHERE serverId = ? AND userId = ? AND itemId = ?",
+                arguments: [scope.serverId, scope.userId, itemId])?.asUserData
+        }
+    }
+
+    /// Which of `ids` the catalogue no longer holds — orphaned downloads, once a
+    /// library has bootstrapped.
+    public func missingIds(among ids: [String], scope: Scope) async throws -> Set<String> {
+        guard !ids.isEmpty else { return [] }
+        return try await database.dbWriter.read { db in
+            var present = Set<String>()
+            for chunk in ids.chunked(500) {
+                let marks = Array(repeating: "?", count: chunk.count).joined(separator: ",")
+                var args: [any DatabaseValueConvertible] = [scope.serverId, scope.userId]
+                args += chunk
+                present.formUnion(try String.fetchAll(
+                    db,
+                    sql: "SELECT itemId FROM catalog_items WHERE serverId = ? AND userId = ? AND itemId IN (\(marks))",
+                    arguments: StatementArguments(args)))
+            }
+            return Set(ids).subtracting(present)
+        }
+    }
+
+    /// Seasons of a series, from the catalogue's Season rows.
+    public func seasons(seriesId: String, scope: Scope) async throws -> [Season] {
+        try await database.dbWriter.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT i.itemId, i.name, i.indexNumber,
+                           (SELECT COUNT(*) FROM catalog_items e WHERE e.serverId = i.serverId AND e.userId = i.userId
+                              AND e.type = 'Episode' AND e.seasonId = i.itemId) AS episodeCount
+                    FROM catalog_items i
+                    WHERE i.serverId = ? AND i.userId = ? AND i.type = 'Season' AND i.seriesId = ?
+                    ORDER BY i.indexNumber
+                    """,
+                arguments: [scope.serverId, scope.userId, seriesId]
+            ).map { row in
+                Season(
+                    id: ItemID(row["itemId"]), seriesId: ItemID(seriesId),
+                    seasonNumber: row["indexNumber"] ?? 0, title: row["name"],
+                    episodeCount: row["episodeCount"])
+            }
+        }
+    }
+
+    /// Episodes of a season. Overview comes from the detail cache when the
+    /// episode has ever been fetched; the lean row does not carry it.
+    public func episodes(seasonId: String, scope: Scope) async throws -> [Episode] {
+        try await database.dbWriter.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT i.itemId, i.seriesId, i.seasonId, i.indexNumber, i.parentIndexNumber, i.name, i.runTimeTicks,
+                           u.itemId AS ud_itemId, u.played, u.playCount, u.isFavorite, u.playbackPositionTicks, u.lastPlayedDate,
+                           json_extract(d.json, '$.overview') AS overview
+                    FROM catalog_items i
+                    LEFT JOIN catalog_user_data u ON u.serverId = i.serverId AND u.userId = i.userId AND u.itemId = i.itemId
+                    LEFT JOIN catalog_item_details d ON d.serverId = i.serverId AND d.userId = i.userId AND d.itemId = i.itemId
+                    WHERE i.serverId = ? AND i.userId = ? AND i.type = 'Episode' AND i.seasonId = ?
+                    ORDER BY i.indexNumber
+                    """,
+                arguments: [scope.serverId, scope.userId, seasonId]
+            ).map { row in
+                let ud: UserData? = row["ud_itemId"] == nil ? nil : UserData(
+                    isFavorite: row["isFavorite"] ?? false,
+                    playbackPosition: TimeInterval((row["playbackPositionTicks"] as Int64?) ?? 0) / 10_000_000,
+                    playCount: row["playCount"] ?? 0,
+                    isPlayed: row["played"] ?? false,
+                    lastPlayedDate: row["lastPlayedDate"])
+                return Episode(
+                    id: ItemID(row["itemId"]),
+                    seriesId: (row["seriesId"] as String?).map(ItemID.init),
+                    seasonId: (row["seasonId"] as String?).map(ItemID.init),
+                    episodeNumber: row["indexNumber"],
+                    seasonNumber: row["parentIndexNumber"],
+                    title: row["name"],
+                    overview: row["overview"],
+                    runtime: (row["runTimeTicks"] as Int64?).map { TimeInterval($0) / 10_000_000 },
+                    userData: ud)
+            }
+        }
+    }
+
     // MARK: - Reads for the UI
 
     /// The grid query. Every `SortField` and every `FilterOptions` field the UI can

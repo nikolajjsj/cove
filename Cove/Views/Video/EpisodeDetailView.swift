@@ -106,9 +106,7 @@ struct EpisodeDetailView: View {
             )
         }
         .task {
-            await detailLoader.load {
-                try await authManager.provider.item(id: item.id)
-            }
+            await appState.loadDetail(item, into: detailLoader)
         }
         .ignoresSafeArea(edges: .top)
         .toolbarBackground(.hidden, for: .navigationBar)

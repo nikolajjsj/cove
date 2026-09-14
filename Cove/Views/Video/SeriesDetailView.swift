@@ -289,9 +289,7 @@ struct SeriesDetailView: View {
         .task {
             await loadSeasons()
             if !isOffline {
-                await detailLoader.load {
-                    try await authManager.provider.item(id: item.id)
-                }
+                await appState.loadDetail(item, into: detailLoader)
             }
         }
         .onChange(of: appState.videoPlayerCoordinator.isPresented) { wasPresented, isPresented in
@@ -299,9 +297,7 @@ struct SeriesDetailView: View {
                 Task {
                     // Allow time for the playback stop report to reach the server
                     try? await Task.sleep(for: .seconds(2))
-                    await detailLoader.load {
-                        try await authManager.provider.item(id: item.id)
-                    }
+                    await appState.loadDetail(item, into: detailLoader)
                     if let selectedSeason {
                         await loadEpisodes(for: selectedSeason)
                     }
@@ -353,7 +349,17 @@ struct SeriesDetailView: View {
             await loadOfflineSeasons(serverId: serverId)
         } else {
             do {
-                let loadedSeasons = try await authManager.provider.seasons(series: item.id)
+                // The catalogue holds Season rows for every synced TV library, so
+                // this works offline and does not change when the connection does.
+                let loadedSeasons: [Season]
+                if let local = await appState.localCatalog(),
+                    let fromCatalog = try? await local.repository.seasons(seriesId: item.id.rawValue, scope: local.scope),
+                    !fromCatalog.isEmpty
+                {
+                    loadedSeasons = fromCatalog
+                } else {
+                    loadedSeasons = try await authManager.provider.seasons(series: item.id)
+                }
                 seasons = loadedSeasons.sorted { $0.seasonNumber < $1.seasonNumber }
                 if let first = seasons.first {
                     selectedSeason = first
@@ -424,7 +430,15 @@ struct SeriesDetailView: View {
             loadOfflineEpisodes(for: season)
         } else {
             do {
-                let loaded = try await authManager.provider.episodes(season: season.id)
+                let loaded: [Episode]
+                if let local = await appState.localCatalog(),
+                    let fromCatalog = try? await local.repository.episodes(seasonId: season.id.rawValue, scope: local.scope),
+                    !fromCatalog.isEmpty
+                {
+                    loaded = fromCatalog
+                } else {
+                    loaded = try await authManager.provider.episodes(season: season.id)
+                }
                 episodes = loaded.sorted { ($0.episodeNumber ?? 0) < ($1.episodeNumber ?? 0) }
             } catch {
                 episodesError = error.localizedDescription

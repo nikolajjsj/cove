@@ -197,3 +197,34 @@ public struct CatalogLibraryRecord: Codable, FetchableRecord, PersistableRecord,
             collectionType: collectionType.flatMap(CollectionType.init(rawValue:)))
     }
 }
+
+/// A row of `catalog_item_details`: one full `MediaItem`, JSON-encoded.
+public struct CatalogItemDetailRecord: Codable, FetchableRecord, PersistableRecord, Sendable {
+    public static let databaseTableName = "catalog_item_details"
+    public var serverId: String
+    public var userId: String
+    public var itemId: String
+    public var json: Data
+    public var pinned: Bool
+    public var lastAccessedAt: Date
+    public var updatedAt: Date
+
+    nonisolated(unsafe) static let encoder: JSONEncoder = {
+        let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601; return e
+    }()
+    nonisolated(unsafe) static let decoder: JSONDecoder = {
+        let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d
+    }()
+
+    public init(item: MediaItem, serverId: String, userId: String, pinned: Bool) throws {
+        self.serverId = serverId
+        self.userId = userId
+        self.itemId = item.id.rawValue
+        self.json = try Self.encoder.encode(item)
+        self.pinned = pinned
+        self.lastAccessedAt = Date()
+        self.updatedAt = Date()
+    }
+
+    public var item: MediaItem? { try? Self.decoder.decode(MediaItem.self, from: json) }
+}

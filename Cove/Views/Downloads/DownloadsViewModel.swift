@@ -20,6 +20,12 @@ final class DownloadsViewModel {
     /// Download groups keyed by group ID.
     private(set) var groupsById: [String: DownloadGroup] = [:]
 
+    /// Downloads whose item the server no longer lists. The file stays — the user
+    /// has it and paid for the bytes — but the row says so.
+    private(set) var orphanedItemIds: Set<String> = []
+    var catalogRepository: CatalogRepository?
+    var catalogScope: CatalogRepository.Scope?
+
     var isLoading = true
     var errorMessage: String?
 
@@ -171,6 +177,17 @@ final class DownloadsViewModel {
     // MARK: - Lifecycle
 
     /// Start observing downloads for the given server.
+    /// Compare completed downloads against the catalogue. Only meaningful once
+    /// the catalogue holds anything; before that, "missing" just means "not
+    /// synced yet".
+    private func detectOrphans() async {
+        guard let repository = catalogRepository, let scope = catalogScope else { return }
+        let total = (try? await repository.count(scope: scope)) ?? 0
+        guard total > 0 else { return }
+        let ids = allDownloads.filter { $0.state == .completed }.map(\.itemId.rawValue)
+        orphanedItemIds = (try? await repository.missingIds(among: ids, scope: scope)) ?? []
+    }
+
     func startObserving(serverId: String) {
         self.serverId = serverId
         observationTask?.cancel()
@@ -191,6 +208,7 @@ final class DownloadsViewModel {
                 await self.loadMetadata(serverId: serverId)
                 await self.loadGroups(serverId: serverId)
                 await self.measureDiskUsage()
+                await self.detectOrphans()
             }
         }
     }

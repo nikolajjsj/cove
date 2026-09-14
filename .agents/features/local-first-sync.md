@@ -71,8 +71,11 @@ whole library. Lean on purpose: measured ~3.2 KB/item with the fields Cove reque
 versus a few hundred bytes lean — roughly 64 MB against 8 MB for 20k items.
 
 **Detail tier** — overview, people, media streams, chapters, trailers, provider ids.
-Fetched lazily on first view, cached, pinned for downloads. Reuses `OfflineMetadataRecord`,
-which is already `(itemId, serverId, mediaType, metadataJSON, updatedAt)`.
+Fetched lazily on first view, cached in `catalog_item_details` (migration 006), pinned for
+downloads. **Not** an extension of `OfflineMetadataRecord` as first planned: that record's
+JSON is `OfflineMediaMetadata`, a lossy projection built for the download pipeline, while
+the detail view needs the whole `MediaItem`. `offline_metadata` keeps serving downloads
+until Phase 5 folds it.
 
 ### 5.3 Tables
 
@@ -118,9 +121,16 @@ userDataOutbox                                      §7
   occurredAt REAL                                    device wall clock at the tap
   attempts INT, lastAttemptAt REAL, lastError TEXT
 
-offline_metadata                                    existing; add:
-  pinned BOOL NOT NULL DEFAULT 0                     set while a download exists (§9.1)
-  lastAccessedAt REAL                                for eviction (§9.4)
+catalog_item_details                                §9.1, §9.4
+  serverId, userId, itemId                           PK
+  json BLOB NOT NULL                                 the full MediaItem
+  pinned BOOL NOT NULL DEFAULT 0                     explicit pin; a live download also protects, by join
+  lastAccessedAt REAL NOT NULL                       LRU
+  updatedAt REAL NOT NULL
+
+offline_metadata                                    existing, download pipeline only; the
+                                                    pinned/lastAccessedAt columns 004 added
+                                                    are unused and can go in Phase 5
 ```
 
 ### 5.4 Indexes
@@ -427,10 +437,12 @@ not a bug.
 
 ### 9.1 Downloads pin detail rows
 
-When a download is created, `offline_metadata.pinned = 1` for that item, and the detail
-tier is fetched *now* if absent — a download without its metadata is a filename. When the
-last download for an item is removed, `pinned = 0`. Eviction (§9.4) never touches a pinned
-row. This is the entire remaining job of "offline metadata": pinning, not a parallel path.
+When a download is created, the item's full detail is fetched and saved to
+`catalog_item_details` with `pinned = 1` — a download without its metadata is a filename.
+Season downloads do this per episode. Nothing un-pins on delete: eviction (§9.4) also
+protects any row with a live `downloads` row by join, so a delete path that forgets to
+unpin cannot strip a downloaded item of its metadata. `pinned` survives later unpinned
+saves (`pinned OR excluded.pinned`).
 
 ### 9.2 Orphaned downloads
 
@@ -509,7 +521,7 @@ Each phase ends shippable. Gate before advancing.
 | 0 | **Done.** Read/write tests against the demo server | Passed: `Date` header present; reconcile primitives work; all four user-data sweep primitives reflect a write immediately. **Failed: `minDateLastSavedForUser`** — does not track user-data writes; replaced by §6.3a. Unverifiable without admin: whether `minDateLastSaved` bumps on metadata edits |
 | 1 | **Done.** Migration 004, `CatalogSyncEngine`, `CatalogRepository`, `LibraryGridView` reads local once a library has bootstrapped or holds rows | Passed: bootstrap against the demo server landed exactly the server's type census (11 Movie, 1 Series, 1 Season, 6 Episode) with cursors in server time; a warm relaunch ran a delta and advanced them; 20 unit tests green and four guards mutation-tested. **Not yet:** *airplane mode* — `AppState.loadLibraries()` still comes from the network and empties `libraries` on failure, so with no connection there is no library to open. The library list must be persisted locally before the offline gate can pass; moved to Phase 2 |
 | 2 | **Done.** One shared `AppState.pageFetcher` behind all four non-music paged views; Home rails (Resume, NextUp, Recently Added, per-library latest, Genres) derived locally; Search over FTS5; the library list persisted (`catalog_libraries`, migration 005); user-data hot sweeps + daily full sweep (§6.3a) | Passed: with the saved connection pointed at a dead host, Home rendered the persisted libraries, three Continue Watching items with progress, a locally derived Next Up (Pioneer One S1E4), Genres and both library rails; the Movies grid rendered all 11 films with played state. 30 catalogue tests green; three sweep guards mutation-tested. Note: artwork was blank in that run only because rewriting the server URL also rewrites every image URL — a real offline launch keeps them and hits Nuke's disk cache |
-| 3 | Detail tier: lazy fetch, `pinned`, eviction; fold `OfflineMetadataRepository`; orphaned-download badge | The offline/online branch is **deleted**, not bypassed. Delete a downloaded item server-side: it stays playable with the badge |
+| 3 | **Data path done; presentation fork remains.** `catalog_item_details` + `AppState.loadDetail` (cached → shown instantly, then refreshed; user data overlaid from `catalog_user_data`); every detail view uses it; `SeriesDetailView` takes seasons and episodes from the catalogue when it can; downloads pin; LRU eviction protects pins and downloads by join; orphaned downloads badged | Passed offline with the saved connection on a dead host: a movie detail rendered overview, streams, cast and *Resume at 46:53* — the position from the user-data table, not the cached JSON — and a series rendered its season and episodes from catalogue rows. 22 repository tests green; eviction protection mutation-tested. **Not met:** `SeriesDetailView`'s `offlineServerId` mode still exists. No longer a *data* fork — the normal path already works offline — but it still drives local artwork paths, local-file playback and per-episode delete actions for the Downloads→Series flow. Deleting it means re-expressing those as "a download exists for this episode" on the normal view. Moved to Phase 5 |
 | 4 | Outbox: replace `UserDataStore` rollback, coalescing, ordered replay, position merge, 404 dropping; fold `OfflinePlaybackReportRepository` | Toggle favourite six times offline → one request. Watch to 40 min offline while the server is at 60 → phone yields. Item deleted server-side with a pending edit → row dropped, queue continues |
 | 5 | Retire remaining provider fetch calls; sync status UI; `BGAppRefreshTask` | Nothing in `Cove/Views` calls a provider fetch method. Grep returns 0 |
 
@@ -597,6 +609,7 @@ Against the 12.0 demo server and this tree — tested, not assumed:
 - End to end on iPad Pro 13-inch against the demo server: `catalog_items` = 19, `catalog_user_data` = 19, `catalog_item_genres` = 37, FTS = 19; both libraries `bootstrapComplete`; cursors `15:28Z` while the host is on CEST.
 - Every `connect()` created a new `servers` row (two rows, same url and user, 83 s apart) before the reuse fix.
 - Phase 2 end to end: `catalog_libraries` = 3 (Movies, Playlists, Shows — music excluded), `sync_state` gained a `userData` scope, 5 in-progress and 1 favourite landed via the hot sweeps; offline launch (saved url → `127.0.0.1:9`) rendered Home and the Movies grid entirely from the catalogue.
+- Phase 3 end to end: `catalog_item_details` held the opened movie at 5,532 bytes with 21 people; offline, the same movie and the series both rendered from local data. Two harness bugs were found on the way — the screenshot driver resolved items over the network and read the engine's scope instead of the connection's — and fixed; neither was in the app.
 - A delta's 120 s overlap re-delivers items saved within the window, *with* their `UserData`. Harmless in production; it hid two sweep paths in tests until the fixture saved items well before the cursor.
 
 **Not verified:**

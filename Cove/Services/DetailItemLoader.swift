@@ -43,6 +43,11 @@ final class DetailItemLoader {
     /// won't appear.
     ///
     /// - Parameter fetch: An async throwing closure that returns the full item.
+    /// Show an item immediately — the cached detail — without waiting on a fetch.
+    func apply(_ cached: MediaItem) {
+        item = cached
+    }
+
     func load(_ fetch: @Sendable () async throws -> MediaItem) async {
         do {
             let full = try await fetch()

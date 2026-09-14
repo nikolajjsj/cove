@@ -84,6 +84,22 @@ final class DownloadCoordinator {
 
     // MARK: - Single Item Download
 
+    /// The local catalogue's detail tier. Set by `CoveApp`; a download pins its
+    /// item's full detail here so the detail view has everything offline.
+    var catalogRepository: CatalogRepository?
+
+    private var catalogScope: CatalogRepository.Scope? {
+        guard let connection = authManager?.activeConnection else { return nil }
+        return CatalogRepository.Scope(serverId: connection.id.uuidString, userId: connection.userId)
+    }
+
+    /// Save the full item into the detail cache, pinned, so eviction never takes
+    /// it. A download without its metadata is a filename.
+    private func pinDetail(_ item: MediaItem) async {
+        guard let repository = catalogRepository, let scope = catalogScope else { return }
+        try? await repository.saveDetail(item, pinned: true, scope: scope)
+    }
+
     func downloadItem(_ item: MediaItem, parentId: ItemID? = nil) async throws {
         // First download is the first moment a completion alert means anything.
         await DownloadNotificationPermission.requestIfNeeded()
@@ -113,6 +129,7 @@ final class DownloadCoordinator {
             includeBackdrop: includeBackdrop
         )
         try await metadataRepo.save(metadata)
+        await pinDetail(item)
 
         let artworkURL = provider.imageURL(
             for: item,
@@ -185,6 +202,11 @@ final class DownloadCoordinator {
                 metadata: &epMeta
             )
             try await metadataRepo.save(epMeta)
+            // The full episode detail, pinned: a downloaded episode must open
+            // offline with its overview and streams, not just a title.
+            if let full = try? await provider.item(id: episode.id) {
+                await pinDetail(full)
+            }
 
             let epItem = MediaItem(
                 id: episode.id, title: episode.title, mediaType: .episode

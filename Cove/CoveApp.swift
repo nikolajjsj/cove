@@ -105,6 +105,7 @@ struct CoveApp: App {
         // The local catalogue: grids read it, the sync engine fills it. Without
         // a database there is no catalogue and views use the provider directly.
         appState.catalogRepository = databaseManager.map { CatalogRepository(database: $0) }
+        downloadCoordinator.catalogRepository = appState.catalogRepository
 
         _authManager = State(initialValue: authManager)
         _downloadCoordinator = State(initialValue: downloadCoordinator)

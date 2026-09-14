@@ -274,7 +274,40 @@ final class AppState {
         }
         let libraries = catalogLibraries
         guard let engine = catalogSync else { return }
-        Task { await engine.syncIfNeeded(libraries: libraries) }
+        Task {
+            await engine.syncIfNeeded(libraries: libraries)
+            await evictDetailCache()
+        }
+    }
+
+    /// Load an item's detail: cached first, so the view fills instantly and works
+    /// offline; then the server, which refreshes the cache. User data always
+    /// comes from the catalogue's user-data table, the outbox-protected truth,
+    /// never from whatever the detail JSON happened to capture.
+    func loadDetail(_ item: MediaItem, into loader: DetailItemLoader) async {
+        let provider = authManager.provider
+        let local = await localCatalog()
+        if let local, let cached = try? await local.repository.detail(id: item.id.rawValue, scope: local.scope) {
+            loader.apply(cached)
+        }
+        guard !isOffline else { return }
+        await loader.load {
+            var fresh = try await provider.item(id: item.id)
+            if let local {
+                try? await local.repository.saveDetail(fresh, scope: local.scope)
+                if let ud = try? await local.repository.userData(itemId: item.id.rawValue, scope: local.scope) {
+                    fresh.userData = ud
+                }
+            }
+            return fresh
+        }
+    }
+
+    /// Keep the detail cache under its soft cap. Pinned rows and anything with a
+    /// live download are never touched; the repository enforces that by join.
+    func evictDetailCache() async {
+        guard let repository = catalogRepository, let scope = catalogScope ?? currentCatalogScope else { return }
+        _ = try? await repository.evictDetails(budgetBytes: 200 * 1024 * 1024, scope: scope)
     }
 
     /// Foreground: pick up whatever changed while the app was away.

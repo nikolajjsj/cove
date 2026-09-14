@@ -227,4 +227,109 @@ final class CatalogRepositoryTests: XCTestCase {
         let favs = try await repo.favoriteIds(scope: scope)
         XCTAssertEqual(favs, ["b"], "a cleared, b protected")
     }
+
+    // MARK: Detail tier
+
+    private func fullItem(_ id: String, overview: String) -> MediaItem {
+        MediaItem(id: ItemID(id), title: id, overview: overview, mediaType: .movie,
+                  people: [], userData: UserData(isFavorite: false, isPlayed: false))
+    }
+
+    func testDetailRoundTripsAndOverlaysCatalogUserData() async throws {
+        try await repo.upsert([entry("a", name: "A")], scope: scope)
+        try await repo.saveDetail(fullItem("a", overview: "Long text"), scope: scope)   // JSON: not a favourite
+        // A later sweep learns it is a favourite. The cached JSON is now stale.
+        try await repo.upsertUserData([("a", UserData(isFavorite: true))], scope: scope)
+        let d = try await repo.detail(id: "a", scope: scope)
+        XCTAssertEqual(d?.overview, "Long text")
+        XCTAssertEqual(d?.userData?.isFavorite, true, "user data comes from catalog_user_data, not the JSON")
+    }
+
+    func testSaveDetailRefreshesUserDataButRespectsPendingOutbox() async throws {
+        try await repo.upsert([entry("a", name: "A")], scope: scope)
+        try await db.dbWriter.write { d in
+            try d.execute(sql: "UPDATE catalog_user_data SET isFavorite = 1 WHERE itemId = 'a'")
+            try d.execute(sql: """
+                INSERT INTO user_data_outbox (id, serverId, userId, itemId, field, value, occurredAt, attempts)
+                VALUES ('o1','srv','usr','a','favorite','true', CURRENT_TIMESTAMP, 0)
+                """)
+        }
+        var fresh = fullItem("a", overview: "x")
+        fresh.userData = UserData(isFavorite: false, isPlayed: true)   // server: not favourite, but played
+        try await repo.saveDetail(fresh, scope: scope)
+        let ud = try await repo.userData(itemId: "a", scope: scope)
+        XCTAssertEqual(ud?.isFavorite, true, "pending favourite survives")
+        XCTAssertEqual(ud?.isPlayed, true, "unprotected field takes the server's value")
+    }
+
+    func testDetailMissingIsNil() async throws {
+        let d = try await repo.detail(id: "nope", scope: scope)
+        XCTAssertNil(d)
+    }
+
+    func testEvictionIsLRUAndSparesPinnedAndDownloaded() async throws {
+        for id in ["old", "mid", "new", "pinned", "downloaded"] {
+            try await repo.saveDetail(fullItem(id, overview: String(repeating: "x", count: 1000)), pinned: id == "pinned", scope: scope)
+        }
+        // Order the access times explicitly.
+        try await db.dbWriter.write { d in
+            for (i, id) in ["old", "mid", "new", "pinned", "downloaded"].enumerated() {
+                try d.execute(sql: "UPDATE catalog_item_details SET lastAccessedAt = ? WHERE itemId = ?",
+                              arguments: [Date(timeIntervalSince1970: 1_700_000_000 + Double(i)), id])
+            }
+            // A live download for 'downloaded' — no explicit pin.
+            try d.execute(sql: """
+                INSERT INTO downloads (id, itemId, serverId, title, mediaType, state, remoteURL)
+                VALUES ('dl1', 'downloaded', 'srv', 'D', 'movie', 'completed', 'https://s/x')
+                """)
+        }
+        // Budget fits exactly one unprotected row, whatever the encoder makes of it.
+        let rowBytes = try await db.dbWriter.read { d in
+            try Int.fetchOne(d, sql: "SELECT LENGTH(json) FROM catalog_item_details WHERE itemId = 'new'") ?? 0
+        }
+        let removed = try await repo.evictDetails(budgetBytes: rowBytes + rowBytes / 2, scope: scope)
+        let remaining = try await db.dbWriter.read { d in
+            try String.fetchAll(d, sql: "SELECT itemId FROM catalog_item_details ORDER BY itemId")
+        }
+        XCTAssertEqual(removed, 2, "old and mid go; new fits the budget")
+        XCTAssertEqual(remaining, ["downloaded", "new", "pinned"])
+    }
+
+    func testSaveDetailNeverUnpins() async throws {
+        try await repo.saveDetail(fullItem("a", overview: "1"), pinned: true, scope: scope)
+        try await repo.saveDetail(fullItem("a", overview: "2"), pinned: false, scope: scope)
+        let pinned = try await db.dbWriter.read { d in
+            try Bool.fetchOne(d, sql: "SELECT pinned FROM catalog_item_details WHERE itemId = 'a'")
+        }
+        XCTAssertEqual(pinned, true)
+    }
+
+    func testMissingIdsFindsOrphans() async throws {
+        try await repo.upsert([entry("a", name: "A")], scope: scope)
+        let missing = try await repo.missingIds(among: ["a", "gone", "also-gone"], scope: scope)
+        XCTAssertEqual(missing, ["gone", "also-gone"])
+    }
+
+    // MARK: Seasons & episodes from the catalogue
+
+    func testSeasonsAndEpisodesComeFromCatalogueRows() async throws {
+        let created = Date(timeIntervalSince1970: 1_600_000_000)
+        try await repo.upsert([
+            CatalogEntry(id: "s1", libraryId: lib, seriesId: "show", type: "Season", mediaType: .season, name: "Season 1", sortName: "1", dateCreated: created, indexNumber: 1),
+            CatalogEntry(id: "s2", libraryId: lib, seriesId: "show", type: "Season", mediaType: .season, name: "Season 2", sortName: "2", dateCreated: created, indexNumber: 2),
+            CatalogEntry(id: "e2", libraryId: lib, seriesId: "show", seasonId: "s1", type: "Episode", mediaType: .episode, name: "Two", sortName: "2", dateCreated: created, runTimeTicks: 600_0000000, indexNumber: 2, parentIndexNumber: 1, userData: UserData(isPlayed: true)),
+            CatalogEntry(id: "e1", libraryId: lib, seriesId: "show", seasonId: "s1", type: "Episode", mediaType: .episode, name: "One", sortName: "1", dateCreated: created, indexNumber: 1, parentIndexNumber: 1),
+        ], scope: scope)
+        try await repo.saveDetail(MediaItem(id: ItemID("e1"), title: "One", overview: "Pilot.", mediaType: .episode), scope: scope)
+
+        let seasons = try await repo.seasons(seriesId: "show", scope: scope)
+        let eps = try await repo.episodes(seasonId: "s1", scope: scope)
+        XCTAssertEqual(seasons.map(\.seasonNumber), [1, 2])
+        XCTAssertEqual(seasons.first?.episodeCount, 2)
+        XCTAssertEqual(eps.map(\.episodeNumber), [1, 2])
+        XCTAssertEqual(eps.first?.overview, "Pilot.", "overview joins in from the detail cache")
+        XCTAssertNil(eps.last?.overview)
+        XCTAssertEqual(eps.last?.userData?.isPlayed, true)
+        XCTAssertEqual(eps.last?.runtime, 600)
+    }
 }

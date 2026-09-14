@@ -161,6 +161,8 @@ struct DownloadsView: View {
                 groupRepository: downloadCoordinator.downloadGroupRepository,
                 downloadRepository: downloadCoordinator.downloadRepository
             )
+            vm.catalogRepository = appState.catalogRepository
+            vm.catalogScope = appState.catalogScope
             viewModel = vm
             vm.startObserving(serverId: connection.id.uuidString)
         }
@@ -286,6 +288,12 @@ struct DownloadsView: View {
                             aspectRatio: 2.0 / 3.0,
                             icon: "film"
                         )
+                        .overlay(alignment: .topTrailing) {
+                            if vm.orphanedItemIds.contains(item.itemId.rawValue) {
+                                OrphanedDownloadBadge()
+                                    .padding(6)
+                            }
+                        }
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
@@ -551,5 +559,20 @@ private struct DownloadsEmptyState: View {
             systemImage: "arrow.down.circle",
             description: Text("Download music, movies, and episodes to enjoy offline.")
         )
+    }
+}
+
+// MARK: - Orphaned Download Badge
+
+/// Marks a download whose item is no longer on the server. It stays playable
+/// from disk; this only says why it will not appear anywhere else in the app.
+struct OrphanedDownloadBadge: View {
+    var body: some View {
+        Label("No longer on server", systemImage: "externaldrive.badge.xmark")
+            .labelStyle(.iconOnly)
+            .font(.caption.weight(.semibold))
+            .padding(6)
+            .background(.thinMaterial, in: Circle())
+            .accessibilityLabel("No longer on your server")
     }
 }

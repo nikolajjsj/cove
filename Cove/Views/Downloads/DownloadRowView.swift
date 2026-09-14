@@ -12,6 +12,8 @@ struct DownloadRowView: View {
     /// system. `DownloadItem.totalBytes` is the server's estimate of the original
     /// file and excludes artwork and subtitle sidecars, so it must not be shown.
     var diskBytes: Int64?
+    /// The server no longer lists this item. The file is still here and plays.
+    var isOrphaned: Bool = false
     let onAction: (DownloadAction, DownloadItem) -> Void
 
     var body: some View {
@@ -136,6 +138,11 @@ struct DownloadRowView: View {
                 if let diskBytes, diskBytes > 0 {
                     Text("·")
                     Text(diskBytes.formatted(.byteCount(style: .file)))
+                }
+                if isOrphaned {
+                    Text("·")
+                    Text("No longer on server")
+                        .foregroundStyle(.orange)
                 }
             }
 

@@ -100,9 +100,7 @@ struct CollectionDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .inlineNavigationTitle()
         .task {
-            await detailLoader.load {
-                try await authManager.provider.item(id: item.id)
-            }
+            await appState.loadDetail(item, into: detailLoader)
         }
         .task {
             await loader.load {

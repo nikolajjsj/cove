@@ -371,6 +371,32 @@ public final class DatabaseManager: Sendable {
             }
         }
 
+        migrator.registerMigration("006_catalog_item_details") { db in
+            // The detail tier: the full MediaItem — overview, people, streams,
+            // chapters, trailers — fetched lazily on first view and cached. A
+            // separate table from offline_metadata on purpose: that one stores a
+            // lossy projection built for the download pipeline; this stores the
+            // whole item, so the detail view reads one type online or offline.
+            try db.create(table: "catalog_item_details") { t in
+                t.column("serverId", .text).notNull()
+                    .references("servers", onDelete: .cascade)
+                t.column("userId", .text).notNull()
+                t.column("itemId", .text).notNull()
+                t.column("json", .blob).notNull()
+                // Explicit pin. Eviction *also* protects any row with a live
+                // download, by join, so a delete path that forgets to unpin
+                // cannot strip a downloaded item of its metadata.
+                t.column("pinned", .boolean).notNull().defaults(to: false)
+                t.column("lastAccessedAt", .datetime).notNull()
+                t.column("updatedAt", .datetime).notNull()
+                t.primaryKey(["serverId", "userId", "itemId"])
+            }
+            try db.create(
+                index: "catalog_item_details_on_access",
+                on: "catalog_item_details",
+                columns: ["serverId", "userId", "pinned", "lastAccessedAt"])
+        }
+
         try migrator.migrate(dbWriter)
         logger.info("Database migrations complete")
     }
