@@ -112,7 +112,11 @@ If SwiftData is configured to use CloudKit:
   `minDateLastSaved` and `minDateLastSavedForUser`, and both really do filter — verified
   against the 12.0 demo server, where a future cutoff returns 0 rows and an epoch cutoff
   returns everything. They are the only delta mechanism the API offers; there is no
-  changes-or-tombstones endpoint. So anything that caches items locally cannot stay
+  changes-or-tombstones endpoint. **And the timestamp they filter on cannot be read
+  back:** `DateLastSaved` is in the `ItemFields` enum, so a request for it succeeds, but it
+  never appears in the response — the DTO does not carry it. The only server clock a
+  client can get is the HTTP `Date` response header, so any cursor has to come from there,
+  never from the device clock. So anything that caches items locally cannot stay
   correct on deltas alone: an item removed from the server is never mentioned again and
   lingers until something reconciles ids directly. Budget for a periodic id-only sweep —
   roughly a third the payload of a fielded fetch — rather than discovering the phantoms
