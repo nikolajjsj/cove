@@ -118,6 +118,13 @@ If SwiftData is configured to use CloudKit:
   roughly a third the payload of a fielded fetch — rather than discovering the phantoms
   when playback fails.
 
+  Related, and true of the paging the app already does: **`sortBy` has no `Id` option**,
+  so every sort `/Items` offers can tie. `startIndex` paging therefore walks a list that
+  can move under it — `PagedCollectionLoader` included. An item added mid-scroll shifts
+  the tail forward and shows a duplicate; one deleted shifts it back and a row is skipped
+  and never seen. Sort ascending on a monotonic key so additions land past the cursor,
+  and treat offset paging as best-effort rather than a guarantee that every row was seen.
+
 - **Never build a path or a URL directly from server-supplied data.** The media server chooses item ids, `TranscodingUrl`, trailer URLs, and subtitle language tags. Two Foundation APIs make this dangerous in ways that read as safe:
 
   - `URL.appending(path:)` is a *path* append, not a component append. It does not escape `/` and does not collapse `..`, and `FileManager` resolves both at syscall time. Anything server-supplied that becomes a path segment must go through `DownloadStorage.safeComponent(_:)` first — including the string-interpolated `relative*Path` helpers, which are persisted and must agree with the URL builders. Guard destructive or writing operations with `DownloadStorage.isContained(_:)`.
