@@ -28,7 +28,7 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - Private Helpers
 
     /// Returns the authenticated client and user ID, or throws if not connected.
-    private func authenticatedClient() throws -> (JellyfinAPIClient, String) {
+    func authenticatedClient() throws -> (JellyfinAPIClient, String) {
         guard let client = state.client, let userId = client.userId ?? state.connection?.userId
         else {
             throw AppError.authFailed(reason: "Not connected to a server")

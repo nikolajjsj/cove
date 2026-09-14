@@ -107,6 +107,26 @@ enum JellyfinMapper {
         )
     }
 
+    /// Image tags present on an item, keyed by our `ImageType`.
+    static func mapImageTags(_ dto: BaseItemDto) -> [ImageType: String]? {
+        var tags = [ImageType: String]()
+        for (key, value) in dto.imageTags ?? [:] {
+            switch key {
+            case "Primary": tags[.primary] = value
+            case "Thumb": tags[.thumb] = value
+            case "Logo": tags[.logo] = value
+            case "Banner": tags[.banner] = value
+            case "Art": tags[.art] = value
+            case "Backdrop": tags[.backdrop] = value
+            default: break
+            }
+        }
+        if tags[.backdrop] == nil, let first = dto.backdropImageTags?.first {
+            tags[.backdrop] = first
+        }
+        return tags.isEmpty ? nil : tags
+    }
+
     /// Map BaseItemPerson to Person domain model.
     /// Requires the API client's base URL to construct person image URLs.
     static func mapPerson(_ dto: BaseItemPerson, baseURL: URL) -> Person? {

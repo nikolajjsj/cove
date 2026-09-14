@@ -133,6 +133,27 @@ public final class HTTPClient: Sendable {
             queryItems: queryItems, cachePolicy: cachePolicy)
     }
 
+    /// Execute a request, decode the JSON body, and return the response headers too.
+    ///
+    /// Always `.networkOnly`: a caller that wants the response is a caller that is
+    /// reading the server's clock from the `Date` header, and a cached `Date` is a
+    /// lie. The sync engine uses this; nothing else should need to.
+    public func requestWithResponse<T: Decodable & Sendable>(
+        url: URL,
+        method: HTTPMethod = .get,
+        headers: [String: String] = [:],
+        queryItems: [URLQueryItem]? = nil
+    ) async throws -> (value: T, response: HTTPURLResponse) {
+        let (data, response) = try await executeReturningResponse(
+            url: url, method: method, headers: headers, resolvedBody: nil,
+            queryItems: queryItems, cachePolicy: .networkOnly)
+        do {
+            return (try decoder.decode(T.self, from: data), response)
+        } catch {
+            throw AppError.unknown(underlying: error)
+        }
+    }
+
     // MARK: - Cache Management
 
     /// The underlying response cache, exposed for targeted invalidation.
@@ -199,6 +220,20 @@ public final class HTTPClient: Sendable {
         queryItems: [URLQueryItem]?,
         cachePolicy: CachePolicy
     ) async throws -> Data {
+        try await executeReturningResponse(
+            url: url, method: method, headers: headers, resolvedBody: resolvedBody,
+            queryItems: queryItems, cachePolicy: cachePolicy
+        ).0
+    }
+
+    private func executeReturningResponse(
+        url: URL,
+        method: HTTPMethod,
+        headers: [String: String],
+        resolvedBody: Data?,
+        queryItems: [URLQueryItem]?,
+        cachePolicy: CachePolicy
+    ) async throws -> (Data, HTTPURLResponse) {
         var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)
         if let queryItems, !queryItems.isEmpty {
             let existing = urlComponents?.queryItems ?? []
@@ -214,7 +249,10 @@ public final class HTTPClient: Sendable {
 
         if case .cacheFirst(let maxAge) = cachePolicy, method == .get {
             if let cached = await responseCache.get(forKey: cacheKey, maxAge: maxAge) {
-                return cached
+                // Only cacheFirst callers reach here, and they discard the response.
+                let synthetic = HTTPURLResponse(
+                    url: finalURL, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (cached, synthetic)
             }
         }
 
@@ -258,7 +296,7 @@ public final class HTTPClient: Sendable {
             if case .cacheFirst = cachePolicy, method == .get {
                 await responseCache.set(data, forKey: cacheKey)
             }
-            return data
+            return (data, httpResponse)
         case 401:
             throw AppError.authExpired(
                 serverName: url.host(percentEncoded: false) ?? url.absoluteString)

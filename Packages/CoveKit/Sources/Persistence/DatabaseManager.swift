@@ -185,6 +185,177 @@ public final class DatabaseManager: Sendable {
             )
         }
 
+        migrator.registerMigration("004_catalog") { db in
+            // Every catalogue table is keyed by (serverId, userId, itemId), not
+            // (serverId, itemId): what /Items returns is filtered per user by library
+            // access and parental controls, so two users on one server hold two
+            // different catalogues. Retrofitting a key column is the worst migration
+            // there is; it is in the key from the start.
+
+            try db.create(table: "catalog_items") { t in
+                t.column("serverId", .text).notNull()
+                    .references("servers", onDelete: .cascade)
+                t.column("userId", .text).notNull()
+                t.column("itemId", .text).notNull()
+                t.column("libraryId", .text).notNull()
+                t.column("parentId", .text)
+                t.column("seriesId", .text)
+                t.column("seasonId", .text)
+                t.column("type", .text).notNull()
+                t.column("mediaType", .text).notNull()
+                t.column("name", .text).notNull()
+                t.column("sortName", .text).notNull()
+                t.column("productionYear", .integer)
+                t.column("premiereDate", .datetime)
+                t.column("dateCreated", .datetime).notNull()
+                t.column("runTimeTicks", .integer)
+                t.column("communityRating", .double)
+                t.column("criticRating", .double)
+                t.column("officialRating", .text)
+                t.column("indexNumber", .integer)
+                t.column("parentIndexNumber", .integer)
+                t.column("seriesName", .text)
+                // JSON {imageType: tag}. The tag is what busts Nuke's URL-keyed cache.
+                t.column("imageTags", .text)
+                // Reconcile stamps rows it saw; the rest are the phantoms.
+                t.column("lastSeenInReconcile", .datetime)
+                t.primaryKey(["serverId", "userId", "itemId"])
+            }
+
+            // One index per sort the UI actually offers (Models.SortField), each
+            // leading with the columns every grid query constrains on.
+            for column in [
+                "sortName", "dateCreated", "premiereDate", "communityRating",
+                "criticRating", "runTimeTicks", "productionYear",
+            ] {
+                try db.create(
+                    index: "catalog_items_on_library_type_\(column)",
+                    on: "catalog_items",
+                    columns: ["serverId", "userId", "libraryId", "type", column])
+            }
+            try db.create(
+                index: "catalog_items_on_series_order",
+                on: "catalog_items",
+                columns: ["serverId", "userId", "seriesId", "parentIndexNumber", "indexNumber"])
+            try db.create(
+                index: "catalog_items_on_reconcile",
+                on: "catalog_items",
+                columns: ["serverId", "userId", "libraryId", "lastSeenInReconcile"])
+
+            // Separate table on purpose: its own sync cadence, a far higher change
+            // rate, and writing it must not rewrite catalogue rows and wake every
+            // observation in the app.
+            try db.create(table: "catalog_user_data") { t in
+                t.column("serverId", .text).notNull()
+                t.column("userId", .text).notNull()
+                t.column("itemId", .text).notNull()
+                t.column("played", .boolean).notNull().defaults(to: false)
+                t.column("playCount", .integer).notNull().defaults(to: 0)
+                t.column("isFavorite", .boolean).notNull().defaults(to: false)
+                t.column("playbackPositionTicks", .integer).notNull().defaults(to: 0)
+                t.column("lastPlayedDate", .datetime)
+                t.primaryKey(["serverId", "userId", "itemId"])
+                t.foreignKey(
+                    ["serverId", "userId", "itemId"],
+                    references: "catalog_items",
+                    columns: ["serverId", "userId", "itemId"],
+                    onDelete: .cascade)
+            }
+            try db.create(
+                index: "catalog_user_data_on_last_played",
+                on: "catalog_user_data",
+                columns: ["serverId", "userId", "lastPlayedDate"])
+            try db.create(
+                index: "catalog_user_data_on_favorite",
+                on: "catalog_user_data",
+                columns: ["serverId", "userId", "isFavorite"])
+            try db.create(
+                index: "catalog_user_data_on_played",
+                on: "catalog_user_data",
+                columns: ["serverId", "userId", "played"])
+
+            // Genre and studio are grid filters today, so they live at catalogue tier.
+            // People are not, so they stay in the detail tier.
+            try db.create(table: "catalog_item_genres") { t in
+                t.column("serverId", .text).notNull()
+                t.column("userId", .text).notNull()
+                t.column("itemId", .text).notNull()
+                t.column("genreId", .text).notNull()
+                t.column("genreName", .text).notNull()
+                t.primaryKey(["serverId", "userId", "itemId", "genreId"])
+                t.foreignKey(
+                    ["serverId", "userId", "itemId"],
+                    references: "catalog_items",
+                    columns: ["serverId", "userId", "itemId"],
+                    onDelete: .cascade)
+            }
+            try db.create(
+                index: "catalog_item_genres_on_name",
+                on: "catalog_item_genres",
+                columns: ["serverId", "userId", "genreName", "itemId"])
+
+            try db.create(table: "catalog_item_studios") { t in
+                t.column("serverId", .text).notNull()
+                t.column("userId", .text).notNull()
+                t.column("itemId", .text).notNull()
+                t.column("studioName", .text).notNull()
+                t.primaryKey(["serverId", "userId", "itemId", "studioName"])
+                t.foreignKey(
+                    ["serverId", "userId", "itemId"],
+                    references: "catalog_items",
+                    columns: ["serverId", "userId", "itemId"],
+                    onDelete: .cascade)
+            }
+
+            // External-content FTS5 over the catalogue, kept in step by triggers so it
+            // cannot drift. remove_diacritics so "Amelie" finds "Amélie".
+            try db.create(virtualTable: "catalog_items_fts", using: FTS5()) { t in
+                t.synchronize(withTable: "catalog_items")
+                t.tokenizer = .unicode61(diacritics: .remove)
+                t.column("name")
+                t.column("sortName")
+                t.column("seriesName")
+            }
+
+            // Per (server, user, scope). Cursors are server time from the Date
+            // header — never the device clock.
+            try db.create(table: "sync_state") { t in
+                t.column("serverId", .text).notNull()
+                t.column("userId", .text).notNull()
+                t.column("scope", .text).notNull()
+                t.column("cursor", .datetime)
+                t.column("bootstrapNextIndex", .integer).notNull().defaults(to: 0)
+                t.column("bootstrapComplete", .boolean).notNull().defaults(to: false)
+                t.column("lastRunAt", .datetime)
+                t.column("lastError", .text)
+                t.primaryKey(["serverId", "userId", "scope"])
+            }
+
+            // Pending user-data writes. At most one row per (item, field): a later
+            // write for the same pair replaces the earlier one, so six offline
+            // toggles reach the server as one request.
+            try db.create(table: "user_data_outbox") { t in
+                t.column("id", .text).notNull().primaryKey()
+                t.column("serverId", .text).notNull()
+                t.column("userId", .text).notNull()
+                t.column("itemId", .text).notNull()
+                t.column("field", .text).notNull()
+                t.column("value", .text).notNull()
+                t.column("occurredAt", .datetime).notNull()
+                t.column("attempts", .integer).notNull().defaults(to: 0)
+                t.column("lastAttemptAt", .datetime)
+                t.column("lastError", .text)
+                t.uniqueKey(["serverId", "userId", "itemId", "field"])
+            }
+
+            // The detail cache grows a pin and an access time. Downloads pin; the
+            // eviction pass never touches a pinned row.
+            try db.alter(table: "offline_metadata") { t in
+                t.add(column: "pinned", .boolean).notNull().defaults(to: false)
+                t.add(column: "lastAccessedAt", .datetime)
+            }
+        }
+
         try migrator.migrate(dbWriter)
         logger.info("Database migrations complete")
     }

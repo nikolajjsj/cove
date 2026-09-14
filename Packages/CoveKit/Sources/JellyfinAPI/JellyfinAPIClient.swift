@@ -240,6 +240,43 @@ public final class JellyfinAPIClient: Sendable {
             cachePolicy: .cacheFirst(maxAge: 30))
     }
 
+    // MARK: - Catalogue sync
+
+    /// `GET /Items` with caller-built query items, returning the server's clock.
+    ///
+    /// This exists for the catalogue sync engine and deliberately bypasses the
+    /// response cache: a sync pass that reads a cached page has not synced, and a
+    /// cached `Date` header would move the delta cursor backwards in time.
+    /// `UserId` is always appended — visibility is per user.
+    public func getCatalogItems(
+        userId: String,
+        queryItems: [URLQueryItem]
+    ) async throws -> (result: ItemsResult, serverDate: Date?) {
+        let url = baseURL.appending(path: "Items")
+        var items = queryItems
+        items.append(URLQueryItem(name: "UserId", value: userId))
+        let (result, response): (ItemsResult, HTTPURLResponse) =
+            try await httpClient.requestWithResponse(
+                url: url, method: .get, headers: authHeaders, queryItems: items)
+        let date = response.value(forHTTPHeaderField: "Date").flatMap(Self.parseHTTPDate)
+        return (result, date)
+    }
+
+    /// RFC 7231 `IMF-fixdate`, the only format a modern server sends.
+    static func parseHTTPDate(_ value: String) -> Date? {
+        httpDateFormatter.date(from: value)
+    }
+
+    // DateFormatter is documented thread-safe on Apple platforms, and this one is
+    // never mutated after creation.
+    nonisolated(unsafe) private static let httpDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        return f
+    }()
+
     // MARK: - Image URLs
 
     /// Build an image URL for an item. This is synchronous — no network call.

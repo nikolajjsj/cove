@@ -24,6 +24,7 @@ let package = Package(
         .library(name: "CoveUI", targets: ["CoveUI"]),
         .library(name: "AppGroup", targets: ["AppGroup"]),
         .library(name: "OpenSubtitlesAPI", targets: ["OpenSubtitlesAPI"]),
+        .library(name: "CatalogSync", targets: ["CatalogSync"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.0.0"),
@@ -110,6 +111,12 @@ let package = Package(
             path: "Sources/OpenSubtitlesAPI"
         ),
 
+        .target(
+            name: "CatalogSync",
+            dependencies: ["Models", "MediaServerKit", "Persistence"],
+            path: "Sources/CatalogSync"
+        ),
+
         // MARK: - Test Targets
 
         .testTarget(
@@ -131,6 +138,11 @@ let package = Package(
             name: "PlaybackEngineTests",
             dependencies: ["PlaybackEngine"],
             path: "Tests/PlaybackEngineTests"
+        ),
+        .testTarget(
+            name: "CatalogSyncTests",
+            dependencies: ["CatalogSync", "Persistence", "MediaServerKit", "Models"],
+            path: "Tests/CatalogSyncTests"
         ),
         .testTarget(
             name: "PersistenceTests",

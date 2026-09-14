@@ -41,6 +41,8 @@ public struct BaseItemDto: Codable, Sendable {
     public let endDate: String?
     public let mediaSources: [MediaSourceInfo]?
     public let chapters: [ChapterInfoDto]?
+    public let parentId: String?
+    public let genreItems: [StudioDto]?
 
     public init(
         id: String? = nil,
@@ -80,7 +82,9 @@ public struct BaseItemDto: Codable, Sendable {
         sortName: String? = nil,
         endDate: String? = nil,
         mediaSources: [MediaSourceInfo]? = nil,
-        chapters: [ChapterInfoDto]? = nil
+        chapters: [ChapterInfoDto]? = nil,
+        parentId: String? = nil,
+        genreItems: [StudioDto]? = nil
     ) {
         self.id = id
         self.name = name
@@ -120,6 +124,8 @@ public struct BaseItemDto: Codable, Sendable {
         self.endDate = endDate
         self.mediaSources = mediaSources
         self.chapters = chapters
+        self.parentId = parentId
+        self.genreItems = genreItems
     }
 
     enum CodingKeys: String, CodingKey {
@@ -161,6 +167,8 @@ public struct BaseItemDto: Codable, Sendable {
         case endDate = "EndDate"
         case mediaSources = "MediaSources"
         case chapters = "Chapters"
+        case parentId = "ParentId"
+        case genreItems = "GenreItems"
     }
 }
 
