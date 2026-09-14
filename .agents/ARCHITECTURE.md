@@ -426,6 +426,8 @@ The `AudioPlaybackManager` is fully decoupled from UI. CarPlay and the main app 
 
 ## Offline & Downloads
 
+> **Superseded in part by local-first sync (Sept 2026).** Views now read a local catalogue in SQLite and the network is a sync process; the detail tier, user-data outbox and the reconcile/sweep passes are specified and recorded in [`features/local-first-sync.md`](features/local-first-sync.md). Read that first; what follows here describes the pre-sync design and remains accurate for the download engine.
+
 ### Download Strategy
 
 | Media Type | Download Format | Rationale |
@@ -476,6 +478,8 @@ When playing offline content:
 ---
 
 ## Local Database (GRDB)
+
+> **Superseded in part by local-first sync (Sept 2026).** Views now read a local catalogue in SQLite and the network is a sync process; the detail tier, user-data outbox and the reconcile/sweep passes are specified and recorded in [`features/local-first-sync.md`](features/local-first-sync.md). Read that first; what follows here describes the pre-sync design and remains accurate for the download engine.
 
 ### Schema
 
@@ -764,3 +768,4 @@ These are explicitly deferred but the architecture accommodates them:
 | 41 | Deep linking | Architecture-ready (destination-driven nav), deferred |
 | 42 | Widgets | Deferred (MPNowPlayingInfoCenter covers lock screen) |
 | 43 | Working name | "Cove" |
+| 44 | Source of truth for the UI | The local catalogue (`catalog_*` tables), filled by `CatalogSyncEngine`; the provider is the sync engine's input, not the view layer's. User data is edited locally first and reaches the server through an outbox; server responses never overwrite a field with a pending write. Deltas cursor on the HTTP `Date` header because `DateLastSaved` is never returned, and user data has no delta on Jellyfin 12 so it is swept. See `features/local-first-sync.md`. |
