@@ -27,10 +27,8 @@ of truth on the device and the server is where it comes from.
 
 ## 3. Non-goals
 
-- **Offline artwork prefetch.** Images dominate "works offline" bytes and the database does
-  not help. §9.3 defines the hook; the policy is separate work.
 - **Replacing `MediaServerKit`.** The provider becomes the sync engine's input.
-- **Music.** `FeatureFlags.musicEnabled` is false. Nothing music-typed is synced.
+- **Music.** Removed from the app entirely. Nothing music-typed is synced.
 - **Being a general Jellyfin mirror.** We store what the UI reads. Nothing else.
 
 ## 4. Scope and seams
@@ -455,13 +453,30 @@ delete a user's file because the server forgot about it.
 
 ### 9.3 Artwork
 
-Nuke's `DataCache` (500 MB) is keyed by URL, and image URLs embed the image **tag**. So the
-catalogue syncing `imageTags` is what keeps artwork fresh: a replaced poster changes the
-tag, the URL, and therefore the cache key. Nothing else needs to invalidate anything.
+Done (Sept 2026). Three decisions, in `ImageService`, `ArtworkSize` and `ArtworkCache`:
 
-Prefetch hook, policy deferred: after bootstrap completes, optionally enqueue `Primary` at
-grid size for every catalogue row via Nuke's prefetcher, Wi-Fi only. That is "offline
-artwork", it is the expensive part, and it is a separate decision.
+- **Cache keys are the URL's path and query, not the URL.** `/…/Items/{id}/Images/Primary?
+  maxWidth=300&maxHeight=450&tag=…` identifies an image completely — item ids are server
+  GUIDs, the tag changes when the server's image does — and it survives the host changing.
+  A saved URL that cannot be reached, or a switch between a LAN and a remote address,
+  still hits the store. (A reverse-proxy *path* prefix is part of the key; that is why the
+  dead-host simulation must keep `/stable`.) Syncing `imageTags` remains the only
+  invalidation: a replaced poster is a new key, the old file ages out by LRU.
+- **Three sizes, everywhere.** `ArtworkSize.poster` 300×450, `.landscape` 480×270,
+  `.backdrop` 1280×720. Every view asks for one of them, so one download serves the grid,
+  the search row, the detail page and the prefetch; twenty ad-hoc sizes were collapsed.
+  Adding a fourth size adds a fourth copy of every image on disk — resist it.
+- **One store, in Application Support**, excluded from backup, 500 MB LRU by default.
+  "Keep All Artwork on Device" (Settings → Cache) lifts the limit to 20 GB and runs
+  `ArtworkCache` after every sync pass: it walks `catalog_items` newest-first and fetches
+  exactly the requests the views make, in tiers — card images (posters, episode
+  thumbnails), then the landscape backdrops Continue Watching uses, then the full-width
+  heroes (detail backdrops, episode stills). Already-stored images cost one directory
+  check, so a re-run after a delta downloads only what is new or re-tagged. Wi-Fi only
+  unless "Use Cellular Data" is on. Cost for a typical library: a few hundred MB for
+  cards, most of the rest in episode stills; the Settings row shows bytes on disk.
+
+People images and chapter thumbnails are cached as seen, not prefetched.
 
 ### 9.4 Storage budget
 
@@ -526,6 +541,8 @@ Each phase ends shippable. Gate before advancing.
 | 4 | **Done.** `UserDataOutboxRepository` (apply locally + queue, atomically; one row per item/field), `OutboxFlusher` (ordered replay, error classes, position merge), `UserDataWriter` protocol with a Jellyfin conformance (`datePlayed`, `POST /UserItems/{id}/UserData`, `GET …/UserData` for the merge read); `UserDataStore` enqueues instead of rolling back; flush runs before every sync pass and on reconnect; audio and video stop positions land in the outbox | Passed live: a favourite written straight into the app's outbox reached the demo server on the next launch (server False → True), the row cleared, and the favourites sweep that followed confirmed the local value instead of reverting it. 15 tests green; four guards mutation-tested (coalescing, pending-beats-sweep, position merge, 404 dropped). **Deferred to Phase 5:** the sign-out confirmation when edits are pending (`pendingOutboxCount()` exists; no dialog yet), and folding `OfflinePlaybackReportRepository` — audio start/progress events offline still queue there, though stop positions now go through the outbox |
 | 5 | **Done, gate reframed.** Library search, See All search, episode detail's nearby episodes and the video genre list read the catalogue; `SeriesDetailView`'s `offlineServerId` mode is gone — one data path, a download preferred at play time whenever one exists, delete controls wherever downloads exist; Settings shows *Library · Up to date / Syncing… / N changes waiting*; Disconnect asks before discarding pending edits; `BGAppRefreshTask` runs the daily reconcile + full sweep; audio start/progress no longer queue legacy offline reports | Measured with the §4 grep: of the fetch calls left in `Cove/Views` + `Cove/Components`, **16 are provider fallbacks behind a `localCatalog` check**, 12 are server-only by nature (similar items, suggestions, trailers, special features, a person's filmography), 3 are doc comments, and 21 were music views — since deleted outright. No view fetches from the provider as its only path |
 
+| 6 | **Done.** No server fallbacks: libraries, detail and collection membership moved into the engine (migration 007: `catalog_collection_items`, `catalog_items.syncedAt`); every view reads the catalogue only; `catalogGeneration` reloads rails and grids in place; artwork keyed host-independently, three canonical sizes, opt-in "keep all artwork" prefetch (§9.3) | Passed on the iPhone simulator: fresh install against the demo server saved Movies and Shows (Playlists dropped), then with `servers.url` on a dead host (`/stable` kept) Home, the Movies grid and a movie detail rendered every row **and every image** from the store (46 files, 6.7 MB prefetched). 36 catalogue tests green incl. libraries/detail-staleness/collections |
+
 Phase 0 is a day and is the only phase that can invalidate the rest. Throw its code away.
 
 ---
@@ -568,24 +585,37 @@ at a time, which is what `AppState` already models.
 
 ## 13a. What still talks to the server, and why
 
-Measured after Phase 5 (`grep -rnoE "provider\.[a-zA-Z]+\(" Cove`), every remaining call
-falls into one of three tiers:
+The rule since Sept 2026: **the sync engine is the only thing that reads catalogue data
+from the server. Views read the catalogue and nothing else.** There is no fallback tier.
+`grep -rnoE "provider\.[a-zA-Z]+\(" Cove` must list only these, all server-only by nature:
 
-1. **Local-first, server as fallback or refresh** — paging, genres, seasons, episodes,
-   Resume, Next Up, recently added, search, detail refresh, the library list. Each sits
-   behind a `localCatalog` check and is reached only on first run or to refresh.
-2. **Server-only by nature, staying that way** — auth; playback and downloads
-   (`streamURL`, `mediaSegments`, `downloadInfo`, `deviceProfile`); live-session reports
-   (the *durable* position goes through the outbox); subtitles; image URL builders
-   (artwork is remote content — §3); server recommendations (`similarItems`,
-   `specialFeatures`, `localTrailers`, `suggestedItems`, `personItems`).
-3. **Closed since:** series/season *mark watched* went straight to the server, bypassing
-   the outbox — offline it failed and the catalogue disagreed until the next sweep. Now
-   one outbox row per container (Jellyfin's endpoint is recursive) with every child
-   episode updated locally. Auto-play's *next episode* and the studio list read the
-   catalogue.
+- auth (`connect`, `restore`, `disconnect`);
+- playback and downloads (`streamURL`, `mediaSegments`, `closeLiveStream`, `downloadInfo`,
+  `downloadURL`, `deviceProfile`); live-session reports (`reportPlayback*` — the *durable*
+  position goes through the outbox); subtitles (`subtitleURL`, `uploadSubtitle`);
+- image URL *builders* (`imageURL`, `chapterImageURL`) — they build, they do not fetch;
+- server recommendations (`similarItems`, `specialFeatures`, `localTrailers`,
+  `suggestedItems`, `personItems`) — recommendations are the server's opinion, not data
+  the catalogue holds. This is why the Home hero (`suggestedItems`) is absent offline.
+- `clearCache`, a local cache action.
 
-Two remain by design decision, not oversight — see §14.
+Everything that used to sit behind a `localCatalog` check with a provider else-branch now
+has one path: paging, genres, studios, seasons, episodes, Resume, Next Up, recently added,
+search, next episode, **collections** (junction `catalog_collection_items`, §5.3, filled
+one request per BoxSet on reconcile and for changed BoxSets on delta), **the library list**
+(`CatalogSyncEngine.refreshLibraries()`, saved to `catalog_libraries`; the app reads the
+saved list) and **detail** (`CatalogSyncEngine.fetchDetail`, called only when no cached
+copy exists or `cachedDetail.isStale` — the catalogue row's `syncedAt` is newer than the
+detail's `updatedAt`, i.e. the server changed the item since). Deep links, the player's
+episode lookup and downloads' pinning resolve items through `AppState.item(id:)` /
+`pinnedDetail(id:)`. Mixed libraries (no collection type) sync Movie/Series/Season/Episode
+instead of being unbrowsable; libraries with no catalogue shape are dropped from the list.
+
+Rows that land during a pass reach the screen through `AppState.catalogGeneration`,
+bumped when a pass ends or one library's first sync completes. Rails re-query in place
+(a hidden rail stays mounted at zero height so it can come back; Home stacks sections with
+zero spacing and each visible one brings its own), grids fill when empty, and an empty
+grid during bootstrap says "Syncing" instead of "This library is empty".
 
 ## 14. Open decisions — genuinely the owner's
 
@@ -599,14 +629,12 @@ Two remain by design decision, not oversight — see §14.
    `nikolajjsj.com/cove/privacy-policy` needs a sentence.
 4. **The played-flag race** (§7.5, second bullet). Accepting last-writer-wins is
    recommended and is what every other client does; it is listed so it is a decision.
-5. **Collections offline.** `CollectionDetailView` still asks the server for a BoxSet's
-   members: membership is many-to-many and the catalogue does not store it. Doing so
-   means a junction table filled during sync and one more reconcile axis. Worth it only
-   if collections matter to you offline.
-6. **The Home hero offline.** `HeroBannerView` uses the server's `suggestedItems`, which is
-   why the hero is absent in every offline capture. A local stand-in (unwatched, recently
-   added, with a backdrop) would keep Home's shape; it would also stop being a
-   "suggestion". Decide which you prefer.
+5. ~~Collections offline.~~ Decided: local-only, like everything else (§13a).
+6. **The Home hero offline.** `HeroBannerView` uses the server's `suggestedItems` — a
+   recommendation, so it stayed server-only under the "only the sync engine reads
+   catalogue data" rule — which is why the hero is absent in every offline capture. A local
+   stand-in (unwatched, recently added, with a backdrop) would keep Home's shape; it would
+   also stop being a "suggestion". Still yours to decide.
 
 ---
 
@@ -644,6 +672,7 @@ Against the 12.0 demo server and this tree — tested, not assumed:
 - Phase 5: Settings rendered *Library · Up to date* online; the folded series view rendered its season and episodes offline from catalogue rows with no offline mode left in the file (zero references to `offlineServerId` / offline metadata). Outbox empty and two details cached after the run.
 - Testing trap: resolve the simulator's app container **after** `simctl install`, not before — an install can move the data container, and every `sqlite3` against the old path fails silently in a `&&`-less script. Cost one false "offline" run here.
 - A delta's 120 s overlap re-delivers items saved within the window, *with* their `UserData`. Harmless in production; it hid two sweep paths in tests until the fixture saved items well before the cursor.
+- Nuke's data-cache filename is `sha1(imageIdKey + processors)`; with `imageIdKey` set to path+query, the file for the demo movie's poster was found under `sha1("/stable/Items/{id}/Images/Primary?maxWidth=300&maxHeight=450&tag={tag}")`. The first dead-host run pointed `servers.url` at `https://127.0.0.1:9` *without* `/stable` and showed no images — the key includes the server's path prefix. Keep the path when simulating offline.
 
 **Not verified:**
 - Whether `DateLastSaved` bumps on *every* kind of server-side metadata edit (it is

@@ -139,7 +139,21 @@ If SwiftData is configured to use CloudKit:
   lives at `<container>/Library/Application Support/com.nikolajjsj.cove/cove.db`; the tables
   `catalog_items`, `catalog_user_data`, `sync_state`, `user_data_outbox` and
   `catalog_item_details` are the fastest way to see what sync actually did, and pointing
-  `servers.url` at `https://127.0.0.1:9` is a faithful offline simulation (restore it after).
+  `servers.url` at a dead host is a faithful offline simulation (restore it after). **Keep
+  the server's path prefix** — `https://127.0.0.1:9/stable` for the demo server — because
+  image cache keys include it; without it every image goes blank and looks like a bug.
+
+- **Views never fall back to the provider for catalogue data.** Libraries, items, details,
+  seasons, episodes, feeds, search and collection membership come from `appState.catalog`;
+  anything the catalogue lacks is the sync engine's job (`CatalogSyncEngine.refreshLibraries`,
+  `fetchDetail`, `syncCollections`). `grep -rnoE "provider\.[a-zA-Z]+\(" Cove | sort -u` must
+  list only auth, playback, downloads, subtitles, image URL builders and recommendations
+  (`similarItems`, `specialFeatures`, `localTrailers`, `suggestedItems`, `personItems`).
+
+- **Ask for artwork at an `ArtworkSize`, never a literal `CGSize`.** The image cache is keyed
+  by URL, and the URL carries the size: a new size is a fourth copy of every image and a
+  miss for the offline prefetch. Load through `MediaImage` or `ImageService.request(for:)` so
+  the host-independent key is applied.
 
 - **User-data writes go through `UserDataStore`, never `provider.setPlayed` / `setFavorite`
   from a view.** The store applies the change to the local catalogue and queues it in the

@@ -470,6 +470,8 @@ When an item is downloaded:
 
 The offline library is a fully browsable, visually rich subset of the server library.
 
+> **Artwork (Sept 2026).** Independently of downloads, all artwork can be kept on device: `ImageService` keys the image store by URL path and query (host-independent), every view asks for one of three `ArtworkSize`s, and `ArtworkCache` prefetches the catalogue's images after each sync when "Keep All Artwork on Device" is on. See `features/local-first-sync.md` §9.3.
+
 ### Offline Playback Position Sync
 
 When playing offline content:
@@ -770,4 +772,6 @@ These are explicitly deferred but the architecture accommodates them:
 | 41 | Deep linking | Architecture-ready (destination-driven nav), deferred |
 | 42 | Widgets | Deferred (MPNowPlayingInfoCenter covers lock screen) |
 | 43 | Working name | "Cove" |
+| 45 | No server fallbacks | Views read the catalogue only; the sync engine is the single reader of catalogue data (libraries, items, details, collection membership). The provider is reached from views solely for auth, playback, downloads, subtitles, image URL building and server recommendations. See `features/local-first-sync.md` §13a. |
+| 46 | Artwork store | Host-independent cache keys (path+query), three canonical sizes, Application Support store with an opt-in prefetch of everything. §9.3. |
 | 44 | Source of truth for the UI | The local catalogue (`catalog_*` tables), filled by `CatalogSyncEngine`; the provider is the sync engine's input, not the view layer's. User data is edited locally first and reaches the server through an outbox; server responses never overwrite a field with a pending write. Deltas cursor on the HTTP `Date` header because `DateLastSaved` is never returned, and user data has no delta on Jellyfin 12 so it is swept. See `features/local-first-sync.md`. |
