@@ -47,6 +47,21 @@ public final class JellyfinServerProvider: MediaServerProvider,
     // MARK: - Connection
 
     public func connect(url: URL, credentials: Credentials) async throws -> ServerConnection {
+        try await connect(url: url, credentials: credentials, reusing: [])
+    }
+
+    /// Connect, keeping the id of an already-saved connection to the same server
+    /// and user if one is offered.
+    ///
+    /// The connection id is the key everything on disk hangs off — the keychain
+    /// token, downloads, and the local catalogue. Minting a new one on every sign-in
+    /// orphans all of it: a second sign-in to the same account would bootstrap the
+    /// whole catalogue again under a fresh id and leave the first copy behind. The
+    /// caller cannot pick the match itself because the user id is only known after
+    /// authentication, so it passes candidates and this picks.
+    public func connect(
+        url: URL, credentials: Credentials, reusing candidates: [ServerConnection]
+    ) async throws -> ServerConnection {
         logger.info("Connecting to Jellyfin server at \(url.absoluteString)")
 
         let client = JellyfinAPIClient(baseURL: url)
@@ -70,8 +85,13 @@ public final class JellyfinServerProvider: MediaServerProvider,
             throw AppError.authFailed(reason: "Server did not return a user ID")
         }
 
-        // Step 3: Build the connection
+        // Step 3: Build the connection, reusing a saved id for this server + user.
+        let existing = candidates.first { $0.url == url && $0.userId == userId }
+        if let existing {
+            logger.info("Reusing saved connection id \(existing.id.uuidString)")
+        }
         let connection = ServerConnection(
+            id: existing?.id ?? UUID(),
             name: serverName,
             url: url,
             userId: userId,

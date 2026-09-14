@@ -1,9 +1,11 @@
+import CatalogSync
 import CoveUI
 import DataLoading
 import Defaults
 import JellyfinProvider
 import MediaServerKit
 import Models
+import Persistence
 import SwiftUI
 
 // MARK: - Library Grid
@@ -11,6 +13,7 @@ import SwiftUI
 struct LibraryGridView: View {
     let library: MediaLibrary?
     @Environment(AuthManager.self) private var authManager
+    @Environment(AppState.self) private var appState
     @State private var loader = PagedCollectionLoader<MediaItem>()
     @State private var searchText = ""
     @State private var searchResults: [MediaItem] = []
@@ -220,7 +223,7 @@ struct LibraryGridView: View {
 
             switch loader.phase {
             case .loading:
-                ProgressView("Loading…")
+                loadingView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .failed(let message):
                 ContentUnavailableView(
@@ -457,6 +460,31 @@ struct LibraryGridView: View {
         let favorite = favoriteOnly ? true : nil
         let years = selectedDecade?.years
         let rating = minRating
+        let itemTypes = library.includeItemTypes
+
+        // Read the local catalogue once it holds this library. Until then — first
+        // run, bootstrap still going — the provider answers exactly as before, so
+        // the grid is never empty just because sync is not finished.
+        if let local = await localCatalog(for: library) {
+            await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
+                let filter = FilterOptions(
+                    genres: genres,
+                    years: years,
+                    isFavorite: favorite,
+                    isPlayed: played,
+                    limit: limit,
+                    startIndex: startIndex,
+                    includeItemTypes: itemTypes,
+                    minCommunityRating: rating
+                )
+                let result = try await local.repository.pagedItems(
+                    libraryId: library.id.rawValue, itemTypes: itemTypes,
+                    sort: sort, filter: filter, scope: local.scope
+                )
+                return .init(items: result.items, totalCount: result.totalCount)
+            }
+            return
+        }
 
         await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
             let filter = FilterOptions(
@@ -466,7 +494,7 @@ struct LibraryGridView: View {
                 isPlayed: played,
                 limit: limit,
                 startIndex: startIndex,
-                includeItemTypes: library.includeItemTypes,
+                includeItemTypes: itemTypes,
                 minCommunityRating: rating
             )
             let result = try await provider.pagedItems(
@@ -476,12 +504,60 @@ struct LibraryGridView: View {
         }
     }
 
+    /// The local catalogue, if it can answer for this library right now.
+    ///
+    /// Three conditions, all required: the flag is on, a signed-in scope exists,
+    /// and the library has finished bootstrapping *or* already holds rows — a
+    /// half-bootstrapped library is still better than a spinner, and the missing
+    /// rows arrive underneath the user as they browse.
+    private func localCatalog(for library: MediaLibrary)
+        async -> (repository: CatalogRepository, scope: CatalogRepository.Scope)?
+    {
+        guard FeatureFlags.localCatalogEnabled,
+            let repository = appState.catalogRepository,
+            let scope = appState.catalogScope,
+            CatalogSyncEngine.itemTypes(for: library.collectionType) != nil
+        else { return nil }
+        let key = "catalog:\(library.id.rawValue)"
+        guard let state = try? await repository.syncState(scope: scope, key: key) else { return nil }
+        if state.bootstrapComplete { return (repository, scope) }
+        let count = (try? await repository.count(libraryId: library.id.rawValue, scope: scope)) ?? 0
+        return count > 0 ? (repository, scope) : nil
+    }
+
     private func loadGenres(for library: MediaLibrary) async {
+        if let local = await localCatalog(for: library),
+            let names = try? await local.repository.genres(
+                libraryId: library.id.rawValue, scope: local.scope)
+        {
+            availableGenres = names
+            return
+        }
         do {
             let items = try await authManager.provider.genres(in: library)
             availableGenres = items.map(\.title)
         } catch {
             availableGenres = []
+        }
+    }
+
+    /// While a library's first sync is still running, say so rather than showing a
+    /// generic spinner: it is the difference between "loading" and "this is going
+    /// to take a minute, and here is how far along it is".
+    @ViewBuilder
+    private var loadingView: some View {
+        if case .bootstrapping(let name, let done, let total) = appState.catalogSyncStatus,
+            name == library?.name, total > 0
+        {
+            VStack(spacing: 10) {
+                ProgressView(value: Double(done), total: Double(total))
+                    .frame(maxWidth: 240)
+                Text("Syncing \(name)… \(done) of \(total)")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            ProgressView("Loading…")
         }
     }
 

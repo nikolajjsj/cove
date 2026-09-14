@@ -1,3 +1,4 @@
+import CatalogSync
 import Defaults
 import DownloadManager
 import Foundation
@@ -28,6 +29,30 @@ final class AppState {
     /// Centralized store for optimistic user data mutations (favorite, played, etc.).
     /// Set during app initialization in `CoveApp`.
     var userDataStore: UserDataStore?
+
+    // MARK: - Local catalogue
+
+    /// Set by `CoveApp` when the database opened. Nil means no local catalogue:
+    /// views fall back to the provider.
+    var catalogRepository: CatalogRepository?
+    /// Who the catalogue rows belong to. Nil until signed in.
+    var catalogScope: CatalogRepository.Scope?
+    /// The engine for the active connection. Recreated on every sign-in.
+    var catalogSync: CatalogSyncEngine?
+    /// Mirrors the engine's status on the main actor for views.
+    var catalogSyncStatus: CatalogSyncStatus = .idle
+    private var catalogStatusTask: Task<Void, Never>?
+
+    /// The libraries the catalogue holds, in the engine's shape. Music is already
+    /// gone from `libraries`; anything without a catalogue shape (playlists, home
+    /// videos) stays on the provider.
+    var catalogLibraries: [CatalogSyncEngine.Library] {
+        libraries.compactMap { lib in
+            CatalogSyncEngine.itemTypes(for: lib.collectionType).map {
+                CatalogSyncEngine.Library(id: lib.id.rawValue, name: lib.name, itemTypes: $0)
+            }
+        }
+    }
 
     // MARK: - UI State
 
@@ -95,6 +120,7 @@ final class AppState {
         if success {
             wireUpPlayer()
             await loadLibraries()
+            startCatalogSync()
             await downloadCoordinator.syncOfflineReports()
 
             // Clean up orphaned metadata and artwork that no longer have
@@ -110,11 +136,17 @@ final class AppState {
     func onConnected() async {
         wireUpPlayer()
         await loadLibraries()
+        startCatalogSync()
     }
 
     /// Disconnect and tear down all state.
     func onDisconnect() async {
         audioPlayer.stop()
+        catalogStatusTask?.cancel()
+        catalogStatusTask = nil
+        catalogSync = nil
+        catalogScope = nil
+        catalogSyncStatus = .idle
         libraries = []
         userDataStore?.invalidateAll()
         await authManager.disconnect()
@@ -136,6 +168,48 @@ final class AppState {
             libraries = []
             libraryLoadFailed = true
         }
+    }
+
+    // MARK: - Catalogue sync
+
+    /// Build the engine for the active connection and run the first pass.
+    ///
+    /// Idempotent per connection: calling it again with the same engine alive just
+    /// triggers another `syncIfNeeded`, which is what foregrounding wants.
+    func startCatalogSync() {
+        guard let repository = catalogRepository,
+            let connection = authManager.activeConnection
+        else { return }
+        let scope = CatalogRepository.Scope(
+            serverId: connection.id.uuidString, userId: connection.userId)
+        if catalogSync == nil || catalogScope != scope {
+            catalogScope = scope
+            let engine = CatalogSyncEngine(
+                source: authManager.provider, repository: repository, scope: scope)
+            catalogSync = engine
+            catalogStatusTask?.cancel()
+            catalogStatusTask = Task { [weak self] in
+                for await status in await engine.statusStream {
+                    guard let self, !Task.isCancelled else { return }
+                    self.catalogSyncStatus = status
+                }
+            }
+        }
+        let libraries = catalogLibraries
+        guard let engine = catalogSync else { return }
+        Task { await engine.syncIfNeeded(libraries: libraries) }
+    }
+
+    /// Foreground: pick up whatever changed while the app was away.
+    func catalogForegrounded() {
+        guard authManager.isAuthenticated else { return }
+        startCatalogSync()
+    }
+
+    /// Pull-to-refresh: the full bidirectional reconcile, not just a delta.
+    func refreshCatalog() async {
+        guard let engine = catalogSync else { return }
+        await engine.reconcileAll(libraries: catalogLibraries)
     }
 
     /// Retry loading libraries with visual feedback for the UI.

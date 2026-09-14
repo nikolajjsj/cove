@@ -471,10 +471,21 @@ source, and it is the reason a film paused on the plane resumes correctly at hom
 
 ### 9.6 Sign-out and server switch
 
-Sign-out **keeps** the catalogue for that `(serverId, userId)` unless the user chooses
-"Sign out and remove data" — re-login to the same account is then instant rather than a
-bootstrap. Downloads follow the existing rule. Switching to a different `(serverId,
-userId)` simply changes which rows are queried; nothing is deleted.
+**Today** `AuthManager.disconnect()` deletes the `servers` row, and every catalogue table
+cascades from it — so sign-out wipes the catalogue (and, pre-existing, the download
+rows). That is a product decision to revisit, not something Phase 1 changed.
+
+**Intended:** sign-out keeps the catalogue for that `(serverId, userId)` unless the user
+chooses "Sign out and remove data" — re-login to the same account is then instant rather
+than a bootstrap. Switching to a different `(serverId, userId)` simply changes which rows
+are queried; nothing is deleted.
+
+**Connection ids are now stable across re-sign-in.** Before Phase 1, every `connect()`
+minted a fresh `UUID` and stored the token, downloads and (now) the catalogue under it;
+signing in again to the same account orphaned all three. Found the first time the
+screenshot driver signed in while session restore was still running: two `servers` rows,
+two full bootstraps, 38 rows where there should be 19. `connect(url:credentials:reusing:)`
+now keeps the saved id for a matching `(url, userId)`.
 
 ---
 
@@ -496,7 +507,7 @@ Each phase ends shippable. Gate before advancing.
 | Phase | Work | Gate |
 |---|---|---|
 | 0 | **Done.** Read/write tests against the demo server | Passed: `Date` header present; reconcile primitives work; all four user-data sweep primitives reflect a write immediately. **Failed: `minDateLastSavedForUser`** — does not track user-data writes; replaced by §6.3a. Unverifiable without admin: whether `minDateLastSaved` bumps on metadata edits |
-| 1 | Migration 004, `CatalogSyncEngine` (bootstrap + delta + reconcile), local `PageFetcher`; `LibraryGridView` reads local | Grid browses in airplane mode; paging instant; sort and every `FilterOptions` field work locally; a server-side delete disappears within one reconcile |
+| 1 | **Done.** Migration 004, `CatalogSyncEngine`, `CatalogRepository`, `LibraryGridView` reads local once a library has bootstrapped or holds rows | Passed: bootstrap against the demo server landed exactly the server's type census (11 Movie, 1 Series, 1 Season, 6 Episode) with cursors in server time; a warm relaunch ran a delta and advanced them; 20 unit tests green and four guards mutation-tested. **Not yet:** *airplane mode* — `AppState.loadLibraries()` still comes from the network and empties `libraries` on failure, so with no connection there is no library to open. The library list must be persisted locally before the offline gate can pass; moved to Phase 2 |
 | 2 | Remaining five `PagedCollectionLoader` views; Home rails including locally derived Resume / NextUp; Search over FTS5 | Search and Home work in airplane mode; Home does not change shape when connectivity toggles |
 | 3 | Detail tier: lazy fetch, `pinned`, eviction; fold `OfflineMetadataRepository`; orphaned-download badge | The offline/online branch is **deleted**, not bypassed. Delete a downloaded item server-side: it stays playable with the badge |
 | 4 | Outbox: replace `UserDataStore` rollback, coalescing, ordered replay, position merge, 404 dropping; fold `OfflinePlaybackReportRepository` | Toggle favourite six times offline → one request. Watch to 40 min offline while the server is at 60 → phone yields. Item deleted server-side with a pending edit → row dropped, queue continues |
@@ -583,6 +594,8 @@ Against the 12.0 demo server and this tree — tested, not assumed:
 - `UserDataStore` is optimistic-with-rollback and has `rebase()`.
 - `OfflineSyncManager` replays sequentially with no permanent-failure path.
 - Fetch-call surface is 22 files; `PageFetcher` is `(limit, startIndex) async throws -> Page`.
+- End to end on iPad Pro 13-inch against the demo server: `catalog_items` = 19, `catalog_user_data` = 19, `catalog_item_genres` = 37, FTS = 19; both libraries `bootstrapComplete`; cursors `15:28Z` while the host is on CEST.
+- Every `connect()` created a new `servers` row (two rows, same url and user, 83 s apart) before the reuse fix.
 
 **Not verified:**
 - Whether `DateLastSaved` bumps on *every* kind of server-side metadata edit (it is

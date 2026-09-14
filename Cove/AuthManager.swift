@@ -57,7 +57,11 @@ final class AuthManager {
         defer { isLoading = false }
 
         let credentials = Credentials(username: username, password: password)
-        let connection = try await provider.connect(url: url, credentials: credentials)
+        // Offer the saved connections so a re-sign-in to the same account keeps
+        // its id — and with it its token, downloads and catalogue.
+        let saved = (try? await serverRepository?.fetchAll()) ?? []
+        let connection = try await provider.connect(
+            url: url, credentials: credentials, reusing: saved)
 
         // Persist the connection
         try? await serverRepository?.save(connection)

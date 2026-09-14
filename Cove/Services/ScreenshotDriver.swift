@@ -33,6 +33,13 @@ enum ScreenshotDriver {
             let username = defaults.string(forKey: "screenshotUser")
         else { return }
 
+        // Session restore runs concurrently at launch. Deciding before it finishes
+        // would sign in a second time and, before connection ids were reused, mint
+        // a second server record for the same account.
+        while authManager.isRestoringSession {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+
         if !authManager.isAuthenticated {
             do {
                 try await authManager.connect(

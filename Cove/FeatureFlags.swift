@@ -13,4 +13,11 @@ enum FeatureFlags {
     /// Nothing under `Views/Music` was deleted. Flipping this to `true` brings
     /// all of it back.
     static let musicEnabled = false
+
+    /// Grids read the local catalogue instead of calling the server.
+    ///
+    /// The sync engine runs either way; this only decides which source a view
+    /// reads. Off, every view falls back to the provider exactly as before — the
+    /// escape hatch the staged plan promised.
+    static let localCatalogEnabled = true
 }

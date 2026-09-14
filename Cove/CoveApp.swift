@@ -1,3 +1,4 @@
+import CatalogSync
 import Defaults
 import DownloadManager
 import ImageService
@@ -13,6 +14,7 @@ struct CoveApp: App {
     @State private var downloadCoordinator: DownloadCoordinator
     @State private var appState: AppState
     @State private var userDataStore: UserDataStore
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         ImageService.configure()
@@ -100,6 +102,9 @@ struct CoveApp: App {
         appState.videoPlayerCoordinator.userDataStore = userDataStore
 
         appState.databaseError = databaseError
+        // The local catalogue: grids read it, the sync engine fills it. Without
+        // a database there is no catalogue and views use the provider directly.
+        appState.catalogRepository = databaseManager.map { CatalogRepository(database: $0) }
 
         _authManager = State(initialValue: authManager)
         _downloadCoordinator = State(initialValue: downloadCoordinator)
@@ -124,6 +129,9 @@ struct CoveApp: App {
                             appState: appState
                         )
                     #endif
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { appState.catalogForegrounded() }
                 }
         }
     }

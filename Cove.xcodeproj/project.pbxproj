@@ -15,6 +15,7 @@
 		B51553F32F87EE43005CC1D3 /* AppGroup in Frameworks */ = {isa = PBXBuildFile; productRef = B51553F22F87EE43005CC1D3 /* AppGroup */; };
 		B51553F52F87EE7C005CC1D3 /* JellyfinAPI in Frameworks */ = {isa = PBXBuildFile; productRef = B51553F42F87EE7C005CC1D3 /* JellyfinAPI */; };
 		B54F33112F8BD1B000AE95DA /* OpenSubtitlesAPI in Frameworks */ = {isa = PBXBuildFile; productRef = B54F33102F8BD1B000AE95DA /* OpenSubtitlesAPI */; };
+		C0000001AAAAAAAAAAAA0C50 /* CatalogSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0C50 /* CatalogSync */; };
 		B56230832F88C06C00335A25 /* DataLoading in Frameworks */ = {isa = PBXBuildFile; productRef = B56230822F88C06C00335A25 /* DataLoading */; };
 		B562FA252F98FACE002A6ACC /* Defaults in Frameworks */ = {isa = PBXBuildFile; productRef = B562FA242F98FACE002A6ACC /* Defaults */; };
 		C0000001AAAAAAAAAAAA0001 /* Models in Frameworks */ = {isa = PBXBuildFile; productRef = C0000002AAAAAAAAAAAA0001 /* Models */; };
@@ -120,6 +121,7 @@
 				C0000001AAAAAAAAAAAA0002 /* MediaServerKit in Frameworks */,
 				C0000001AAAAAAAAAAAA0003 /* JellyfinAPI in Frameworks */,
 				B54F33112F8BD1B000AE95DA /* OpenSubtitlesAPI in Frameworks */,
+				C0000001AAAAAAAAAAAA0C50 /* CatalogSync in Frameworks */,
 				C0000001AAAAAAAAAAAA0004 /* JellyfinProvider in Frameworks */,
 				B562FA252F98FACE002A6ACC /* Defaults in Frameworks */,
 				C0000001AAAAAAAAAAAA0005 /* PlaybackEngine in Frameworks */,
@@ -232,6 +234,7 @@
 				B51553F22F87EE43005CC1D3 /* AppGroup */,
 				B56230822F88C06C00335A25 /* DataLoading */,
 				B54F33102F8BD1B000AE95DA /* OpenSubtitlesAPI */,
+				C0000002AAAAAAAAAAAA0C50 /* CatalogSync */,
 				B562FA242F98FACE002A6ACC /* Defaults */,
 			);
 			productName = Cove;
@@ -697,6 +700,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C0000004AAAAAAAAAAAA0001 /* XCLocalSwiftPackageReference "Packages/CoveKit" */;
 			productName = OpenSubtitlesAPI;
+		};
+		C0000002AAAAAAAAAAAA0C50 /* CatalogSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0000004AAAAAAAAAAAA0001 /* XCLocalSwiftPackageReference "Packages/CoveKit" */;
+			productName = CatalogSync;
 		};
 		B56230822F88C06C00335A25 /* DataLoading */ = {
 			isa = XCSwiftPackageProductDependency;
