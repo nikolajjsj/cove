@@ -754,11 +754,13 @@ extension SeriesDetailView {
         defer { isMarkingSeriesWatched = false }
 
         do {
-            // Single API call — Jellyfin marks all children recursively
-            try await authManager.provider.setPlayed(itemId: item.id, isPlayed: isPlayed)
-
-            // Invalidate local overrides so fresh data is picked up
-            appState.userDataStore?.invalidate(item.id)
+            // Through the outbox: local catalogue updated now, the server told
+            // once (its endpoint is recursive) — offline or not.
+            if let store = appState.userDataStore {
+                try await store.setPlayedRecursively(containerId: item.id, isPlayed: isPlayed)
+            } else {
+                try await authManager.provider.setPlayed(itemId: item.id, isPlayed: isPlayed)
+            }
             for episode in episodes {
                 appState.userDataStore?.invalidate(episode.id)
             }
@@ -805,16 +807,22 @@ extension SeriesDetailView {
         guard !previousSeasons.isEmpty || !earlierInSeason.isEmpty else { return }
 
         do {
-            // One recursive API call per prior season marks all its episodes.
+            // One recursive write per prior season, each through the outbox.
             for season in previousSeasons {
-                try await authManager.provider.setPlayed(itemId: season.id, isPlayed: true)
-                appState.userDataStore?.invalidate(season.id)
+                if let store = appState.userDataStore {
+                    try await store.setPlayedRecursively(containerId: season.id, isPlayed: true)
+                } else {
+                    try await authManager.provider.setPlayed(itemId: season.id, isPlayed: true)
+                }
             }
 
-            // Mark earlier episodes in the current season individually.
+            // Earlier episodes in the current season, individually.
             for ep in earlierInSeason {
-                try await authManager.provider.setPlayed(itemId: ep.id, isPlayed: true)
-                appState.userDataStore?.invalidate(ep.id)
+                if let store = appState.userDataStore {
+                    try await store.markPlayed(itemId: ep.id, current: ep.userData)
+                } else {
+                    try await authManager.provider.setPlayed(itemId: ep.id, isPlayed: true)
+                }
             }
 
             // Reload the current season so watched indicators update immediately.

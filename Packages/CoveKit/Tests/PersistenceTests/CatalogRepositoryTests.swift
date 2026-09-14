@@ -332,4 +332,27 @@ final class CatalogRepositoryTests: XCTestCase {
         XCTAssertEqual(eps.last?.userData?.isPlayed, true)
         XCTAssertEqual(eps.last?.runtime, 600)
     }
+
+    func testNextEpisodeCrossesSeasonsAndSkipsSpecials() async throws {
+        let created = Date(timeIntervalSince1970: 1_600_000_000)
+        try await repo.upsert([
+            episode("s0e1", series: "A", season: 0, ep: 1, played: false),
+            episode("s1e1", series: "A", season: 1, ep: 1, played: true),
+            episode("s1e2", series: "A", season: 1, ep: 2, played: false),
+            episode("s2e1", series: "A", season: 2, ep: 1, played: false),
+            CatalogEntry(id: "other", libraryId: lib, seriesId: "B", type: "Episode", mediaType: .episode, name: "b", sortName: "b", dateCreated: created, indexNumber: 1, parentIndexNumber: 1),
+        ], scope: scope)
+        let n1 = try await repo.nextEpisode(after: "s1e1", scope: scope)?.id.rawValue
+        let n2 = try await repo.nextEpisode(after: "s1e2", scope: scope)?.id.rawValue
+        let n3 = try await repo.nextEpisode(after: "s2e1", scope: scope)
+        XCTAssertEqual(n1, "s1e2")
+        XCTAssertEqual(n2, "s2e1", "crosses into the next season")
+        XCTAssertNil(n3, "last episode has no next")
+    }
+
+    func testStudiosListedPerLibrary() async throws {
+        try await repo.upsert([entry("a", name: "A", studios: ["Warner", "A24"]), entry("b", name: "B", studios: ["a24"])], scope: scope)
+        let s = try await repo.studios(libraryId: lib, scope: scope)
+        XCTAssertEqual(s.map { $0.lowercased() }.sorted(), ["a24", "a24", "warner"])
+    }
 }

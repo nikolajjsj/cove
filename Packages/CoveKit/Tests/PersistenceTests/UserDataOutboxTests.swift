@@ -97,4 +97,21 @@ final class UserDataOutboxTests: XCTestCase {
         let attempts = try await outbox.pending(scope: scope).first!.attempts
         XCTAssertEqual(attempts, 2)
     }
+
+    func testRecursivePlayedFlipsEveryEpisodeAndQueuesOneRow() async throws {
+        let created = Date(timeIntervalSince1970: 1_600_000_000)
+        try await catalog.upsert([
+            CatalogEntry(id: "show", libraryId: "lib", type: "Series", mediaType: .series, name: "Show", sortName: "Show", dateCreated: created),
+            CatalogEntry(id: "s1", libraryId: "lib", seriesId: "show", type: "Season", mediaType: .season, name: "S1", sortName: "1", dateCreated: created, indexNumber: 1),
+            CatalogEntry(id: "e1", libraryId: "lib", seriesId: "show", seasonId: "s1", type: "Episode", mediaType: .episode, name: "E1", sortName: "1", dateCreated: created, indexNumber: 1, parentIndexNumber: 1, userData: UserData(playbackPosition: 300)),
+            CatalogEntry(id: "e2", libraryId: "lib", seriesId: "show", seasonId: "s1", type: "Episode", mediaType: .episode, name: "E2", sortName: "2", dateCreated: created, indexNumber: 2, parentIndexNumber: 1),
+        ], scope: scope)
+        try await outbox.enqueueRecursivePlayed(containerId: "show", isPlayed: true, at: .now, scope: scope)
+        let e1 = try await catalog.userData(itemId: "e1", scope: scope)
+        let e2 = try await catalog.userData(itemId: "e2", scope: scope)
+        let pending = try await outbox.pending(scope: scope)
+        XCTAssertEqual(e1?.isPlayed, true); XCTAssertEqual(e1?.playbackPosition, 0)
+        XCTAssertEqual(e2?.isPlayed, true)
+        XCTAssertEqual(pending.map(\.itemId), ["show"], "the server hears one recursive request")
+    }
 }

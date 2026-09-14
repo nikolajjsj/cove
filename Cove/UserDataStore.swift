@@ -255,6 +255,21 @@ final class UserDataStore {
         }
     }
 
+    /// Mark a whole series or season played/unplayed.
+    ///
+    /// One outbox row for the container — Jellyfin applies it recursively — and
+    /// every child episode updated locally so the catalogue agrees at once.
+    /// Without an outbox this falls back to the recursive server call.
+    func setPlayedRecursively(containerId: ItemID, isPlayed: Bool) async throws {
+        invalidate(containerId)
+        if let outbox, let outboxScope {
+            try await outbox.enqueueRecursivePlayed(
+                containerId: containerId.rawValue, isPlayed: isPlayed, at: .now, scope: outboxScope)
+            return
+        }
+        try await mutationProvider.setPlayed(itemId: containerId, isPlayed: isPlayed)
+    }
+
     // MARK: - Reconciliation
 
     /// Merge fresh server data without clobbering in-flight optimistic updates.

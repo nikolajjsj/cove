@@ -68,6 +68,48 @@ public final class UserDataOutboxRepository: Sendable {
         }
     }
 
+    /// Mark a whole series or season played/unplayed.
+    ///
+    /// Jellyfin's played endpoint is recursive, so the server hears **one** request
+    /// for the container. Locally, though, nothing is recursive: every child
+    /// episode row is updated here so the catalogue agrees with what the server
+    /// will say, offline or not.
+    public func enqueueRecursivePlayed(containerId: String, isPlayed: Bool, at date: Date, scope: Scope) async throws {
+        try await database.dbWriter.write { db in
+            // Every episode under the container, plus the container itself.
+            let ids = try String.fetchAll(
+                db,
+                sql: """
+                    SELECT itemId FROM catalog_items
+                    WHERE serverId = ? AND userId = ?
+                      AND (itemId = ? OR seriesId = ? OR seasonId = ?
+                           OR seriesId IN (SELECT itemId FROM catalog_items WHERE serverId = ? AND userId = ? AND itemId = ?))
+                    """,
+                arguments: [scope.serverId, scope.userId, containerId, containerId, containerId, scope.serverId, scope.userId, containerId])
+            for id in ids {
+                try db.execute(
+                    sql: """
+                        INSERT OR IGNORE INTO catalog_user_data (serverId, userId, itemId, played, playCount, isFavorite, playbackPositionTicks)
+                        VALUES (?, ?, ?, 0, 0, 0, 0)
+                        """,
+                    arguments: [scope.serverId, scope.userId, id])
+                try db.execute(
+                    sql: "UPDATE catalog_user_data SET played = ?, playbackPositionTicks = CASE WHEN ? THEN 0 ELSE playbackPositionTicks END, lastPlayedDate = CASE WHEN ? THEN ? ELSE lastPlayedDate END WHERE serverId = ? AND userId = ? AND itemId = ?",
+                    arguments: [isPlayed, isPlayed, isPlayed, date, scope.serverId, scope.userId, id])
+            }
+            let change = UserDataChange.played(isPlayed, at: date)
+            try db.execute(
+                sql: """
+                    INSERT INTO user_data_outbox (id, serverId, userId, itemId, field, value, occurredAt, attempts)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+                    ON CONFLICT(serverId, userId, itemId, field) DO UPDATE SET
+                        id = excluded.id, value = excluded.value, occurredAt = excluded.occurredAt,
+                        attempts = 0, lastAttemptAt = NULL, lastError = NULL
+                    """,
+                arguments: [UUID().uuidString, scope.serverId, scope.userId, containerId, change.field, change.encodedValue, date])
+        }
+    }
+
     /// Everything waiting, oldest first, so replay lands in the order it happened.
     public func pending(scope: Scope) async throws -> [PendingUserDataChange] {
         try await database.dbWriter.read { db in

@@ -566,6 +566,27 @@ at a time, which is what `AppState` already models.
 
 ---
 
+## 13a. What still talks to the server, and why
+
+Measured after Phase 5 (`grep -rnoE "provider\.[a-zA-Z]+\(" Cove`), every remaining call
+falls into one of three tiers:
+
+1. **Local-first, server as fallback or refresh** — paging, genres, seasons, episodes,
+   Resume, Next Up, recently added, search, detail refresh, the library list. Each sits
+   behind a `localCatalog` check and is reached only on first run or to refresh.
+2. **Server-only by nature, staying that way** — auth; playback and downloads
+   (`streamURL`, `mediaSegments`, `downloadInfo`, `deviceProfile`); live-session reports
+   (the *durable* position goes through the outbox); subtitles; image URL builders
+   (artwork is remote content — §3); server recommendations (`similarItems`,
+   `specialFeatures`, `localTrailers`, `suggestedItems`, `personItems`).
+3. **Closed since:** series/season *mark watched* went straight to the server, bypassing
+   the outbox — offline it failed and the catalogue disagreed until the next sweep. Now
+   one outbox row per container (Jellyfin's endpoint is recursive) with every child
+   episode updated locally. Auto-play's *next episode* and the studio list read the
+   catalogue.
+
+Two remain by design decision, not oversight — see §14.
+
 ## 14. Open decisions — genuinely the owner's
 
 1. **Very large libraries.** Above some size, bootstrap should either ask or be per-library
@@ -578,6 +599,14 @@ at a time, which is what `AppState` already models.
    `nikolajjsj.com/cove/privacy-policy` needs a sentence.
 4. **The played-flag race** (§7.5, second bullet). Accepting last-writer-wins is
    recommended and is what every other client does; it is listed so it is a decision.
+5. **Collections offline.** `CollectionDetailView` still asks the server for a BoxSet's
+   members: membership is many-to-many and the catalogue does not store it. Doing so
+   means a junction table filled during sync and one more reconcile axis. Worth it only
+   if collections matter to you offline.
+6. **The Home hero offline.** `HeroBannerView` uses the server's `suggestedItems`, which is
+   why the hero is absent in every offline capture. A local stand-in (unwatched, recently
+   added, with a backdrop) would keep Home's shape; it would also stop being a
+   "suggestion". Decide which you prefer.
 
 ---
 

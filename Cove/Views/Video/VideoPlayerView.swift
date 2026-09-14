@@ -346,7 +346,7 @@ struct VideoPlayerView: View {
                     if newItem.mediaType == .episode,
                         Defaults[.autoPlayNextEpisode]
                     {
-                        let next = try? await provider.nextEpisodeAfter(item: newItem)
+                        let next = await appState.nextEpisode(after: newItem)
                         vm.setNextEpisode(next)
                     }
                 }
@@ -372,7 +372,7 @@ struct VideoPlayerView: View {
         {
             let provider = authManager.provider
             Task {
-                let next = try? await provider.nextEpisodeAfter(item: item)
+                let next = await appState.nextEpisode(after: item)
                 videoManager.setNextEpisode(next)
             }
         }

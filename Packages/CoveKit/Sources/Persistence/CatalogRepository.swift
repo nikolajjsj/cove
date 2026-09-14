@@ -674,6 +674,47 @@ public final class CatalogRepository: Sendable {
         }
     }
 
+    /// Distinct studio names present in a library, for the studio list.
+    public func studios(libraryId: String, scope: Scope) async throws -> [String] {
+        try await database.dbWriter.read { db in
+            try String.fetchAll(
+                db,
+                sql: """
+                    SELECT DISTINCT s.studioName FROM catalog_item_studios s
+                    JOIN catalog_items i ON i.serverId = s.serverId AND i.userId = s.userId AND i.itemId = s.itemId
+                    WHERE s.serverId = ? AND s.userId = ? AND i.libraryId = ?
+                    ORDER BY s.studioName COLLATE NOCASE
+                    """,
+                arguments: [scope.serverId, scope.userId, libraryId])
+        }
+    }
+
+    /// The episode that follows `itemId` in its series — next in the same season,
+    /// else the first of the next season. Specials (season 0) are skipped, as
+    /// Next Up does. Nil for a non-episode or the last episode.
+    public func nextEpisode(after itemId: String, scope: Scope) async throws -> MediaItem? {
+        try await database.dbWriter.read { db in
+            guard let current = try Row.fetchOne(
+                db,
+                sql: "SELECT seriesId, parentIndexNumber, indexNumber FROM catalog_items WHERE serverId = ? AND userId = ? AND itemId = ? AND type = 'Episode'",
+                arguments: [scope.serverId, scope.userId, itemId]),
+                let seriesId: String = current["seriesId"]
+            else { return nil }
+            let season: Int = current["parentIndexNumber"] ?? 0
+            let episode: Int = current["indexNumber"] ?? 0
+            return try Row.fetchOne(
+                db,
+                sql: CatalogQuery.selectSQL + """
+                     WHERE i.serverId = ? AND i.userId = ? AND i.type = 'Episode' AND i.seriesId = ?
+                       AND i.parentIndexNumber > 0
+                       AND (i.parentIndexNumber * 100000 + COALESCE(i.indexNumber, 0)) > ?
+                     ORDER BY i.parentIndexNumber, i.indexNumber LIMIT 1
+                    """,
+                arguments: [scope.serverId, scope.userId, seriesId, season * 100000 + episode]
+            ).map(Self.mediaItem(from:))
+        }
+    }
+
     public func item(id: String, scope: Scope) async throws -> MediaItem? {
         try await database.dbWriter.read { db in
             try Row.fetchOne(

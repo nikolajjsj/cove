@@ -342,6 +342,18 @@ final class AppState {
         scheduleBackgroundRefresh()
     }
 
+    /// The episode auto-play should queue after `item`. Local ordering first, so
+    /// a downloaded season plays through offline; the server when the catalogue
+    /// cannot answer.
+    func nextEpisode(after item: MediaItem) async -> MediaItem? {
+        if let local = await localCatalog(),
+            let next = try? await local.repository.nextEpisode(after: item.id.rawValue, scope: local.scope)
+        {
+            return next
+        }
+        return try? await authManager.provider.nextEpisodeAfter(item: item)
+    }
+
     /// Foreground: pick up whatever changed while the app was away.
     func catalogForegrounded() {
         guard authManager.isAuthenticated else { return }
