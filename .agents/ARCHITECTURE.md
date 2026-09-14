@@ -710,6 +710,9 @@ These are explicitly deferred but the architecture accommodates them:
 - **Lyrics** — `Lyrics` model exists, `MusicProvider.lyrics()` method defined, UI deferred.
 - **Scrobbling (Last.fm)** — observer on playback events, no core changes needed.
 - **Widgets / Lock Screen** — `MPNowPlayingInfoCenter` handles lock screen. Home screen widgets are additive.
+- **Local-first sync** — views read a local catalogue in SQLite instead of calling a
+  provider; the network becomes a sync process. Staged plan, open decisions and the
+  deletion problem in [`features/local-first-sync.md`](features/local-first-sync.md).
 - **Deep Linking** — navigation is destination-driven (`NavigationStack(path:)`), so a `DeepLinkRouter` maps URLs to destinations. No current implementation.
 
 ---
