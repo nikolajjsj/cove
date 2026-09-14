@@ -116,7 +116,11 @@ If SwiftData is configured to use CloudKit:
   back:** `DateLastSaved` is in the `ItemFields` enum, so a request for it succeeds, but it
   never appears in the response — the DTO does not carry it. The only server clock a
   client can get is the HTTP `Date` response header, so any cursor has to come from there,
-  never from the device clock. So anything that caches items locally cannot stay
+  never from the device clock. **`minDateLastSavedForUser` is not a user-data change
+  detector**, whatever its name suggests: on 12.0 a favourite toggle, a mark-played and a
+  position write were each invisible to it seconds later. Sync user data with the sets the
+  server indexes — `/UserItems/Resume`, `isFavorite=true`, `isPlayed=true&sortBy=DatePlayed`
+  — and a periodic full sweep. Design in `.agents/features/local-first-sync.md` §6.3a. So anything that caches items locally cannot stay
   correct on deltas alone: an item removed from the server is never mentioned again and
   lingers until something reconciles ids directly. Budget for a periodic id-only sweep —
   roughly a third the payload of a fielded fetch — rather than discovering the phantoms

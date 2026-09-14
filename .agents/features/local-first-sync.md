@@ -186,18 +186,41 @@ First connection, or after a full reset.
 `includeItemTypes=Movie,Series,Season,Episode,BoxSet`. `recursive=true` returns
 `Folder`, `Playlist`, and music types too; filter server-side, not after download.
 
-### 6.3 Delta
-
-Two independent axes, two cursors, two queries:
+### 6.3 Delta — catalogue axis only
 
 ```
 catalogue:  GET /Items?recursive=true&fields=<catalogue set>&minDateLastSaved=<cursor − overlap>
-user data:  GET /Items?recursive=true&fields=&enableImages=false&minDateLastSavedForUser=<cursor − overlap>
 ```
 
-Both parameters **verified to filter** on the 12.0 demo server. Both paged the same way
-as bootstrap. A delta that returns more than, say, 5,000 rows is treated as a bootstrap
-(the catalogue has changed too much to trust an offset walk over it).
+Paged like bootstrap. A delta that returns more than ~5,000 rows is treated as a bootstrap.
+
+**There is no user-data delta axis.** The spec originally paired `minDateLastSaved` with
+`minDateLastSavedForUser`. Phase 0 disproved the second: on the 12.0 demo server a
+favourite toggle, a mark-played, and a position write via `POST /UserItems/{id}/UserData`
+were each followed by a `minDateLastSavedForUser` query cursored from the `Date` header
+taken seconds earlier — and **all three returned 0 rows**, with and without an explicit
+`userId`. The parameter filters on *something* (epoch → all, future → none) but not on
+user-data writes. User data is synced by sweeps instead — §6.3a.
+
+### 6.3a User-data sweeps
+
+The UI needs three things fresh: what is in progress, what is a favourite, and what was
+recently watched. Each is a small, indexed server query, verified to reflect a write
+immediately:
+
+| Sweep | Query | Local effect |
+|---|---|---|
+| In progress | `GET /UserItems/Resume?limit=100&fields=&enableImages=false` | Upsert positions. Any local row with `position > 0 AND played = 0` **not** in the response has finished or been reset elsewhere → refetch those ids (`GET /Items?ids=…`) and upsert |
+| Favourites | `GET /Items?recursive=true&isFavorite=true&fields=&enableImages=false` | Set `isFavorite` on returned ids; clear it on local favourites not returned |
+| Recently played | `GET /Items?recursive=true&isPlayed=true&sortBy=DatePlayed&sortOrder=Descending&limit=200&fields=&enableImages=false` | Upsert `played`, `playCount`, `lastPlayedDate` |
+| Full | `GET /Items?recursive=true&includeItemTypes=<catalogue types>&fields=&enableImages=false` per library, paged — **782 bytes/item** with `UserData` (~15 MB for 20k) | Upsert every row's user data. Catches un-watch events and anything the hot sweeps miss |
+
+The three hot sweeps run on every foreground and after playback; the full sweep runs daily
+and on pull-to-refresh. A bare mark-played from another client that does not set
+`DatePlayed` is invisible to the hot sweeps and lands with the daily full sweep — accepted.
+
+**The outbox flushes before any sweep**, or a sweep pulls the server's stale value over
+what the user just changed (§7.5).
 
 ### 6.4 Cursors — the part that is easy to get silently wrong
 
@@ -205,8 +228,8 @@ as bootstrap. A delta that returns more than, say, 5,000 rows is treated as a bo
 you can *request* it, but it **never appears in the response** — tested. `UserData` carries
 only `LastPlayedDate`, which does not move on a favourite toggle.
 
-So the cursor is **server time at the moment of the request**, taken from the HTTP `Date`
-response header of the *first page* of the pass. Never the device clock: a phone five
+So the catalogue cursor is **server time at the moment of the request**, taken from the HTTP
+`Date` response header of the *first page* of the pass. (User data has no cursor — §6.3a.) Never the device clock: a phone five
 minutes fast never sees five minutes of changes, forever.
 
 - Read `Date` from the first page's response. Record it as `candidateCursor`.
@@ -250,14 +273,14 @@ is not "no libraries").
 
 | Trigger | Runs |
 |---|---|
-| App foregrounded | user-data delta immediately; catalogue delta if > 15 min since last |
-| Playback stopped | user-data delta for that item's series (cheap, keeps NextUp honest) |
-| Pull-to-refresh | catalogue delta + user-data delta + reconcile for that library |
+| App foregrounded | outbox flush, then the three hot user-data sweeps; catalogue delta if > 15 min since last |
+| Playback stopped | outbox flush, then Resume + recently-played sweeps (keeps Continue Watching and NextUp honest) |
+| Pull-to-refresh | catalogue delta + full user-data sweep + reconcile for that library |
 | Daily, opportunistic (`BGAppRefreshTask`) | full reconcile |
-| Connectivity regained | flush outbox first (§7), *then* user-data delta |
+| Connectivity regained | flush outbox first (§7), *then* the hot sweeps |
 | Sign-in | bootstrap |
 
-The **outbox flushes before any user-data delta**, always. Otherwise the delta pulls the
+The **outbox flushes before any user-data sweep**, always. Otherwise the sweep pulls the
 server's stale value for something the user just changed and overwrites the local intent.
 
 ### 6.7 Failure taxonomy
@@ -338,7 +361,7 @@ Consequences, worked through:
 
 - **You mark a film watched on the phone offline; someone marks it unwatched on the TV.**
   You reconnect. Flush runs first: `POST /UserPlayedItems` — your edit lands, later in
-  wall-clock, and the server now says *played*. Then the delta pulls *played*. Consistent.
+  wall-clock, and the server now says *played*. Then the sweep pulls *played*. Consistent.
   The TV user sees it flip; that is correct — the phone's edit was made later.
 - **Same, but the TV edit happened *after* your offline edit in real time.** Your
   `datePlayed` is earlier, but Jellyfin's played flag has no timestamp semantics — last
@@ -353,7 +376,7 @@ Consequences, worked through:
   if it is greater, drop the outbox row rather than replay it. This is the one field with
   a merge rather than a last-writer rule, because it is the one field where "later" and
   "further" are different things.
-- **Delta arrives while a row is pending.** The incoming `UserData` for that `(itemId,
+- **A sweep arrives while a row is pending.** The incoming `UserData` for that `(itemId,
   field)` is **ignored**; other fields on the same row are applied. This is `rebase()`,
   in SQL.
 - **The item was deleted server-side while an edit was pending.** Replay returns 404.
@@ -472,7 +495,7 @@ Each phase ends shippable. Gate before advancing.
 
 | Phase | Work | Gate |
 |---|---|---|
-| 0 | Throwaway harness against the demo server: both delta axes, `Date`-header cursor, bidirectional reconcile, measure | A server-side delete is removed **and** a deliberately skipped item is backfilled **and** a cursor taken from the `Date` header catches an edit made 30 s later. If any fails, stop |
+| 0 | **Done.** Read/write tests against the demo server | Passed: `Date` header present; reconcile primitives work; all four user-data sweep primitives reflect a write immediately. **Failed: `minDateLastSavedForUser`** — does not track user-data writes; replaced by §6.3a. Unverifiable without admin: whether `minDateLastSaved` bumps on metadata edits |
 | 1 | Migration 004, `CatalogSyncEngine` (bootstrap + delta + reconcile), local `PageFetcher`; `LibraryGridView` reads local | Grid browses in airplane mode; paging instant; sort and every `FilterOptions` field work locally; a server-side delete disappears within one reconcile |
 | 2 | Remaining five `PagedCollectionLoader` views; Home rails including locally derived Resume / NextUp; Search over FTS5 | Search and Home work in airplane mode; Home does not change shape when connectivity toggles |
 | 3 | Detail tier: lazy fetch, `pinned`, eviction; fold `OfflineMetadataRepository`; orphaned-download badge | The offline/online branch is **deleted**, not bypassed. Delete a downloaded item server-side: it stays playable with the badge |
@@ -494,6 +517,8 @@ sync tests are unusually easy to write that way:
 | Reconcile backfills skips | skip the missing-fetch | row stays absent |
 | Cursor advances only after last page | advance on page 1 | edit between page 1 and N is lost |
 | Cursor from `Date` header | use `Date()` | with clock set 5 min fast, edit is never seen |
+| Resume sweep detects items that left the set | skip the refetch | a film finished on the TV stays in Continue Watching |
+| Favourites sweep clears stale | skip the clear | an unfavourited item stays a favourite |
 | Outbox coalescing | append instead of replace | six rows, six requests |
 | Pending row beats delta | apply delta unconditionally | local favourite reverts |
 | Position merge | always replay | 40 min overwrites 60 |
@@ -536,7 +561,13 @@ at a time, which is what `AppState` already models.
 
 Against the 12.0 demo server and this tree — tested, not assumed:
 
-- `minDateLastSaved` **and** `minDateLastSavedForUser` both filter (future cutoff → 0, epoch → all).
+- `minDateLastSaved` filters (future cutoff → 0, epoch → all). `minDateLastSavedForUser` also
+  filters on *something* — but **not on user-data writes**: favourite, mark-played and a
+  position `POST` were each invisible to it seconds later, with and without `userId`.
+- `/UserItems/Resume`, `isFavorite=true`, `isPlayed=true&sortBy=DatePlayed`, and `ids=` all
+  reflect a write immediately. Full user-data sweep is 782 bytes/item.
+- `POST /UserItems/{id}/UserData` with `PlaybackPositionTicks`/`Played` works on 12.0 (200,
+  state changed). `POST /UserPlayedItems` resets position to 0 as a side effect.
 - `DateLastSaved` **does not appear in responses** even when requested via `fields`. `UserData` carries only `LastPlayedDate`.
 - The server sends an HTTP `Date` header.
 - `sortBy` has no `Id`; no option is unique.
@@ -556,7 +587,5 @@ Against the 12.0 demo server and this tree — tested, not assumed:
 **Not verified:**
 - Whether `DateLastSaved` bumps on *every* kind of server-side metadata edit (it is
   invisible in responses, so this can only be tested behaviourally — Phase 0's third gate).
-- Whether `POST /UserItems/{id}/UserData` behaves on 12.0 as the spec says. Read-only
-  checks only; writing to a shared public demo account was not done.
 - Multi-user on one server, end to end. No UI exists to exercise it.
 - `MaxResumePct` location in `/System/Configuration` on 12.0.
