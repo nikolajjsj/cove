@@ -98,6 +98,8 @@ struct CoveApp: App {
 
         // 4. Create the centralized user data mutation store
         let userDataStore = UserDataStore(provider: authManager.provider)
+        // Edits go to the local catalogue first and reach the server on flush.
+        userDataStore.outbox = databaseManager.map { UserDataOutboxRepository(database: $0) }
         appState.userDataStore = userDataStore
         appState.videoPlayerCoordinator.userDataStore = userDataStore
 

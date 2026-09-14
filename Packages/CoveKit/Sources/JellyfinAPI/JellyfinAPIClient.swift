@@ -967,6 +967,56 @@ public final class JellyfinAPIClient: Sendable {
         await httpClient.cache.removeAll(matching: "NextUp")
     }
 
+    /// Mark an item as played *at a given time*.
+    /// `POST /UserPlayedItems/{itemId}?datePlayed=`
+    ///
+    /// Used when replaying an offline watch: the server should record when the
+    /// film was actually finished, not when the phone reconnected.
+    public func markPlayed(userId: String, itemId: String, datePlayed: Date) async throws {
+        let url = baseURL.appending(path: "UserPlayedItems/\(itemId)")
+        try await httpClient.request(
+            url: url, method: .post, headers: authHeaders,
+            queryItems: [
+                URLQueryItem(name: "userId", value: userId),
+                URLQueryItem(name: "datePlayed", value: datePlayed.formatted(.iso8601)),
+            ],
+            cachePolicy: .networkOnly)
+        await httpClient.cache.removeAll(matching: itemId)
+        await httpClient.cache.removeAll(matching: "IsPlayed")
+        await httpClient.cache.removeAll(matching: "Resume")
+        await httpClient.cache.removeAll(matching: "NextUp")
+    }
+
+    /// Write a playback position outside a live session.
+    /// `POST /UserItems/{itemId}/UserData`
+    ///
+    /// `/Sessions/Playing/Progress` needs a PlaySessionId the server no longer
+    /// knows once the session is over; this whole-object endpoint is what an
+    /// offline position report should call.
+    public func updateUserData(
+        userId: String, itemId: String, positionTicks: Int64, played: Bool, lastPlayedDate: Date
+    ) async throws {
+        let url = baseURL.appending(path: "UserItems/\(itemId)/UserData")
+        let body = UpdateUserItemDataBody(
+            playbackPositionTicks: positionTicks, played: played, lastPlayedDate: lastPlayedDate)
+        let data = try Self.pascalCaseEncoder.encode(body)
+        try await httpClient.request(
+            url: url, method: .post, headers: authHeaders, rawBody: data,
+            queryItems: [URLQueryItem(name: "userId", value: userId)])
+        await httpClient.cache.removeAll(matching: itemId)
+        await httpClient.cache.removeAll(matching: "Resume")
+    }
+
+    /// The server's current user data for one item.
+    /// `GET /UserItems/{itemId}/UserData`
+    public func userData(userId: String, itemId: String) async throws -> BaseItemUserData {
+        let url = baseURL.appending(path: "UserItems/\(itemId)/UserData")
+        return try await httpClient.request(
+            url: url, method: .get, headers: authHeaders,
+            queryItems: [URLQueryItem(name: "userId", value: userId)],
+            cachePolicy: .networkOnly)
+    }
+
     /// Mark an item as unplayed.
     /// `DELETE /UserPlayedItems/{itemId}`
     public func markUnplayed(userId: String, itemId: String) async throws {
@@ -1351,5 +1401,18 @@ struct UploadSubtitleRequest: Encodable, Sendable {
         case format = "Format"
         case isForced = "IsForced"
         case data = "Data"
+    }
+}
+
+/// Body for `POST /UserItems/{itemId}/UserData`. PascalCase on the wire.
+struct UpdateUserItemDataBody: Encodable {
+    let playbackPositionTicks: Int64
+    let played: Bool
+    let lastPlayedDate: Date
+
+    enum CodingKeys: String, CodingKey {
+        case playbackPositionTicks = "PlaybackPositionTicks"
+        case played = "Played"
+        case lastPlayedDate = "LastPlayedDate"
     }
 }

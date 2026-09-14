@@ -1,12 +1,18 @@
 import Foundation
 import MediaServerKit
 import Models
+import Persistence
 
 // MARK: - UserDataStore
 
 /// Centralized, observable store for per-item user data (favorite, played, etc.)
-/// that provides optimistic updates with automatic server synchronization and
-/// rollback on failure.
+/// that applies every edit locally at once and gets it to the server later.
+///
+/// With an outbox configured, a tap **always succeeds**: the change is written to
+/// the local catalogue and queued in the same transaction, the in-memory
+/// override updates the UI immediately, and the server hears about it on the
+/// next flush — now if online, on reconnect if not. Nothing rolls back. Without an
+/// outbox (previews, no database) it falls back to the old call-the-server path.
 ///
 /// Injected into the SwiftUI environment. Views read user data through this
 /// store to get the latest optimistic state across all screens. Mutations are
@@ -56,6 +62,13 @@ final class UserDataStore {
 
     private let mutationProvider: any UserDataMutationProvider
 
+    /// Set by `CoveApp` once the database is open. Nil means no local catalogue.
+    var outbox: UserDataOutboxRepository?
+    /// Who the edits belong to. Set by `AppState` when a connection is active.
+    var outboxScope: CatalogRepository.Scope?
+
+    private var usesOutbox: Bool { outbox != nil && outboxScope != nil }
+
     // MARK: - Init
 
     nonisolated init(provider: any UserDataMutationProvider) {
@@ -97,8 +110,14 @@ final class UserDataStore {
         updated.isFavorite = newValue
         overrides[itemId] = updated
         evictOverridesIfNeeded()
-        markInflight(itemId, .favorite)
 
+        if let outbox, let outboxScope {
+            // Local truth + queue, atomically. The flush is somebody else's job.
+            try await outbox.enqueue(.favorite(newValue, at: .now), itemId: itemId.rawValue, scope: outboxScope)
+            return newValue
+        }
+
+        markInflight(itemId, .favorite)
         do {
             try await mutationProvider.setFavorite(itemId: itemId, isFavorite: newValue)
             unmarkInflight(itemId, .favorite)
@@ -132,8 +151,13 @@ final class UserDataStore {
         updated.isPlayed = true
         overrides[itemId] = updated
         evictOverridesIfNeeded()
-        markInflight(itemId, .played)
 
+        if let outbox, let outboxScope {
+            try await outbox.enqueue(.played(true, at: .now), itemId: itemId.rawValue, scope: outboxScope)
+            return
+        }
+
+        markInflight(itemId, .played)
         do {
             try await mutationProvider.setPlayed(itemId: itemId, isPlayed: true)
             unmarkInflight(itemId, .played)
@@ -168,14 +192,30 @@ final class UserDataStore {
         var data = userData(for: itemId, fallback: currentData)
         data.playbackPosition = position
 
-        if let runtime, runtime > 0, position / runtime >= 0.9 {
+        // The completion threshold is decided here because offline nobody else
+        // can. 90% matches the server's default MaxResumePct.
+        let finished = runtime.map { $0 > 0 && position / $0 >= 0.9 } ?? false
+        if finished {
             data.isPlayed = true
             data.playCount += 1
             data.lastPlayedDate = .now
+            data.playbackPosition = 0
         }
 
         overrides[itemId] = data
         evictOverridesIfNeeded()
+
+        // Durable: the position lands in the catalogue now and reaches the server
+        // on the next flush. Online, the live session report has already said the
+        // same thing; the flusher's merge rule makes the repeat harmless.
+        if let outbox, let outboxScope {
+            let ticks = Int64(position * 10_000_000)
+            Task {
+                try? await outbox.enqueue(
+                    .position(ticks: ticks, played: finished, at: .now),
+                    itemId: itemId.rawValue, scope: outboxScope)
+            }
+        }
     }
 
     /// Toggle played/watched: apply optimistic update → call server → rollback on failure.
@@ -193,8 +233,13 @@ final class UserDataStore {
         updated.isPlayed = newValue
         overrides[itemId] = updated
         evictOverridesIfNeeded()
-        markInflight(itemId, .played)
 
+        if let outbox, let outboxScope {
+            try await outbox.enqueue(.played(newValue, at: .now), itemId: itemId.rawValue, scope: outboxScope)
+            return newValue
+        }
+
+        markInflight(itemId, .played)
         do {
             try await mutationProvider.setPlayed(itemId: itemId, isPlayed: newValue)
             unmarkInflight(itemId, .played)

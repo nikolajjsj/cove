@@ -259,6 +259,7 @@ final class AppState {
         else { return }
         let scope = CatalogRepository.Scope(
             serverId: connection.id.uuidString, userId: connection.userId)
+        userDataStore?.outboxScope = scope
         if catalogSync == nil || catalogScope != scope {
             catalogScope = scope
             let engine = CatalogSyncEngine(
@@ -275,9 +276,28 @@ final class AppState {
         let libraries = catalogLibraries
         guard let engine = catalogSync else { return }
         Task {
+            // Outbox first, always: a sweep must never pull the server's stale
+            // value over something the user just changed.
+            await flushOutbox()
             await engine.syncIfNeeded(libraries: libraries)
             await evictDetailCache()
         }
+    }
+
+    /// Send pending user-data edits to the server. Safe to call any time; a no-op
+    /// when nothing is pending or nothing is signed in.
+    func flushOutbox() async {
+        guard let outbox = userDataStore?.outbox, let scope = catalogScope ?? currentCatalogScope,
+            !isOffline
+        else { return }
+        let flusher = OutboxFlusher(outbox: outbox, writer: authManager.provider, scope: scope)
+        await flusher.flush()
+    }
+
+    /// Edits waiting to reach the server — for the sign-out confirmation.
+    func pendingOutboxCount() async -> Int {
+        guard let outbox = userDataStore?.outbox, let scope = catalogScope ?? currentCatalogScope else { return 0 }
+        return (try? await outbox.pendingCount(scope: scope)) ?? 0
     }
 
     /// Load an item's detail: cached first, so the view fills instantly and works
@@ -454,6 +474,10 @@ final class AppState {
 
         audioPlayer.onPlaybackStopped = { track, position in
             let item = Self.mediaItem(from: track)
+            // The position lands locally either way; the outbox carries it if the
+            // live report below cannot be sent.
+            await userDataStore?.updatePlaybackPosition(
+                itemId: item.id, position: position, runtime: item.runtime, currentData: track.userData)
             if networkMonitor.isConnected {
                 try? await provider.reportPlaybackStopped(item: item, position: position)
             } else {
@@ -494,6 +518,7 @@ final class AppState {
 
                 // When coming back online, sync pending reports and retry failed loads
                 if connected {
+                    await self.flushOutbox()
                     await self.downloadCoordinator.syncOfflineReports()
 
                     // Automatically retry loading libraries if the previous attempt failed
