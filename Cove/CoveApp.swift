@@ -105,10 +105,10 @@ struct CoveApp: App {
         appState.videoPlayerCoordinator.userDataStore = userDataStore
 
         appState.databaseError = databaseError
-        // The local catalogue: grids read it, the sync engine fills it. Without
-        // a database there is no catalogue and views use the provider directly.
+        // The local catalogue: every view reads it, the sync engine fills it.
         appState.catalogRepository = databaseManager.map { CatalogRepository(database: $0) }
         downloadCoordinator.catalogRepository = appState.catalogRepository
+        downloadCoordinator.detailResolver = { id in await appState.pinnedDetail(id: id) }
 
         _authManager = State(initialValue: authManager)
         _downloadCoordinator = State(initialValue: downloadCoordinator)
@@ -172,26 +172,25 @@ struct CoveApp: App {
 
         Task {
             guard authManager.isAuthenticated else { return }
-            do {
-                let item = try await authManager.provider.item(id: itemId)
-                switch host {
-                case "play":
-                    appState.videoPlayerCoordinator.play(
-                        item: item,
-                        using: authManager.provider
-                    )
-                case "item":
-                    appState.selectedTab = .home
-                    appState.navigationPaths[.home, default: NavigationPath()].append(item)
-                default:
-                    break
-                }
-            } catch {
+            guard let item = await appState.item(id: itemId) else {
                 ToastManager.shared.show(
                     "Couldn't open item",
                     icon: "exclamationmark.triangle",
                     style: .error
                 )
+                return
+            }
+            switch host {
+            case "play":
+                appState.videoPlayerCoordinator.play(
+                    item: item,
+                    using: authManager.provider
+                )
+            case "item":
+                appState.selectedTab = .home
+                appState.navigationPaths[.home, default: NavigationPath()].append(item)
+            default:
+                break
             }
         }
     }

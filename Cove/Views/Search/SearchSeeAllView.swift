@@ -117,22 +117,15 @@ struct SearchSeeAllView: View {
 
     // MARK: - Helpers
 
-    /// Maps our MediaType to Jellyfin's IncludeItemTypes strings.
-    /// One page: the FTS index when the catalogue can answer, the server otherwise.
-    /// Music types are never in the catalogue, so they always go to the server.
+    /// One page from the FTS index.
     private func page(startIndex: Int) async throws -> PagedResult<MediaItem> {
-        let types = includeItemTypes
-        let catalogTypes: Set<String> = ["Movie", "Series", "Episode"]
-        if let types, types.allSatisfy(catalogTypes.contains),
-            let local = await appState.localCatalog()
-        {
-            return try await local.repository.searchPaged(
-                term: query,
-                filter: FilterOptions(limit: pageSize, startIndex: startIndex, includeItemTypes: types),
-                scope: local.scope)
+        guard let catalog = appState.catalog else {
+            return PagedResult(items: [], startIndex: startIndex, totalCount: 0)
         }
-        return try await authManager.provider.searchPaged(
-            query: query, includeItemTypes: types, limit: pageSize, startIndex: startIndex)
+        return try await catalog.repository.searchPaged(
+            term: query,
+            filter: FilterOptions(limit: pageSize, startIndex: startIndex, includeItemTypes: includeItemTypes),
+            scope: catalog.scope)
     }
 
     private var includeItemTypes: [String]? {

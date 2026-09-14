@@ -97,7 +97,7 @@ struct PagedMediaGridView<Card: View>: View {
 
         let favorite: Bool? = isFavoriteFilter ? true : nil
         let types = [itemType]
-        let fetch = await appState.pageFetcher(
+        let fetch = appState.pageFetcher(
             library: library, itemTypes: types,
             sort: SortOptions(field: sortField, order: sortOrder)
         ) { limit, startIndex in

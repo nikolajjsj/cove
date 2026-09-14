@@ -17,21 +17,17 @@ struct BecauseYouWatchedSection: View {
         // Read the provider on the main actor; the fetch closure is @Sendable and
         // cannot reach main-actor state itself.
         let provider = authManager.provider
-        let appState = appState
-
+        let catalog = appState.catalog
         ContentRail(
             cardWidth: { _ in 130 },
+            reloadKey: appState.catalogGeneration,
+            sectionSpacing: HomeView.sectionSpacing,
             skeleton: { SkeletonCard(width: 130, aspectRatio: 2.0 / 3.0, lineCount: 2) }
         ) {
-            // The seed comes from the local Resume feed when possible; the
-            // similar-items lookup is server-side by nature and stays there.
-            let resumeItems: [MediaItem]
-            if let local = await appState.localCatalog() {
-                resumeItems = try await local.repository.resumeItems(scope: local.scope, limit: 1)
-            } else {
-                resumeItems = try await provider.resumeItems()
-            }
-
+            // The seed is the local Resume feed; the similar-items lookup is a
+            // server recommendation by nature and stays one.
+            guard let catalog else { return [] }
+            let resumeItems = try await catalog.repository.resumeItems(scope: catalog.scope, limit: 1)
             guard let source = resumeItems.first else { return [] }
 
             // Publish the source title back to the main actor for the header
@@ -56,17 +52,16 @@ struct RecentlyAddedSection: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        let provider = authManager.provider
-        let appState = appState
+        let catalog = appState.catalog
         ContentRail(
             title: "Recently Added",
             cardWidth: { _ in 130 },
+            reloadKey: appState.catalogGeneration,
+            sectionSpacing: HomeView.sectionSpacing,
             skeleton: { SkeletonCard(width: 130, aspectRatio: 2.0 / 3.0, lineCount: 2) }
         ) {
-            if let local = await appState.localCatalog() {
-                return try await local.repository.recentlyAdded(scope: local.scope)
-            }
-            return try await provider.recentlyAdded()
+            guard let catalog else { return [] }
+            return try await catalog.repository.recentlyAdded(scope: catalog.scope)
         } card: { item in
             MediaCard(item: item)
         }

@@ -9,21 +9,27 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppState.self) private var appState
     @Default(.homeSections) private var sections
-    @State private var refreshID = UUID()
     @State private var showCustomization = false
     @State private var hasMigratedSections = false
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 24) {
+            // Zero spacing on purpose: each section brings its own bottom space
+            // while visible, so a hidden rail stays mounted at zero height and
+            // costs no gap. See ContentRail.sectionSpacing.
+            LazyVStack(alignment: .leading, spacing: 0) {
                 if appState.libraries.isEmpty, appState.libraryLoadFailed {
                     ServerUnavailableView()
                         .frame(maxWidth: .infinity)
+                } else if appState.libraries.isEmpty, appState.catalogSyncStatus.isBusy {
+                    ProgressView("Syncing your library…")
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 80)
                 } else if appState.libraries.isEmpty {
                     ContentUnavailableView(
                         "No Libraries",
                         systemImage: "folder",
-                        description: Text("No libraries found on this server.")
+                        description: Text("No movie or TV libraries found on this server.")
                     )
                     .padding(.horizontal)
                 } else {
@@ -33,11 +39,11 @@ struct HomeView: View {
                 }
             }
             .padding(.vertical)
-            .id(refreshID)
         }
         .refreshable {
+            // A full reconcile; the rails re-query in place when it lands.
             await appState.retryLoadLibraries()
-            refreshID = UUID()
+            await appState.refreshCatalog()
         }
         .onAppear {
             guard !hasMigratedSections else { return }
@@ -58,6 +64,9 @@ struct HomeView: View {
 
     // MARK: - Helpers
 
+    /// Vertical space between Home sections, applied by each visible section.
+    static let sectionSpacing: CGFloat = 24
+
     private var visibleSections: [SectionConfig<HomeSection>] {
         sections.filter(\.isVisible)
     }
@@ -66,7 +75,7 @@ struct HomeView: View {
     private func sectionView(for section: HomeSection) -> some View {
         switch section {
         case .heroBanner:
-            HeroBannerView()
+            HeroBannerView(sectionSpacing: Self.sectionSpacing)
                 .padding(.horizontal)
 
         case .continueWatching:
@@ -110,19 +119,16 @@ private struct ContinueWatchingSection: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        let provider = authManager.provider
-        let appState = appState
+        let catalog = appState.catalog
         ContentRail(
             title: "Continue Watching",
             cardWidth: { _ in 240 },
+            reloadKey: appState.catalogGeneration,
+            sectionSpacing: HomeView.sectionSpacing,
             skeleton: { SkeletonCard.landscape(width: 240) }
         ) {
-            // Derived locally whenever the catalogue can answer, so Home keeps
-            // its shape when the connection changes.
-            if let local = await appState.localCatalog() {
-                return try await local.repository.resumeItems(scope: local.scope)
-            }
-            return try await provider.resumeItems()
+            guard let catalog else { return [] }
+            return try await catalog.repository.resumeItems(scope: catalog.scope)
         } card: { item in
             MediaCard(item: item, style: .landscape)
         }
@@ -136,17 +142,16 @@ private struct UpNextSection: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        let provider = authManager.provider
-        let appState = appState
+        let catalog = appState.catalog
         ContentRail(
             title: "Up Next",
             cardWidth: { _ in 240 },
+            reloadKey: appState.catalogGeneration,
+            sectionSpacing: HomeView.sectionSpacing,
             skeleton: { SkeletonCard.landscape(width: 240) }
         ) {
-            if let local = await appState.localCatalog() {
-                return try await local.repository.nextUp(scope: local.scope)
-            }
-            return try await provider.nextUp()
+            guard let catalog else { return [] }
+            return try await catalog.repository.nextUp(scope: catalog.scope)
         } card: { item in
             MediaCard(item: item, style: .landscape)
         }
@@ -161,12 +166,13 @@ private struct LibrarySection: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        let provider = authManager.provider
-        let appState = appState
+        let catalog = appState.catalog
         let library = library
         ContentRail(
             skeletonCount: 6,
             cardWidth: cardWidth,
+            reloadKey: appState.catalogGeneration,
+            sectionSpacing: HomeView.sectionSpacing,
             skeleton: {
                 SkeletonCard(
                     width: defaultCardWidth,
@@ -175,19 +181,10 @@ private struct LibrarySection: View {
                 )
             },
             fetch: {
-                if let local = await appState.localCatalog(for: library) {
-                    return try await local.repository.latest(
-                        libraryId: library.id.rawValue, itemTypes: library.includeItemTypes,
-                        scope: local.scope)
-                }
-                let sort = SortOptions(field: .dateAdded, order: .descending)
-                let filter = FilterOptions(
-                    limit: 20,
-                    includeItemTypes: library.includeItemTypes
-                )
-                return try await provider.items(
-                    in: library, sort: sort, filter: filter
-                )
+                guard let catalog else { return [] }
+                return try await catalog.repository.latest(
+                    libraryId: library.id.rawValue, itemTypes: library.includeItemTypes,
+                    scope: catalog.scope)
             },
             card: { item in
                 MediaCard(item: item)

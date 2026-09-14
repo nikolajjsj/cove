@@ -93,17 +93,10 @@ struct StudioListView: View {
             return
         }
 
-        let provider = authManager.provider
-        if let local = await appState.localCatalog(for: library) {
-            await loader.load {
-                try await local.repository.studios(libraryId: library.id.rawValue, scope: local.scope)
-                    .map { MediaItem(id: ItemID($0), title: $0, mediaType: .studio) }
-            }
-            return
-        }
-
+        guard let catalog = appState.catalog else { return }
         await loader.load {
-            try await provider.studios(in: library)
+            try await catalog.repository.studios(libraryId: library.id.rawValue, scope: catalog.scope)
+                .map { MediaItem(id: ItemID($0), title: $0, mediaType: .studio) }
         }
     }
 }

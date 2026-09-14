@@ -88,6 +88,10 @@ final class DownloadCoordinator {
     /// item's full detail here so the detail view has everything offline.
     var catalogRepository: CatalogRepository?
 
+    /// The full, pinned item for a download — through the sync engine when
+    /// online, the cached copy otherwise. Set by `CoveApp`.
+    var detailResolver: ((ItemID) async -> MediaItem?)?
+
     private var catalogScope: CatalogRepository.Scope? {
         guard let connection = authManager?.activeConnection else { return nil }
         return CatalogRepository.Scope(serverId: connection.id.uuidString, userId: connection.userId)
@@ -129,7 +133,8 @@ final class DownloadCoordinator {
             includeBackdrop: includeBackdrop
         )
         try await metadataRepo.save(metadata)
-        await pinDetail(item)
+        // The full item, not the lean row the grid handed us.
+        await pinDetail(await detailResolver?(item.id) ?? item)
 
         let artworkURL = provider.imageURL(
             for: item,
@@ -204,7 +209,7 @@ final class DownloadCoordinator {
             try await metadataRepo.save(epMeta)
             // The full episode detail, pinned: a downloaded episode must open
             // offline with its overview and streams, not just a title.
-            if let full = try? await provider.item(id: episode.id) {
+            if let full = await detailResolver?(episode.id) {
                 await pinDetail(full)
             }
 

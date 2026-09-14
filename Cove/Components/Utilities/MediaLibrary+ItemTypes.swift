@@ -17,6 +17,10 @@ nonisolated extension MediaLibrary {
             return ["Series"]
         case .boxsets:
             return ["BoxSet"]
+        case .none:
+            // A mixed library: the grid shows its top-level titles, not the
+            // seasons and episodes the catalogue also holds for it.
+            return ["Movie", "Series"]
         default:
             return nil
         }

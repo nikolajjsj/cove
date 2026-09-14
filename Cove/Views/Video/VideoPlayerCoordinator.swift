@@ -32,6 +32,10 @@ final class VideoPlayerCoordinator {
     /// optimistic overrides from `UserDataStore`.
     var userDataStore: UserDataStore?
 
+    /// Turns an episode id into an item — the catalogue's cached detail or row.
+    /// Injected by `AppState`; the player never asks the server for metadata.
+    var itemResolver: ((ItemID) async -> MediaItem?)?
+
     // MARK: - Presentation State
 
     /// Whether the video player is currently presented.
@@ -305,7 +309,9 @@ final class VideoPlayerCoordinator {
             }
 
             do {
-                let episodeItem = try await provider.item(id: episodeId)
+                guard let episodeItem = await itemResolver?(episodeId) else {
+                    throw AppError.itemNotFound(id: episodeId)
+                }
                 try await resolveAndPresent(item: episodeItem, using: provider)
             } catch {
                 self.error = PlaybackError(

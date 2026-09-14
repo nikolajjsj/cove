@@ -90,7 +90,7 @@ struct StudioDetailView: View {
 
         let itemTypes = studioItemTypes
         let studio = studioName
-        let fetch = await appState.pageFetcher(
+        let fetch = appState.pageFetcher(
             library: library, itemTypes: itemTypes, sort: sortOptions
         ) { limit, startIndex in
             FilterOptions(

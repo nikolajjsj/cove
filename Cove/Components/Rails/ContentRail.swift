@@ -19,7 +19,7 @@ import SwiftUI
 ///     title: "Continue Watching",
 ///     skeleton: { SkeletonCard.landscape(width: 240) }
 /// ) {
-///     try await provider.resumeItems()
+///     try await catalog.repository.resumeItems(scope: catalog.scope)
 /// } card: { item in
 ///     ContinueWatchingCard(item: item)
 /// }
@@ -39,6 +39,13 @@ struct ContentRail<Card: View, Skeleton: View, Header: View>: View {
     let skeletonCount: Int
     let spacing: CGFloat
     let cardWidth: ((MediaItem) -> CGFloat)?
+    /// Re-runs `fetch` in place when it changes — Home passes the catalogue
+    /// generation so rows that land during a sync appear without a rebuild.
+    let reloadKey: AnyHashable
+    /// Space below the rail while it is visible. Home stacks sections with zero
+    /// spacing and lets each visible one bring its own, so a hidden rail takes
+    /// no room while it stays mounted and keeps listening for rows.
+    let sectionSpacing: CGFloat
 
     // MARK: - State
 
@@ -51,28 +58,40 @@ struct ContentRail<Card: View, Skeleton: View, Header: View>: View {
     // MARK: - Body
 
     var body: some View {
-        if isVisible {
-            Group {
-                switch loader.phase {
-                case .loading:
-                    loadingContent
+        Group {
+            if isVisible {
+                Group {
+                    switch loader.phase {
+                    case .loading:
+                        loadingContent
 
-                case .loaded(let items):
-                    loadedContent(items)
+                    case .loaded(let items):
+                        loadedContent(items)
 
-                case .empty, .failed:
-                    // The loader resolved to empty/failed — animate out.
-                    // We use `Color.clear` so SwiftUI has something to
-                    // remove during the transition.
-                    Color.clear
-                        .frame(height: 0)
-                        .onAppear { hideRail() }
+                    case .empty, .failed:
+                        // The loader resolved to empty/failed — animate out.
+                        // We use `Color.clear` so SwiftUI has something to
+                        // remove during the transition.
+                        Color.clear
+                            .frame(height: 0)
+                            .onAppear { hideRail() }
+                    }
                 }
+                .padding(.bottom, sectionSpacing)
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.3), value: phaseKey)
+            } else {
+                // Hidden, not gone: the task below must survive so a later
+                // reload can bring the rail back.
+                Color.clear.frame(height: 0)
             }
-            .transition(.opacity)
-            .animation(.easeInOut(duration: 0.3), value: phaseKey)
-            .task {
-                await loader.load(fetch)
+        }
+        .task(id: reloadKey) {
+            await loader.load(fetch)
+        }
+        .onChange(of: phaseKey) { _, phase in
+            if phase == "loaded", !isVisible {
+                withAnimation(.easeInOut(duration: 0.25)) { isVisible = true }
             }
         }
     }
@@ -156,7 +175,7 @@ extension ContentRail where Header == SectionHeader {
     ///     title: "Up Next",
     ///     skeleton: { SkeletonCard.landscape(width: 240) }
     /// ) {
-    ///     try await provider.nextUp()
+    ///     try await catalog.repository.nextUp(scope: catalog.scope)
     /// } card: { item in
     ///     UpNextCard(item: item)
     /// }
@@ -166,6 +185,8 @@ extension ContentRail where Header == SectionHeader {
         skeletonCount: Int = 4,
         spacing: CGFloat = 12,
         cardWidth: ((MediaItem) -> CGFloat)? = nil,
+        reloadKey: AnyHashable = 0,
+        sectionSpacing: CGFloat = 0,
         @ViewBuilder skeleton: @escaping () -> Skeleton,
         fetch: @escaping @Sendable () async throws -> [MediaItem],
         @ViewBuilder card: @escaping (MediaItem) -> Card
@@ -175,6 +196,8 @@ extension ContentRail where Header == SectionHeader {
         self.skeletonCount = skeletonCount
         self.spacing = spacing
         self.cardWidth = cardWidth
+        self.reloadKey = reloadKey
+        self.sectionSpacing = sectionSpacing
         self.fetch = fetch
         self.card = card
     }
@@ -193,7 +216,7 @@ extension ContentRail {
     /// ContentRail(
     ///     skeletonCount: 6,
     ///     skeleton: { SkeletonCard.poster(width: 130) },
-    ///     fetch: { try await provider.items(in: library, ...) },
+    ///     fetch: { try await catalog.repository.latest(libraryId: library.id.rawValue, ...) },
     ///     card: { item in LibraryItemCard(item: item) },
     ///     header: {
     ///         NavigationLink(value: library) {
@@ -206,6 +229,8 @@ extension ContentRail {
         skeletonCount: Int = 4,
         spacing: CGFloat = 12,
         cardWidth: ((MediaItem) -> CGFloat)? = nil,
+        reloadKey: AnyHashable = 0,
+        sectionSpacing: CGFloat = 0,
         @ViewBuilder skeleton: @escaping () -> Skeleton,
         fetch: @escaping @Sendable () async throws -> [MediaItem],
         @ViewBuilder card: @escaping (MediaItem) -> Card,
@@ -216,6 +241,8 @@ extension ContentRail {
         self.skeletonCount = skeletonCount
         self.spacing = spacing
         self.cardWidth = cardWidth
+        self.reloadKey = reloadKey
+        self.sectionSpacing = sectionSpacing
         self.fetch = fetch
         self.card = card
     }

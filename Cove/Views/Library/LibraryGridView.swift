@@ -29,6 +29,8 @@ struct LibraryGridView: View {
     @State private var watchedFilter: WatchedFilter = .all
     @State private var selectedGenres: Set<String> = []
     @State private var availableGenres: [String] = []
+    /// The library's first sync has not finished: an empty page means "not yet".
+    @State private var isBootstrapping = false
     @State private var favoriteOnly: Bool = false
     @State private var selectedDecade: Decade? = nil
     @State private var minRating: Double? = nil
@@ -121,6 +123,14 @@ struct LibraryGridView: View {
         }
         .task(id: library?.id) {
             await loadFirstPage()
+        }
+        .task(id: appState.catalogGeneration) {
+            // Rows landed under us. Fill an empty grid; a populated one keeps
+            // its scroll position and picks the rest up on the next open.
+            guard let library else { return }
+            isBootstrapping = await appState.isBootstrapping(library)
+            if loader.items.isEmpty, !isActivelySearching { await loadFirstPage() }
+            if availableGenres.isEmpty, isVideoLibrary { await loadGenres(for: library) }
         }
         .task(id: library?.id) {
             availableGenres = []
@@ -232,8 +242,14 @@ struct LibraryGridView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .empty:
-                emptyStateView
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if isBootstrapping, !hasActiveFilters {
+                    // Not empty — not synced yet. Say so.
+                    loadingView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    emptyStateView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             case .loaded:
                 scrollContent
             }
@@ -455,7 +471,7 @@ struct LibraryGridView: View {
         let rating = minRating
         let itemTypes = library.includeItemTypes
 
-        let fetch = await appState.pageFetcher(
+        let fetch = appState.pageFetcher(
             library: library, itemTypes: itemTypes, sort: sortOptions
         ) { limit, startIndex in
             FilterOptions(
@@ -473,19 +489,9 @@ struct LibraryGridView: View {
     }
 
     private func loadGenres(for library: MediaLibrary) async {
-        if let local = await appState.localCatalog(for: library),
-            let names = try? await local.repository.genres(
-                libraryId: library.id.rawValue, scope: local.scope)
-        {
-            availableGenres = names
-            return
-        }
-        do {
-            let items = try await authManager.provider.genres(in: library)
-            availableGenres = items.map(\.title)
-        } catch {
-            availableGenres = []
-        }
+        guard let catalog = appState.catalog else { return }
+        availableGenres = (try? await catalog.repository.genres(
+            libraryId: library.id.rawValue, scope: catalog.scope)) ?? []
     }
 
     /// While a library's first sync is still running, say so rather than showing a
@@ -503,22 +509,21 @@ struct LibraryGridView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+        } else if isBootstrapping, let name = library?.name {
+            ProgressView("Syncing \(name)…")
         } else {
             ProgressView("Loading…")
         }
     }
 
-    /// One page of in-library search: the FTS index when the catalogue can answer,
-    /// the server otherwise. Same filters either way.
+    /// One page of in-library search from the FTS index, same filters as the grid.
     private func searchPage(library: MediaLibrary, sort: SortOptions, filter: FilterOptions)
         async throws -> PagedResult<MediaItem>
     {
-        if let local = await appState.localCatalog(for: library) {
-            return try await local.repository.pagedItems(
-                libraryId: library.id.rawValue, itemTypes: library.includeItemTypes,
-                sort: sort, filter: filter, scope: local.scope)
-        }
-        return try await authManager.provider.pagedItems(in: library, sort: sort, filter: filter)
+        guard let catalog = appState.catalog else { return PagedResult(items: [], startIndex: 0, totalCount: 0) }
+        return try await catalog.repository.pagedItems(
+            libraryId: library.id.rawValue, itemTypes: library.includeItemTypes,
+            sort: sort, filter: filter, scope: catalog.scope)
     }
 
     // MARK: - Search Filter

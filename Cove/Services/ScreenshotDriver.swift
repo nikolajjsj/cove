@@ -69,23 +69,9 @@ enum ScreenshotDriver {
         // external open shows a system "Open in Cove?" alert, which lands in
         // the middle of the screenshot.
         if let rawId = defaults.string(forKey: "screenshotItem") {
-            // The catalogue first, exactly as a tap on a grid cell would: that is
-            // what makes an offline launch reach a detail screen at all.
-            var item: MediaItem?
-            if let repository = appState.catalogRepository,
-                let connection = authManager.activeConnection
-            {
-                // Derive the scope from the connection rather than waiting on the
-                // engine to publish one; right after restore the latter may not
-                // exist yet, and the item does.
-                let scope = CatalogRepository.Scope(
-                    serverId: connection.id.uuidString, userId: connection.userId)
-                item = try? await repository.item(id: rawId, scope: scope)
-            }
-            if item == nil {
-                item = try? await authManager.provider.item(id: ItemID(rawId))
-            }
-            if let item {
+            // Exactly what a tap on a grid cell does: the catalogue, and only
+            // online a detail fetch through the engine.
+            if let item = await appState.item(id: ItemID(rawId)) {
                 appState.selectedTab = .home
                 appState.navigationPaths[.home, default: NavigationPath()].append(item)
             } else {

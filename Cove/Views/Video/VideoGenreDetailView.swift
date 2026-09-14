@@ -90,7 +90,7 @@ struct VideoGenreDetailView: View {
 
         let itemTypes = genreItemTypes
         let genre = genreName
-        let fetch = await appState.pageFetcher(
+        let fetch = appState.pageFetcher(
             library: library, itemTypes: itemTypes, sort: sortOptions
         ) { limit, startIndex in
             FilterOptions(

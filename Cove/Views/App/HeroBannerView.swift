@@ -8,6 +8,8 @@ private let heroBannerCornerRadius: CGFloat = 16
 // MARK: - Hero Banner Carousel
 
 struct HeroBannerView: View {
+    /// Space below the banner while it shows anything. See HomeView.
+    var sectionSpacing: CGFloat = 0
     @Environment(AuthManager.self) private var authManager
     @State private var items: [MediaItem] = []
     @State private var currentIndex = 0
@@ -27,6 +29,7 @@ struct HeroBannerView: View {
         Group {
             if isLoading {
                 BannerSkeletonView(height: bannerHeight, cornerRadius: heroBannerCornerRadius)
+                    .padding(.bottom, sectionSpacing)
             } else if !items.isEmpty {
                 BannerCarouselView(
                     items: items,
@@ -37,6 +40,7 @@ struct HeroBannerView: View {
                     resumeDelay: resumeDelay,
                     cornerRadius: heroBannerCornerRadius
                 )
+                .padding(.bottom, sectionSpacing)
             }
         }
         .task {

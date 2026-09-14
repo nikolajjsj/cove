@@ -4,6 +4,7 @@ import Defaults
 import ImageService
 import JellyfinProvider
 import Models
+import Persistence
 import SwiftUI
 
 /// Detail view for a collection (boxset) showing a hero header and a grid of the movies inside.
@@ -102,9 +103,11 @@ struct CollectionDetailView: View {
         .task {
             await appState.loadDetail(item, into: detailLoader)
         }
-        .task {
+        .task(id: appState.catalogGeneration) {
+            // Membership is synced into the catalogue; re-query when a pass lands.
+            guard let catalog = appState.catalog else { return }
             await loader.load {
-                try await authManager.provider.collectionItems(collectionId: item.id)
+                try await catalog.repository.collectionItems(collectionId: item.id.rawValue, scope: catalog.scope)
             }
         }
     }

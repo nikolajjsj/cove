@@ -19,8 +19,9 @@ final class AppState {
 
     var libraries: [MediaLibrary] = []
 
-    /// `true` when the last `loadLibraries()` call failed due to a network or server error.
-    /// Used by the home view to distinguish "server has no libraries" from "couldn't connect."
+    /// `true` when the server could not be asked for its library list and nothing
+    /// is saved locally either — a first launch with no connection. Once a list is
+    /// saved this never flips again; the saved list is the library.
     var libraryLoadFailed = false
 
     /// `true` while a manual retry of `loadLibraries()` is in progress.
@@ -34,8 +35,8 @@ final class AppState {
 
     // MARK: - Local catalogue
 
-    /// Set by `CoveApp` when the database opened. Nil means no local catalogue:
-    /// views fall back to the provider.
+    /// Set by `CoveApp` when the database opened. Every view reads from here and
+    /// nowhere else; without a database the app shows its database error.
     var catalogRepository: CatalogRepository?
     /// Who the catalogue rows belong to. Nil until signed in.
     var catalogScope: CatalogRepository.Scope?
@@ -44,6 +45,18 @@ final class AppState {
     /// Mirrors the engine's status on the main actor for views.
     var catalogSyncStatus: CatalogSyncStatus = .idle
     private var catalogStatusTask: Task<Void, Never>?
+
+    /// Bumped every time a sync pass finishes or a library's first sync lands.
+    /// Rails and grids re-query the catalogue on change, in place, so rows that
+    /// arrive underneath the user appear without recreating the screen.
+    var catalogGeneration = 0
+
+    /// The catalogue for the signed-in user. Nil only when signed out or when the
+    /// database failed to open.
+    struct LocalCatalog {
+        let repository: CatalogRepository
+        let scope: CatalogRepository.Scope
+    }
 
     /// The libraries the catalogue holds, in the engine's shape. Music is already
     /// gone from `libraries`; anything without a catalogue shape (playlists, home
@@ -106,6 +119,9 @@ final class AppState {
         // Start network monitoring
         networkMonitor.start()
         startNetworkObservation()
+
+        // The player resolves episodes through the catalogue, never the server.
+        videoPlayerCoordinator.itemResolver = { [weak self] id in await self?.item(id: id) }
     }
 
     // MARK: - Session Lifecycle
@@ -136,6 +152,14 @@ final class AppState {
         startCatalogSync()
     }
 
+    /// Everything the views read. One accessor, no conditions on sync progress:
+    /// a half-synced library is still better than a spinner, and the missing
+    /// rows arrive underneath the user as they browse.
+    var catalog: LocalCatalog? {
+        guard let repository = catalogRepository, let scope = catalogScope ?? currentCatalogScope else { return nil }
+        return LocalCatalog(repository: repository, scope: scope)
+    }
+
     /// Disconnect and tear down all state.
     func onDisconnect() async {
         catalogStatusTask?.cancel()
@@ -150,30 +174,15 @@ final class AppState {
 
     // MARK: - Library Loading
 
+    /// The saved library list. The sync engine is the only thing that talks to
+    /// the server about libraries; this just reads what it saved.
     func loadLibraries() async {
-        do {
-            let fetched = try await authManager.provider.libraries()
-            // Cove does not do music, and has no playlist screens. Dropping those
-            // libraries here removes them from every place the list is read.
-            libraries = fetched.filter { $0.collectionType != .music && $0.collectionType != .playlists }
-            libraryLoadFailed = false
-            // Persist only on success. An empty list on a 5xx is not "no libraries".
-            if let repository = catalogRepository, let scope = currentCatalogScope {
-                try? await repository.saveLibraries(libraries, scope: scope)
-            }
-        } catch {
-            // Offline or unreachable: the saved list is the library. Without this
-            // there is nothing to open even though every item is cached.
-            if let repository = catalogRepository, let scope = currentCatalogScope,
-                let saved = try? await repository.libraries(scope: scope), !saved.isEmpty
-            {
-                libraries = saved
-                libraryLoadFailed = false
-            } else {
-                libraries = []
-                libraryLoadFailed = true
-            }
+        guard let catalog else {
+            libraries = []
+            return
         }
+        libraries = (try? await catalog.repository.libraries(scope: catalog.scope)) ?? []
+        if !libraries.isEmpty { libraryLoadFailed = false }
     }
 
     /// The scope for the active connection, whether or not the engine exists yet.
@@ -182,59 +191,29 @@ final class AppState {
         return CatalogRepository.Scope(serverId: connection.id.uuidString, userId: connection.userId)
     }
 
-    /// The local catalogue, if it can answer for this library right now.
-    ///
-    /// Three conditions, all required: the flag is on, a signed-in scope exists,
-    /// and the library has finished bootstrapping *or* already holds rows — a
-    /// half-bootstrapped library is still better than a spinner, and the missing
-    /// rows arrive underneath the user as they browse.
-    func localCatalog(for library: MediaLibrary)
-        async -> (repository: CatalogRepository, scope: CatalogRepository.Scope)?
-    {
-        guard FeatureFlags.localCatalogEnabled,
-            let repository = catalogRepository,
-            let scope = catalogScope ?? currentCatalogScope,
-            CatalogSyncEngine.itemTypes(for: library.collectionType) != nil
-        else { return nil }
+    /// Whether a library's first sync has not finished yet — the grid says so
+    /// instead of "This library is empty".
+    func isBootstrapping(_ library: MediaLibrary) async -> Bool {
+        guard let catalog else { return false }
         let key = "catalog:\(library.id.rawValue)"
-        guard let state = try? await repository.syncState(scope: scope, key: key) else { return nil }
-        if state.bootstrapComplete { return (repository, scope) }
-        let count = (try? await repository.count(libraryId: library.id.rawValue, scope: scope)) ?? 0
-        return count > 0 ? (repository, scope) : nil
+        let state = try? await catalog.repository.syncState(scope: catalog.scope, key: key)
+        return state.map { !$0.bootstrapComplete } ?? false
     }
 
-    /// The local catalogue for scope-wide reads (Home, Search): available once any
-    /// library has rows.
-    func localCatalog() async -> (repository: CatalogRepository, scope: CatalogRepository.Scope)? {
-        guard FeatureFlags.localCatalogEnabled,
-            let repository = catalogRepository,
-            let scope = catalogScope ?? currentCatalogScope
-        else { return nil }
-        let count = (try? await repository.count(scope: scope)) ?? 0
-        return count > 0 ? (repository, scope) : nil
-    }
-
-    /// One page fetcher for every paged view: local catalogue when it can answer,
-    /// the provider otherwise. Views pass what varies — sort and filter — and
-    /// stop knowing which source answered.
+    /// One page fetcher for every paged view. Views pass what varies — sort and
+    /// filter — and never see a source.
     func pageFetcher(
         library: MediaLibrary,
         itemTypes: [String]?,
         sort: SortOptions,
         filter: @escaping @Sendable (_ limit: Int, _ startIndex: Int) -> FilterOptions
-    ) async -> PagedCollectionLoader<MediaItem>.PageFetcher {
-        let provider = authManager.provider
-        if let local = await localCatalog(for: library) {
-            let libraryId = library.id.rawValue
-            return { limit, startIndex in
-                let result = try await local.repository.pagedItems(
-                    libraryId: libraryId, itemTypes: itemTypes, sort: sort,
-                    filter: filter(limit, startIndex), scope: local.scope)
-                return .init(items: result.items, totalCount: result.totalCount)
-            }
-        }
+    ) -> PagedCollectionLoader<MediaItem>.PageFetcher {
+        guard let catalog else { return { _, _ in .init(items: [], totalCount: 0) } }
+        let libraryId = library.id.rawValue
         return { limit, startIndex in
-            let result = try await provider.pagedItems(in: library, sort: sort, filter: filter(limit, startIndex))
+            let result = try await catalog.repository.pagedItems(
+                libraryId: libraryId, itemTypes: itemTypes, sort: sort,
+                filter: filter(limit, startIndex), scope: catalog.scope)
             return .init(items: result.items, totalCount: result.totalCount)
         }
     }
@@ -261,17 +240,40 @@ final class AppState {
             catalogStatusTask = Task { [weak self] in
                 for await status in await engine.statusStream {
                     guard let self, !Task.isCancelled else { return }
+                    let wasBusy = self.catalogSyncStatus.isBusy
+                    let libraryFinished: Bool
+                    if case .bootstrapping(let name, let done, let total) = status, total > 0, done >= total,
+                        case .bootstrapping(let previousName, _, _) = self.catalogSyncStatus, previousName == name
+                    {
+                        libraryFinished = true
+                    } else {
+                        libraryFinished = false
+                    }
                     self.catalogSyncStatus = status
+                    // A pass ended, or one library's first sync landed: the rows
+                    // changed under whatever is on screen.
+                    if (wasBusy && !status.isBusy) || libraryFinished {
+                        self.catalogGeneration += 1
+                    }
                 }
             }
         }
-        let libraries = catalogLibraries
         guard let engine = catalogSync else { return }
         Task {
             // Outbox first, always: a sweep must never pull the server's stale
             // value over something the user just changed.
             await flushOutbox()
-            await engine.syncIfNeeded(libraries: libraries)
+            // The library list is the first thing synced; the saved one stands
+            // when the server is unreachable.
+            do {
+                _ = try await engine.refreshLibraries()
+            } catch {
+                if libraries.isEmpty { libraryLoadFailed = true }
+            }
+            let before = libraries
+            await loadLibraries()
+            if libraries != before { catalogGeneration += 1 }
+            await engine.syncIfNeeded(libraries: catalogLibraries)
             await evictDetailCache()
         }
     }
@@ -292,27 +294,47 @@ final class AppState {
         return (try? await outbox.pendingCount(scope: scope)) ?? 0
     }
 
-    /// Load an item's detail: cached first, so the view fills instantly and works
-    /// offline; then the server, which refreshes the cache. User data always
-    /// comes from the catalogue's user-data table, the outbox-protected truth,
-    /// never from whatever the detail JSON happened to capture.
+    /// Load an item's detail: the cached copy first, so the view fills instantly
+    /// and works offline; the server only when there is no copy or the sync
+    /// engine has seen the item change since (`cachedDetail.isStale`). User data
+    /// always comes from the catalogue's user-data table, the outbox-protected
+    /// truth, never from whatever the detail JSON happened to capture.
     func loadDetail(_ item: MediaItem, into loader: DetailItemLoader) async {
-        let provider = authManager.provider
-        let local = await localCatalog()
-        if let local, let cached = try? await local.repository.detail(id: item.id.rawValue, scope: local.scope) {
-            loader.apply(cached)
+        guard let catalog, let engine = catalogSync else { return }
+        let cached = try? await catalog.repository.cachedDetail(id: item.id.rawValue, scope: catalog.scope)
+        if let cached { loader.apply(cached.item) }
+        guard cached?.isStale ?? true, !isOffline else { return }
+        await loader.load { try await engine.fetchDetail(itemId: item.id.rawValue) }
+    }
+
+    /// Resolve an item by id for deep links, the player and downloads: the cached
+    /// detail, else the catalogue row, else — online only — a detail fetch.
+    func item(id: ItemID) async -> MediaItem? {
+        guard let catalog else { return nil }
+        if let detail = try? await catalog.repository.detail(id: id.rawValue, scope: catalog.scope) {
+            return detail
         }
-        guard !isOffline else { return }
-        await loader.load {
-            var fresh = try await provider.item(id: item.id)
-            if let local {
-                try? await local.repository.saveDetail(fresh, scope: local.scope)
-                if let ud = try? await local.repository.userData(itemId: item.id.rawValue, scope: local.scope) {
-                    fresh.userData = ud
-                }
-            }
+        if let row = try? await catalog.repository.item(id: id.rawValue, scope: catalog.scope) {
+            return row
+        }
+        guard !isOffline, let engine = catalogSync else { return nil }
+        return try? await engine.fetchDetail(itemId: id.rawValue)
+    }
+
+    /// The full item for a download, pinned so eviction never strips a downloaded
+    /// file of its metadata. Falls back to the catalogue row offline.
+    func pinnedDetail(id: ItemID) async -> MediaItem? {
+        guard let catalog else { return nil }
+        if !isOffline, let engine = catalogSync,
+            let fresh = try? await engine.fetchDetail(itemId: id.rawValue, pinned: true)
+        {
             return fresh
         }
+        if let detail = try? await catalog.repository.detail(id: id.rawValue, scope: catalog.scope) {
+            try? await catalog.repository.setPinned(true, itemIds: [id.rawValue], scope: catalog.scope)
+            return detail
+        }
+        return try? await catalog.repository.item(id: id.rawValue, scope: catalog.scope)
     }
 
     /// Keep the detail cache under its soft cap. Pinned rows and anything with a
@@ -342,16 +364,11 @@ final class AppState {
         scheduleBackgroundRefresh()
     }
 
-    /// The episode auto-play should queue after `item`. Local ordering first, so
-    /// a downloaded season plays through offline; the server when the catalogue
-    /// cannot answer.
+    /// The episode auto-play should queue after `item`, from the catalogue's
+    /// ordering — so a downloaded season plays through offline.
     func nextEpisode(after item: MediaItem) async -> MediaItem? {
-        if let local = await localCatalog(),
-            let next = try? await local.repository.nextEpisode(after: item.id.rawValue, scope: local.scope)
-        {
-            return next
-        }
-        return try? await authManager.provider.nextEpisodeAfter(item: item)
+        guard let catalog else { return nil }
+        return try? await catalog.repository.nextEpisode(after: item.id.rawValue, scope: catalog.scope)
     }
 
     /// Foreground: pick up whatever changed while the app was away.
@@ -366,9 +383,17 @@ final class AppState {
         await engine.reconcileAll(libraries: catalogLibraries)
     }
 
-    /// Retry loading libraries with visual feedback for the UI.
+    /// Retry the library sync with visual feedback for the UI.
     func retryLoadLibraries() async {
         isRetryingLibraries = true
+        if let engine = catalogSync {
+            do {
+                _ = try await engine.refreshLibraries()
+                libraryLoadFailed = false
+            } catch {
+                if libraries.isEmpty { libraryLoadFailed = true }
+            }
+        }
         await loadLibraries()
         isRetryingLibraries = false
     }
@@ -386,9 +411,9 @@ final class AppState {
                     await self.flushOutbox()
                     await self.downloadCoordinator.syncOfflineReports()
 
-                    // Automatically retry loading libraries if the previous attempt failed
+                    // A first launch that never reached the server: try the sync now.
                     if self.libraryLoadFailed {
-                        await self.loadLibraries()
+                        self.startCatalogSync()
                     }
                 }
             }

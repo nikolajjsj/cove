@@ -93,17 +93,10 @@ struct VideoGenreListView: View {
             return
         }
 
-        let provider = authManager.provider
-        if let local = await appState.localCatalog(for: library) {
-            await loader.load {
-                try await local.repository.genres(libraryId: library.id.rawValue, scope: local.scope)
-                    .map { MediaItem(id: ItemID($0), title: $0, mediaType: .genre) }
-            }
-            return
-        }
-
+        guard let catalog = appState.catalog else { return }
         await loader.load {
-            try await provider.genres(in: library)
+            try await catalog.repository.genres(libraryId: library.id.rawValue, scope: catalog.scope)
+                .map { MediaItem(id: ItemID($0), title: $0, mediaType: .genre) }
         }
     }
 }

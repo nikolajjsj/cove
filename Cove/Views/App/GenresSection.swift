@@ -16,30 +16,41 @@ struct GenresSection: View {
     @State private var isVisible = true
 
     var body: some View {
-        if isVisible {
-            Group {
-                switch loader.phase {
-                case .loading:
-                    GenresSectionShell(isLoaded: false) {
-                        GenresSectionSkeleton()
-                    }
-
-                case .loaded(let items):
-                    GenresSectionShell(isLoaded: true) {
-                        GenreCardRail(genres: items, libraryId: videoLibrary?.id)
-                    }
-
-                case .empty, .failed:
-                    Color.clear
-                        .frame(height: 0)
-                        .onAppear {
-                            withAnimation(.easeInOut(duration: 0.25)) { isVisible = false }
+        Group {
+            if isVisible {
+                Group {
+                    switch loader.phase {
+                    case .loading:
+                        GenresSectionShell(isLoaded: false) {
+                            GenresSectionSkeleton()
                         }
+
+                    case .loaded(let items):
+                        GenresSectionShell(isLoaded: true) {
+                            GenreCardRail(genres: items, libraryId: videoLibrary?.id)
+                        }
+
+                    case .empty, .failed:
+                        Color.clear
+                            .frame(height: 0)
+                            .onAppear {
+                                withAnimation(.easeInOut(duration: 0.25)) { isVisible = false }
+                            }
+                    }
                 }
+                .padding(.bottom, HomeView.sectionSpacing)
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.3), value: phaseKey)
+            } else {
+                // Stays mounted so the reload below can bring it back.
+                Color.clear.frame(height: 0)
             }
-            .transition(.opacity)
-            .animation(.easeInOut(duration: 0.3), value: phaseKey)
-            .task { await loadGenres() }
+        }
+        .task(id: appState.catalogGeneration) { await loadGenres() }
+        .onChange(of: phaseKey) { _, phase in
+            if phase == "loaded", !isVisible {
+                withAnimation(.easeInOut(duration: 0.25)) { isVisible = true }
+            }
         }
     }
 
@@ -54,15 +65,11 @@ struct GenresSection: View {
             withAnimation(.easeInOut(duration: 0.25)) { isVisible = false }
             return
         }
-        let provider = authManager.provider
-        if let local = await appState.localCatalog(for: library) {
-            await loader.load {
-                try await local.repository.genres(libraryId: library.id.rawValue, scope: local.scope)
-                    .map { MediaItem(id: ItemID($0), title: $0, mediaType: .genre) }
-            }
-            return
+        guard let catalog = appState.catalog else { return }
+        await loader.load {
+            try await catalog.repository.genres(libraryId: library.id.rawValue, scope: catalog.scope)
+                .map { MediaItem(id: ItemID($0), title: $0, mediaType: .genre) }
         }
-        await loader.load { try await provider.genres(in: library) }
     }
 
     private var phaseKey: String {

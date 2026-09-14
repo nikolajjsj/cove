@@ -339,15 +339,8 @@ struct SeriesDetailView: View {
         do {
             // The catalogue holds Season rows for every synced TV library, so
             // this works offline and does not change when the connection does.
-            let loadedSeasons: [Season]
-            if let local = await appState.localCatalog(),
-                let fromCatalog = try? await local.repository.seasons(seriesId: item.id.rawValue, scope: local.scope),
-                !fromCatalog.isEmpty
-            {
-                loadedSeasons = fromCatalog
-            } else {
-                loadedSeasons = try await authManager.provider.seasons(series: item.id)
-            }
+            guard let catalog = appState.catalog else { return }
+            let loadedSeasons = try await catalog.repository.seasons(seriesId: item.id.rawValue, scope: catalog.scope)
             seasons = loadedSeasons.sorted { $0.seasonNumber < $1.seasonNumber }
             if showsOnlyDownloaded {
                 // Only seasons with something on this device.
@@ -392,15 +385,8 @@ struct SeriesDetailView: View {
         isLoadingEpisodes = true
         episodesError = nil
         do {
-            let loaded: [Episode]
-            if let local = await appState.localCatalog(),
-                let fromCatalog = try? await local.repository.episodes(seasonId: season.id.rawValue, scope: local.scope),
-                !fromCatalog.isEmpty
-            {
-                loaded = fromCatalog
-            } else {
-                loaded = try await authManager.provider.episodes(season: season.id)
-            }
+            guard let catalog = appState.catalog else { return }
+            let loaded = try await catalog.repository.episodes(seasonId: season.id.rawValue, scope: catalog.scope)
             var sorted = loaded.sorted { ($0.episodeNumber ?? 0) < ($1.episodeNumber ?? 0) }
             if showsOnlyDownloaded {
                 let downloaded = Set(offlineEpisodeDownloads.map(\.itemId))
@@ -715,7 +701,8 @@ extension SeriesDetailView {
         defer { downloadingSeasons.remove(season.id) }
 
         do {
-            let eps = try await authManager.provider.episodes(season: season.id)
+            guard let catalog = appState.catalog else { return }
+            let eps = try await catalog.repository.episodes(seasonId: season.id.rawValue, scope: catalog.scope)
             try await downloadCoordinator.downloadSeason(
                 series: item,
                 season: season,
@@ -756,11 +743,8 @@ extension SeriesDetailView {
         do {
             // Through the outbox: local catalogue updated now, the server told
             // once (its endpoint is recursive) — offline or not.
-            if let store = appState.userDataStore {
-                try await store.setPlayedRecursively(containerId: item.id, isPlayed: isPlayed)
-            } else {
-                try await authManager.provider.setPlayed(itemId: item.id, isPlayed: isPlayed)
-            }
+            guard let store = appState.userDataStore else { return }
+            try await store.setPlayedRecursively(containerId: item.id, isPlayed: isPlayed)
             for episode in episodes {
                 appState.userDataStore?.invalidate(episode.id)
             }
@@ -807,22 +791,15 @@ extension SeriesDetailView {
         guard !previousSeasons.isEmpty || !earlierInSeason.isEmpty else { return }
 
         do {
+            guard let store = appState.userDataStore else { return }
             // One recursive write per prior season, each through the outbox.
             for season in previousSeasons {
-                if let store = appState.userDataStore {
-                    try await store.setPlayedRecursively(containerId: season.id, isPlayed: true)
-                } else {
-                    try await authManager.provider.setPlayed(itemId: season.id, isPlayed: true)
-                }
+                try await store.setPlayedRecursively(containerId: season.id, isPlayed: true)
             }
 
             // Earlier episodes in the current season, individually.
             for ep in earlierInSeason {
-                if let store = appState.userDataStore {
-                    try await store.markPlayed(itemId: ep.id, current: ep.userData)
-                } else {
-                    try await authManager.provider.setPlayed(itemId: ep.id, isPlayed: true)
-                }
+                try await store.markPlayed(itemId: ep.id, current: ep.userData)
             }
 
             // Reload the current season so watched indicators update immediately.

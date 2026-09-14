@@ -201,32 +201,20 @@ private struct SearchContentView: View {
                 case .unwatched: return false
                 }
             }()
-            let fetched: SearchResults
-            if let local = await appState.localCatalog() {
-                // Instant and offline. Diverges from the server's fuzzy matching
-                // by design — see the spec's open decisions.
-                let items = try await local.repository.search(
-                    term: trimmedQuery,
-                    filter: FilterOptions(
-                        years: selectedDecade?.years,
-                        isFavorite: favoriteOnly ? true : nil,
-                        isPlayed: isPlayed,
-                        limit: 60, startIndex: 0,
-                        minCommunityRating: minRating),
-                    scope: local.scope)
-                fetched = SearchResults(items: items)
-            } else {
-                // Always fetch all types; scope filtering is client-side.
-                fetched = try await authManager.provider.filteredSearch(
-                    query: trimmedQuery,
+            // The FTS index: instant and offline. Diverges from the server's
+            // fuzzy matching by design — see the spec's open decisions.
+            guard let catalog = appState.catalog else { return }
+            let items = try await catalog.repository.search(
+                term: trimmedQuery,
+                filter: FilterOptions(
+                    years: selectedDecade?.years,
                     isFavorite: favoriteOnly ? true : nil,
                     isPlayed: isPlayed,
-                    years: selectedDecade?.years,
-                    minCommunityRating: minRating
-                )
-            }
-            // The server's search returns every type it knows; keep the ones the
-            // app has screens for.
+                    limit: 60, startIndex: 0,
+                    minCommunityRating: minRating),
+                scope: catalog.scope)
+            let fetched = SearchResults(items: items)
+            // Keep the types the app has screens for.
             let visible = SearchResults(
                 items: fetched.items.filter { Self.visibleTypes.contains($0.mediaType) })
             results = visible

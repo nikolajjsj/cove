@@ -19,9 +19,7 @@ import Observation
 /// }
 ///
 /// // In .task:
-/// await detailLoader.load {
-///     try await appState.provider.item(id: item.id)
-/// }
+/// await appState.loadDetail(item, into: detailLoader)
 /// ```
 @MainActor
 @Observable
