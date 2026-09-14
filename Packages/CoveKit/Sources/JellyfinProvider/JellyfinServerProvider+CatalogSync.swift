@@ -63,6 +63,86 @@ extension JellyfinServerProvider: CatalogSyncSource {
         return out
     }
 
+    // MARK: - User-data sweeps
+
+    public func resumeUserData() async throws -> [CatalogUserDataRow] {
+        let (client, userId) = try authenticatedClient()
+        let result = try await client.getResumeItems(userId: userId, mediaTypes: ["Video"], limit: 100)
+        return Self.userDataRows(result.items ?? [])
+    }
+
+    public func favoriteIds() async throws -> Set<String> {
+        var ids = Set<String>()
+        var index = 0
+        var total = 0
+        repeat {
+            let (result, _) = try await catalogClient().getCatalogItems(
+                userId: try authenticatedClient().1,
+                queryItems: [
+                    URLQueryItem(name: "Recursive", value: "true"),
+                    URLQueryItem(name: "IsFavorite", value: "true"),
+                    URLQueryItem(name: "Fields", value: ""),
+                    URLQueryItem(name: "EnableImages", value: "false"),
+                    URLQueryItem(name: "EnableUserData", value: "false"),
+                    URLQueryItem(name: "StartIndex", value: String(index)),
+                    URLQueryItem(name: "Limit", value: "500"),
+                    URLQueryItem(name: "EnableTotalRecordCount", value: "true"),
+                ])
+            let page = (result.items ?? []).compactMap(\.id)
+            ids.formUnion(page)
+            total = result.totalRecordCount ?? 0
+            index += page.count
+            if page.isEmpty { break }
+        } while index < total
+        return ids
+    }
+
+    public func recentlyPlayedUserData(limit: Int) async throws -> [CatalogUserDataRow] {
+        let (client, userId) = try authenticatedClient()
+        let (result, _) = try await client.getCatalogItems(
+            userId: userId,
+            queryItems: [
+                URLQueryItem(name: "Recursive", value: "true"),
+                URLQueryItem(name: "IsPlayed", value: "true"),
+                URLQueryItem(name: "SortBy", value: "DatePlayed"),
+                URLQueryItem(name: "SortOrder", value: "Descending"),
+                URLQueryItem(name: "Fields", value: ""),
+                URLQueryItem(name: "EnableImages", value: "false"),
+                URLQueryItem(name: "Limit", value: String(limit)),
+            ])
+        return Self.userDataRows(result.items ?? [])
+    }
+
+    public func userDataPage(
+        libraryId: String, itemTypes: [String], startIndex: Int, limit: Int
+    ) async throws -> (rows: [CatalogUserDataRow], totalCount: Int) {
+        let (client, userId) = try authenticatedClient()
+        let (result, _) = try await client.getCatalogItems(
+            userId: userId,
+            queryItems: [
+                URLQueryItem(name: "ParentId", value: libraryId),
+                URLQueryItem(name: "Recursive", value: "true"),
+                URLQueryItem(name: "IncludeItemTypes", value: itemTypes.joined(separator: ",")),
+                URLQueryItem(name: "Fields", value: ""),
+                URLQueryItem(name: "EnableImages", value: "false"),
+                URLQueryItem(name: "SortBy", value: "DateCreated"),
+                URLQueryItem(name: "SortOrder", value: "Ascending"),
+                URLQueryItem(name: "StartIndex", value: String(startIndex)),
+                URLQueryItem(name: "Limit", value: String(limit)),
+                URLQueryItem(name: "EnableTotalRecordCount", value: "true"),
+            ])
+        return (Self.userDataRows(result.items ?? []), result.totalRecordCount ?? 0)
+    }
+
+    private func catalogClient() throws -> JellyfinAPIClient { try authenticatedClient().0 }
+
+    private static func userDataRows(_ dtos: [BaseItemDto]) -> [CatalogUserDataRow] {
+        dtos.compactMap { dto in
+            guard let id = dto.id, let ud = dto.userData else { return nil }
+            return CatalogUserDataRow(itemId: id, userData: JellyfinMapper.mapUserData(ud))
+        }
+    }
+
     private func fetchPage(
         libraryId: String, itemTypes: [String], startIndex: Int, limit: Int, extra: [URLQueryItem]
     ) async throws -> CatalogPage {

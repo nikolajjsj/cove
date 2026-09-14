@@ -356,6 +356,21 @@ public final class DatabaseManager: Sendable {
             }
         }
 
+        migrator.registerMigration("005_catalog_libraries") { db in
+            // The library list itself. Without it, an unreachable server leaves the
+            // app with nothing to open even though every item is cached locally.
+            try db.create(table: "catalog_libraries") { t in
+                t.column("serverId", .text).notNull()
+                    .references("servers", onDelete: .cascade)
+                t.column("userId", .text).notNull()
+                t.column("libraryId", .text).notNull()
+                t.column("name", .text).notNull()
+                t.column("collectionType", .text)
+                t.column("sortIndex", .integer).notNull().defaults(to: 0)
+                t.primaryKey(["serverId", "userId", "libraryId"])
+            }
+        }
+
         try migrator.migrate(dbWriter)
         logger.info("Database migrations complete")
     }

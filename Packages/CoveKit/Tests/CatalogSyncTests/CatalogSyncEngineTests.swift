@@ -151,6 +151,86 @@ final class CatalogSyncEngineTests: XCTestCase {
         XCTAssertEqual(out.phantoms, ["d"])
     }
 
+    // MARK: User-data sweeps
+
+    func testResumeSweepUpsertsPositionsAndRefetchesItemsThatLeftTheSet() async throws {
+        // Saved well before the cursor, so the delta's overlap window never
+        // re-delivers them: the sweep has to be the thing that does the work.
+        let saved = source.serverClock.addingTimeInterval(-3600)
+        for n in 1...3 { source.add(Fixture.movie(n), savedAt: saved) }
+        await engine.syncIfNeeded(libraries: [library])
+
+        // Locally m1 is in progress. On the server it has since been finished
+        // (played, position 0) and m2 has been started.
+        try await repo.upsertUserData([("m1", UserData(playbackPosition: 600))], scope: scope)
+        source.setUserData("m1", UserData(playbackPosition: 0, isPlayed: true))
+        source.resumeSet = [CatalogUserDataRow(itemId: "m2", userData: UserData(playbackPosition: 1200))]
+        // Move the server clock past the delta overlap. A user-data write does not
+        // bump DateLastSaved on a real server, so the catalogue delta must return
+        // nothing here and the resume sweep has to do the work itself.
+        source.serverClock = source.serverClock.addingTimeInterval(3600)
+
+        await engine.syncIfNeeded(libraries: [library])
+
+        let m1 = try await repo.item(id: "m1", scope: scope)?.userData
+        let m2 = try await repo.item(id: "m2", scope: scope)?.userData
+        XCTAssertEqual(m1?.isPlayed, true, "left the resume set → refetched → finished")
+        XCTAssertEqual(m1?.playbackPosition, 0)
+        XCTAssertEqual(m2?.playbackPosition, 1200)
+        XCTAssertTrue(source.entryRequests.contains(["m1"]), "exactly the item that left was refetched")
+    }
+
+    func testFavouritesSweepSetsAndClears() async throws {
+        for n in 1...3 { source.add(Fixture.movie(n, favorite: n == 1)) }
+        await engine.syncIfNeeded(libraries: [library])   // m1 favourite locally
+
+        source.favorites = ["m2"]                           // elsewhere: unfav m1, fav m2
+        await engine.syncIfNeeded(libraries: [library])
+
+        let favs = try await repo.favoriteIds(scope: scope)
+        XCTAssertEqual(favs, ["m2"])
+    }
+
+    func testFavouritesSweepDoesNotClearAPendingLocalFavourite() async throws {
+        for n in 1...2 { source.add(Fixture.movie(n)) }
+        await engine.syncIfNeeded(libraries: [library])
+        // User favourited m1 offline: local true + outbox row. Server still says no.
+        try await db.dbWriter.write { d in
+            try d.execute(sql: "UPDATE catalog_user_data SET isFavorite = 1 WHERE itemId = 'm1'")
+            try d.execute(sql: """
+                INSERT INTO user_data_outbox (id, serverId, userId, itemId, field, value, occurredAt, attempts)
+                VALUES ('o1','srv','usr','m1','favorite','true', CURRENT_TIMESTAMP, 0)
+                """)
+        }
+        source.favorites = []
+        await engine.syncIfNeeded(libraries: [library])
+        let favs = try await repo.favoriteIds(scope: scope)
+        XCTAssertEqual(favs, ["m1"], "pending write is the truth until acknowledged")
+    }
+
+    func testRecentlyPlayedSweepMarksWatched() async throws {
+        for n in 1...2 { source.add(Fixture.movie(n)) }
+        await engine.syncIfNeeded(libraries: [library])
+        source.recentlyPlayed = [CatalogUserDataRow(itemId: "m2", userData: UserData(playCount: 1, isPlayed: true, lastPlayedDate: Date()))]
+        await engine.syncIfNeeded(libraries: [library])
+        let m2 = try await repo.item(id: "m2", scope: scope)?.userData
+        XCTAssertEqual(m2?.isPlayed, true)
+    }
+
+    func testFullSweepCatchesAnUnwatchNobodyElseReports() async throws {
+        let saved = source.serverClock.addingTimeInterval(-3600)
+        for n in 1...2 { source.add(Fixture.movie(n, played: true), savedAt: saved) }
+        await engine.syncIfNeeded(libraries: [library])
+        source.setUserData("m1", UserData(isPlayed: false))     // un-watched elsewhere; no hot sweep sees it
+        source.serverClock = source.serverClock.addingTimeInterval(3600)   // past the delta overlap
+        await engine.syncIfNeeded(libraries: [library])
+        var m1 = try await repo.item(id: "m1", scope: scope)?.userData
+        XCTAssertEqual(m1?.isPlayed, true, "hot sweeps cannot see an un-watch")
+        await engine.reconcileAll(libraries: [library])          // daily path
+        m1 = try await repo.item(id: "m1", scope: scope)?.userData
+        XCTAssertEqual(m1?.isPlayed, false, "full sweep does")
+    }
+
     // MARK: Error classes
 
     func testErrorClassification() {

@@ -2,6 +2,7 @@ import Defaults
 import JellyfinProvider
 import MediaServerKit
 import Models
+import Persistence
 import PlaybackEngine
 import SwiftUI
 
@@ -106,14 +107,22 @@ struct HomeView: View {
 
 private struct ContinueWatchingSection: View {
     @Environment(AuthManager.self) private var authManager
+    @Environment(AppState.self) private var appState
 
     var body: some View {
+        let provider = authManager.provider
+        let appState = appState
         ContentRail(
             title: "Continue Watching",
             cardWidth: { _ in 240 },
             skeleton: { SkeletonCard.landscape(width: 240) }
         ) {
-            try await authManager.provider.resumeItems()
+            // Derived locally whenever the catalogue can answer, so Home keeps
+            // its shape when the connection changes.
+            if let local = await appState.localCatalog() {
+                return try await local.repository.resumeItems(scope: local.scope)
+            }
+            return try await provider.resumeItems()
         } card: { item in
             MediaCard(item: item, style: .landscape)
         }
@@ -124,14 +133,20 @@ private struct ContinueWatchingSection: View {
 
 private struct UpNextSection: View {
     @Environment(AuthManager.self) private var authManager
+    @Environment(AppState.self) private var appState
 
     var body: some View {
+        let provider = authManager.provider
+        let appState = appState
         ContentRail(
             title: "Up Next",
             cardWidth: { _ in 240 },
             skeleton: { SkeletonCard.landscape(width: 240) }
         ) {
-            try await authManager.provider.nextUp()
+            if let local = await appState.localCatalog() {
+                return try await local.repository.nextUp(scope: local.scope)
+            }
+            return try await provider.nextUp()
         } card: { item in
             MediaCard(item: item, style: .landscape)
         }
@@ -143,8 +158,12 @@ private struct UpNextSection: View {
 private struct LibrarySection: View {
     let library: MediaLibrary
     @Environment(AuthManager.self) private var authManager
+    @Environment(AppState.self) private var appState
 
     var body: some View {
+        let provider = authManager.provider
+        let appState = appState
+        let library = library
         ContentRail(
             skeletonCount: 6,
             cardWidth: cardWidth,
@@ -156,12 +175,17 @@ private struct LibrarySection: View {
                 )
             },
             fetch: {
+                if let local = await appState.localCatalog(for: library) {
+                    return try await local.repository.latest(
+                        libraryId: library.id.rawValue, itemTypes: library.includeItemTypes,
+                        scope: local.scope)
+                }
                 let sort = SortOptions(field: .dateAdded, order: .descending)
                 let filter = FilterOptions(
                     limit: 20,
                     includeItemTypes: library.includeItemTypes
                 )
-                return try await authManager.provider.items(
+                return try await provider.items(
                     in: library, sort: sort, filter: filter
                 )
             },

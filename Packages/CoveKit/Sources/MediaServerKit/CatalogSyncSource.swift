@@ -26,4 +26,21 @@ public protocol CatalogSyncSource: Sendable {
 
     /// Full catalogue-tier entries for specific ids — reconcile's backfill.
     func catalogEntries(ids: [String], libraryId: String) async throws -> [CatalogEntry]
+
+    // MARK: User-data sweeps
+    //
+    // There is no user-data delta on Jellyfin 12 — `minDateLastSavedForUser` does not
+    // track user-data writes — so user data is pulled as the sets the server already
+    // indexes. Each of these was verified to reflect a write immediately.
+
+    /// Everything in progress for this user, with positions.
+    func resumeUserData() async throws -> [CatalogUserDataRow]
+    /// Ids of every favourite.
+    func favoriteIds() async throws -> Set<String>
+    /// The most recently played items, newest first.
+    func recentlyPlayedUserData(limit: Int) async throws -> [CatalogUserDataRow]
+    /// One page of user data for a whole library — the daily full sweep.
+    func userDataPage(
+        libraryId: String, itemTypes: [String], startIndex: Int, limit: Int
+    ) async throws -> (rows: [CatalogUserDataRow], totalCount: Int)
 }

@@ -28,10 +28,10 @@ enum ScreenshotDriver {
 
     static func runIfRequested(authManager: AuthManager, appState: AppState) async {
         let defaults = UserDefaults.standard
-        guard let server = defaults.string(forKey: "screenshotServer"),
-            let url = URL(string: server),
-            let username = defaults.string(forKey: "screenshotUser")
-        else { return }
+        let wantsTab = defaults.string(forKey: "screenshotTab") != nil
+        let wantsItem = defaults.string(forKey: "screenshotItem") != nil
+        let server = defaults.string(forKey: "screenshotServer")
+        guard server != nil || wantsTab || wantsItem else { return }
 
         // Session restore runs concurrently at launch. Deciding before it finishes
         // would sign in a second time and, before connection ids were reused, mint
@@ -40,7 +40,12 @@ enum ScreenshotDriver {
             try? await Task.sleep(for: .milliseconds(50))
         }
 
-        if !authManager.isAuthenticated {
+        // Tab / item selection alone is allowed without a server: it drives a
+        // restored session, which is how an offline launch is exercised.
+        if !authManager.isAuthenticated,
+            let server, let url = URL(string: server),
+            let username = defaults.string(forKey: "screenshotUser")
+        {
             do {
                 try await authManager.connect(
                     url: url,

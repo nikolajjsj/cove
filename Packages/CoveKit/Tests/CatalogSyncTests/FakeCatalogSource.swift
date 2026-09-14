@@ -23,6 +23,11 @@ final class FakeCatalogSource: CatalogSyncSource, @unchecked Sendable {
     var idRequests = 0
     var entryRequests: [[String]] = []
 
+    /// User-data sweep state. Tests set these directly to model other clients.
+    var resumeSet: [CatalogUserDataRow] = []
+    var favorites: Set<String> = []
+    var recentlyPlayed: [CatalogUserDataRow] = []
+
     func add(_ entry: CatalogEntry, savedAt: Date? = nil) {
         items[entry.id] = ServerItem(entry: entry, lastSaved: savedAt ?? serverClock)
     }
@@ -67,6 +72,39 @@ final class FakeCatalogSource: CatalogSyncSource, @unchecked Sendable {
     func catalogEntries(ids: [String], libraryId: String) async throws -> [CatalogEntry] {
         entryRequests.append(ids)
         return ids.compactMap { items[$0]?.entry }
+    }
+
+    // MARK: sweeps
+
+    func resumeUserData() async throws -> [CatalogUserDataRow] { resumeSet }
+    func favoriteIds() async throws -> Set<String> { favorites }
+    func recentlyPlayedUserData(limit: Int) async throws -> [CatalogUserDataRow] {
+        Array(recentlyPlayed.prefix(limit))
+    }
+    func userDataPage(libraryId: String, itemTypes: [String], startIndex: Int, limit: Int) async throws
+        -> (rows: [CatalogUserDataRow], totalCount: Int)
+    {
+        let all = ordered(libraryId, itemTypes).compactMap { si -> CatalogUserDataRow? in
+            si.entry.userData.map { CatalogUserDataRow(itemId: si.entry.id, userData: $0) }
+        }
+        return (Array(all.dropFirst(startIndex).prefix(limit)), all.count)
+    }
+
+    /// Change an item's server-side user data in place (what another client did).
+    func setUserData(_ id: String, _ ud: UserData) {
+        guard var si = items[id] else { return }
+        si.entry = CatalogEntry(
+            id: si.entry.id, libraryId: si.entry.libraryId, parentId: si.entry.parentId,
+            seriesId: si.entry.seriesId, seasonId: si.entry.seasonId, type: si.entry.type,
+            mediaType: si.entry.mediaType, name: si.entry.name, sortName: si.entry.sortName,
+            productionYear: si.entry.productionYear, premiereDate: si.entry.premiereDate,
+            dateCreated: si.entry.dateCreated, runTimeTicks: si.entry.runTimeTicks,
+            communityRating: si.entry.communityRating, criticRating: si.entry.criticRating,
+            officialRating: si.entry.officialRating, indexNumber: si.entry.indexNumber,
+            parentIndexNumber: si.entry.parentIndexNumber, seriesName: si.entry.seriesName,
+            imageTags: si.entry.imageTags, genres: si.entry.genres, studios: si.entry.studios,
+            userData: ud)
+        items[id] = si
     }
 }
 

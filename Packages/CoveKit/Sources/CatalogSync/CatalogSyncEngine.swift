@@ -89,6 +89,7 @@ public actor CatalogSyncEngine {
                     try await bootstrap(library)
                 }
             }
+            try await sweepUserData(libraries: libraries)
             publish(.idle)
         } catch {
             handle(error)
@@ -105,6 +106,7 @@ public actor CatalogSyncEngine {
             for library in libraries {
                 try await reconcile(library)
             }
+            try await fullUserDataSweep(libraries: libraries)
             publish(.idle)
         } catch {
             handle(error)
@@ -263,6 +265,66 @@ public actor CatalogSyncEngine {
         try await repository.saveSyncState(state)
     }
 
+    // MARK: - User data
+
+    /// The three hot sweeps: what is in progress, what is a favourite, what was
+    /// recently played. Small, indexed server queries; run on every foreground.
+    ///
+    /// Order matters: the caller flushes the outbox first, and the repository
+    /// refuses to overwrite any field with a pending outbox row, so a sweep can
+    /// never revert something the user just did.
+    func sweepUserData(libraries: [Library]) async throws {
+        try Task.checkCancellation()
+
+        // Resume: positions for everything in progress — and, by absence, what
+        // stopped being in progress since we last looked.
+        let resume = try await source.resumeUserData()
+        try await repository.upsertUserData(resume.map { ($0.itemId, $0.userData) }, scope: scope)
+        let inProgress = try await repository.inProgressIds(scope: scope)
+        let left = UserDataSweep.leftResume(local: inProgress, server: Set(resume.map(\.itemId)))
+        if !left.isEmpty {
+            // Their new state is unknown; ask. catalogEntries carries UserData.
+            let refreshed = try await source.catalogEntries(ids: left, libraryId: "")
+            try await repository.upsertUserData(
+                refreshed.compactMap { e in e.userData.map { (e.id, $0) } }, scope: scope)
+        }
+
+        // Favourites: the whole set, so un-favouriting elsewhere is seen too.
+        let favorites = try await source.favoriteIds()
+        try await repository.replaceFavorites(with: favorites, scope: scope)
+
+        // Recently played: catches new watches from other clients quickly.
+        let recent = try await source.recentlyPlayedUserData(limit: 200)
+        try await repository.upsertUserData(recent.map { ($0.itemId, $0.userData) }, scope: scope)
+
+        var state = try await repository.syncState(scope: scope, key: Self.userDataKey)
+        state.lastRunAt = Date()
+        state.lastError = nil
+        try await repository.saveSyncState(state)
+    }
+
+    /// Every item's user data, per library. Catches un-watch events and a bare
+    /// mark-played from a client that did not set DatePlayed. Daily, and on
+    /// pull-to-refresh.
+    func fullUserDataSweep(libraries: [Library]) async throws {
+        for library in libraries {
+            var index = 0
+            var total = 0
+            repeat {
+                try Task.checkCancellation()
+                let page = try await source.userDataPage(
+                    libraryId: library.id, itemTypes: library.itemTypes, startIndex: index, limit: 500)
+                try await repository.upsertUserData(page.rows.map { ($0.itemId, $0.userData) }, scope: scope)
+                total = page.totalCount
+                index += page.rows.count
+                if page.rows.isEmpty { break }
+            } while index < total
+        }
+        var state = try await repository.syncState(scope: scope, key: Self.fullUserDataKey)
+        state.lastRunAt = Date()
+        try await repository.saveSyncState(state)
+    }
+
     // MARK: - Errors
 
     private func handle(_ error: any Error) {
@@ -287,6 +349,8 @@ public actor CatalogSyncEngine {
 
     static func bootstrapKey(_ libraryId: String) -> String { "catalog:\(libraryId)" }
     static func reconcileKey(_ libraryId: String) -> String { "reconcile:\(libraryId)" }
+    static let userDataKey = "userData"
+    static let fullUserDataKey = "userData:full"
 
     /// The server type strings a library contributes. Music is excluded upstream by
     /// the caller (FeatureFlags); this is about shape, not policy.

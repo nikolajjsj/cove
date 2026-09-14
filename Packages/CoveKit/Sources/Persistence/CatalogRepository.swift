@@ -243,6 +243,177 @@ public final class CatalogRepository: Sendable {
         try await saveSyncState(state)
     }
 
+    // MARK: - Libraries
+
+    /// Replace the saved library list for a scope. Called after every successful
+    /// `/UserViews`; never on failure, since an empty list on a 5xx is not "no
+    /// libraries".
+    public func saveLibraries(_ libraries: [MediaLibrary], scope: Scope) async throws {
+        try await database.dbWriter.write { db in
+            try db.execute(
+                sql: "DELETE FROM catalog_libraries WHERE serverId = ? AND userId = ?",
+                arguments: [scope.serverId, scope.userId])
+            for (index, lib) in libraries.enumerated() {
+                try CatalogLibraryRecord(
+                    serverId: scope.serverId, userId: scope.userId, libraryId: lib.id.rawValue,
+                    name: lib.name, collectionType: lib.collectionType?.rawValue, sortIndex: index
+                ).insert(db)
+            }
+        }
+    }
+
+    public func libraries(scope: Scope) async throws -> [MediaLibrary] {
+        try await database.dbWriter.read { db in
+            try CatalogLibraryRecord.fetchAll(
+                db,
+                sql: "SELECT * FROM catalog_libraries WHERE serverId = ? AND userId = ? ORDER BY sortIndex",
+                arguments: [scope.serverId, scope.userId]
+            ).map(\.asLibrary)
+        }
+    }
+
+    // MARK: - User-data sweep helpers
+
+    /// Items the catalogue thinks are in progress. Anything here that a Resume
+    /// sweep does not return has finished or been reset elsewhere.
+    public func inProgressIds(scope: Scope) async throws -> Set<String> {
+        try await database.dbWriter.read { db in
+            Set(try String.fetchAll(
+                db,
+                sql: "SELECT itemId FROM catalog_user_data WHERE serverId = ? AND userId = ? AND playbackPositionTicks > 0 AND played = 0",
+                arguments: [scope.serverId, scope.userId]))
+        }
+    }
+
+    public func favoriteIds(scope: Scope) async throws -> Set<String> {
+        try await database.dbWriter.read { db in
+            Set(try String.fetchAll(
+                db,
+                sql: "SELECT itemId FROM catalog_user_data WHERE serverId = ? AND userId = ? AND isFavorite = 1",
+                arguments: [scope.serverId, scope.userId]))
+        }
+    }
+
+    /// Set the favourite flag on exactly `ids`; clear it everywhere else — except
+    /// where a favourite write is still pending in the outbox.
+    public func replaceFavorites(with ids: Set<String>, scope: Scope) async throws {
+        try await database.dbWriter.write { db in
+            let pending = try Self.pendingOutboxFields(db, scope: scope)
+                .filter { $0.value.contains("favorite") }.map(\.key)
+            let protect = Array(repeating: "?", count: pending.count).joined(separator: ",")
+            let protectClause = pending.isEmpty ? "" : " AND itemId NOT IN (\(protect))"
+            var clearArgs: [any DatabaseValueConvertible] = [scope.serverId, scope.userId]
+            clearArgs += pending
+            try db.execute(
+                sql: "UPDATE catalog_user_data SET isFavorite = 0 WHERE serverId = ? AND userId = ? AND isFavorite = 1\(protectClause)",
+                arguments: StatementArguments(clearArgs))
+            for chunk in Array(ids).chunked(500) {
+                let marks = Array(repeating: "?", count: chunk.count).joined(separator: ",")
+                var args: [any DatabaseValueConvertible] = [scope.serverId, scope.userId]
+                args += chunk
+                args += pending
+                try db.execute(
+                    sql: "UPDATE catalog_user_data SET isFavorite = 1 WHERE serverId = ? AND userId = ? AND itemId IN (\(marks))\(protectClause)",
+                    arguments: StatementArguments(args))
+            }
+        }
+    }
+
+    // MARK: - Derived feeds
+
+    /// Continue Watching, derived locally so Home does not change shape when the
+    /// connection does.
+    public func resumeItems(scope: Scope, limit: Int = 20) async throws -> [MediaItem] {
+        try await database.dbWriter.read { db in
+            try Row.fetchAll(
+                db,
+                sql: CatalogQuery.selectSQL + """
+                     WHERE i.serverId = ? AND i.userId = ? AND u.playbackPositionTicks > 0 AND u.played = 0
+                       AND i.type IN ('Movie', 'Episode')
+                     ORDER BY u.lastPlayedDate DESC NULLS LAST LIMIT ?
+                    """,
+                arguments: [scope.serverId, scope.userId, limit]
+            ).map(Self.mediaItem(from:))
+        }
+    }
+
+    /// Next Up: per series with a played episode, the first unplayed episode after
+    /// the latest played one, specials excluded. Series ordered by most recent
+    /// activity. Diverges from the server on AiredEpisodeOrder and rewatching,
+    /// by design.
+    public func nextUp(scope: Scope, limit: Int = 20) async throws -> [MediaItem] {
+        try await database.dbWriter.read { db in
+            try Row.fetchAll(
+                db,
+                sql: """
+                    WITH played AS (
+                        SELECT i.seriesId,
+                               MAX(i.parentIndexNumber * 100000 + i.indexNumber) AS lastKey,
+                               MAX(u.lastPlayedDate) AS lastPlayed
+                        FROM catalog_items i
+                        JOIN catalog_user_data u ON u.serverId = i.serverId AND u.userId = i.userId AND u.itemId = i.itemId
+                        WHERE i.serverId = ? AND i.userId = ? AND i.type = 'Episode' AND u.played = 1
+                          AND i.parentIndexNumber > 0 AND i.seriesId IS NOT NULL
+                        GROUP BY i.seriesId
+                    ),
+                    candidate AS (
+                        SELECT i.itemId, p.lastPlayed,
+                               ROW_NUMBER() OVER (PARTITION BY i.seriesId ORDER BY i.parentIndexNumber, i.indexNumber) AS rn
+                        FROM catalog_items i
+                        JOIN played p ON p.seriesId = i.seriesId
+                        LEFT JOIN catalog_user_data u ON u.serverId = i.serverId AND u.userId = i.userId AND u.itemId = i.itemId
+                        WHERE i.serverId = ? AND i.userId = ? AND i.type = 'Episode' AND i.parentIndexNumber > 0
+                          AND COALESCE(u.played, 0) = 0
+                          AND (i.parentIndexNumber * 100000 + i.indexNumber) > p.lastKey
+                    )
+                    \(CatalogQuery.selectSQL)
+                    JOIN candidate c ON c.itemId = i.itemId
+                    WHERE i.serverId = ? AND i.userId = ? AND c.rn = 1
+                    ORDER BY c.lastPlayed DESC NULLS LAST LIMIT ?
+                    """,
+                arguments: [scope.serverId, scope.userId, scope.serverId, scope.userId, scope.serverId, scope.userId, limit]
+            ).map(Self.mediaItem(from:))
+        }
+    }
+
+    /// Cross-library recently added: Movies and Series only, so episodes collapse
+    /// into their series.
+    public func recentlyAdded(scope: Scope, limit: Int = 20) async throws -> [MediaItem] {
+        try await database.dbWriter.read { db in
+            try Row.fetchAll(
+                db,
+                sql: CatalogQuery.selectSQL + """
+                     WHERE i.serverId = ? AND i.userId = ? AND i.type IN ('Movie', 'Series')
+                     ORDER BY i.dateCreated DESC, i.itemId LIMIT ?
+                    """,
+                arguments: [scope.serverId, scope.userId, limit]
+            ).map(Self.mediaItem(from:))
+        }
+    }
+
+    /// A library's newest items, for the Home rail.
+    public func latest(libraryId: String, itemTypes: [String]?, scope: Scope, limit: Int = 20) async throws -> [MediaItem] {
+        try await pagedItems(
+            libraryId: libraryId, itemTypes: itemTypes,
+            sort: SortOptions(field: .dateAdded, order: .descending),
+            filter: FilterOptions(limit: limit, startIndex: 0), scope: scope
+        ).items
+    }
+
+    /// Scope-wide search over the FTS index, with the same filters the grid has.
+    public func search(term: String, filter: FilterOptions, scope: Scope) async throws -> [MediaItem] {
+        let full = FilterOptions(
+            genres: filter.genres, years: filter.years, isFavorite: filter.isFavorite,
+            isPlayed: filter.isPlayed, limit: filter.limit ?? 60, startIndex: filter.startIndex ?? 0,
+            searchTerm: term, includeItemTypes: filter.includeItemTypes ?? ["Movie", "Series", "Episode"],
+            minCommunityRating: filter.minCommunityRating)
+        let query = CatalogQuery(libraryId: nil, itemTypes: full.includeItemTypes,
+                                 sort: SortOptions(field: .name, order: .ascending), filter: full, scope: scope)
+        return try await database.dbWriter.read { db in
+            try Row.fetchAll(db, sql: query.pageSQL, arguments: query.pageArguments).map(Self.mediaItem(from:))
+        }
+    }
+
     // MARK: - Reads for the UI
 
     /// The grid query. Every `SortField` and every `FilterOptions` field the UI can
@@ -340,9 +511,13 @@ struct CatalogQuery {
     let limit: Int
     let offset: Int
 
-    init(libraryId: String, itemTypes: [String]?, sort: SortOptions, filter: FilterOptions, scope: CatalogRepository.Scope) {
-        var clauses = ["i.serverId = ?", "i.userId = ?", "i.libraryId = ?"]
-        var args: [any DatabaseValueConvertible] = [scope.serverId, scope.userId, libraryId]
+    init(libraryId: String?, itemTypes: [String]?, sort: SortOptions, filter: FilterOptions, scope: CatalogRepository.Scope) {
+        var clauses = ["i.serverId = ?", "i.userId = ?"]
+        var args: [any DatabaseValueConvertible] = [scope.serverId, scope.userId]
+        if let libraryId {
+            clauses.append("i.libraryId = ?")
+            args.append(libraryId)
+        }
 
         if let itemTypes, !itemTypes.isEmpty {
             clauses.append("i.type IN (\(Array(repeating: "?", count: itemTypes.count).joined(separator: ",")))")

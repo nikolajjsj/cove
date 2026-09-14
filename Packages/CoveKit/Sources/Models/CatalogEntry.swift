@@ -126,3 +126,14 @@ public struct CatalogIdPage: Sendable {
         self.serverDate = serverDate
     }
 }
+
+/// One item's user data as a sweep returns it.
+public struct CatalogUserDataRow: Sendable, Equatable {
+    public let itemId: String
+    public let userData: UserData
+
+    public init(itemId: String, userData: UserData) {
+        self.itemId = itemId
+        self.userData = userData
+    }
+}

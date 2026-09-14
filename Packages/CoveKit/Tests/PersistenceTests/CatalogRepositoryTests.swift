@@ -152,4 +152,79 @@ final class CatalogRepositoryTests: XCTestCase {
         XCTAssertEqual(item?.genres, ["Drama"])
         XCTAssertNil(item?.overview, "detail tier is not in the catalogue")
     }
+
+    // MARK: Libraries
+
+    func testLibrariesRoundTripInOrder() async throws {
+        let libs = [
+            MediaLibrary(id: ItemID("b"), name: "TV", collectionType: .tvshows),
+            MediaLibrary(id: ItemID("a"), name: "Films", collectionType: .movies),
+        ]
+        try await repo.saveLibraries(libs, scope: scope)
+        let back = try await repo.libraries(scope: scope)
+        XCTAssertEqual(back, libs, "order preserved, types preserved")
+        try await repo.saveLibraries([libs[1]], scope: scope)
+        let again = try await repo.libraries(scope: scope)
+        XCTAssertEqual(again.map(\.name), ["Films"], "save replaces, never accumulates")
+    }
+
+    // MARK: Derived feeds
+
+    private func episode(_ id: String, series: String, season: Int, ep: Int, played: Bool, position: TimeInterval = 0, lastPlayed: Date? = nil) -> CatalogEntry {
+        CatalogEntry(
+            id: id, libraryId: lib, seriesId: series, type: "Episode", mediaType: .episode,
+            name: id, sortName: id, dateCreated: Date(timeIntervalSince1970: 1_600_000_000),
+            indexNumber: ep, parentIndexNumber: season, seriesName: series,
+            userData: UserData(playbackPosition: position, isPlayed: played, lastPlayedDate: lastPlayed))
+    }
+
+    func testResumeFeedIsInProgressUnplayedByRecency() async throws {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        try await repo.upsert([
+            entry("done", name: "Done", played: true),
+            episode("e-old", series: "S", season: 1, ep: 1, played: false, position: 300, lastPlayed: t0),
+            episode("e-new", series: "S", season: 1, ep: 2, played: false, position: 60, lastPlayed: t0.addingTimeInterval(100)),
+            entry("zero", name: "Zero"),
+        ], scope: scope)
+        let ids = try await repo.resumeItems(scope: scope).map(\.id.rawValue)
+        XCTAssertEqual(ids, ["e-new", "e-old"])
+    }
+
+    func testNextUpPicksFirstUnplayedAfterLatestPlayedAndSkipsSpecials() async throws {
+        let t = Date(timeIntervalSince1970: 1_700_000_000)
+        try await repo.upsert([
+            episode("s0e1", series: "A", season: 0, ep: 1, played: false),           // special: ignored
+            episode("s1e1", series: "A", season: 1, ep: 1, played: true, lastPlayed: t),
+            episode("s1e2", series: "A", season: 1, ep: 2, played: true, lastPlayed: t.addingTimeInterval(10)),
+            episode("s1e3", series: "A", season: 1, ep: 3, played: false),
+            episode("s1e4", series: "A", season: 1, ep: 4, played: false),
+            episode("b1e1", series: "B", season: 1, ep: 1, played: false),           // never started: no NextUp
+        ], scope: scope)
+        let ids = try await repo.nextUp(scope: scope).map(\.id.rawValue)
+        XCTAssertEqual(ids, ["s1e3"])
+    }
+
+    func testScopeWideSearchSpansLibrariesAndAppliesFilters() async throws {
+        var other = entry("x", name: "Godzilla Minus One", year: 2023, rating: 8.0)
+        other.libraryId = "other-lib"
+        try await repo.upsert([entry("g", name: "Godzilla", year: 1954, rating: 7.5), other], scope: scope)
+        let all = try await repo.search(term: "godz", filter: FilterOptions(limit: 10, startIndex: 0), scope: scope).map(\.id.rawValue)
+        let recent = try await repo.search(term: "godz", filter: FilterOptions(years: [2023], limit: 10, startIndex: 0), scope: scope).map(\.id.rawValue)
+        XCTAssertEqual(Set(all), ["g", "x"])
+        XCTAssertEqual(recent, ["x"])
+    }
+
+    func testReplaceFavoritesProtectsPendingOutbox() async throws {
+        try await repo.upsert([entry("a", name: "A", favorite: true), entry("b", name: "B")], scope: scope)
+        try await db.dbWriter.write { d in
+            try d.execute(sql: "UPDATE catalog_user_data SET isFavorite = 1 WHERE itemId = 'b'")
+            try d.execute(sql: """
+                INSERT INTO user_data_outbox (id, serverId, userId, itemId, field, value, occurredAt, attempts)
+                VALUES ('o1','srv','usr','b','favorite','true', CURRENT_TIMESTAMP, 0)
+                """)
+        }
+        try await repo.replaceFavorites(with: [], scope: scope)   // server: nothing is a favourite
+        let favs = try await repo.favoriteIds(scope: scope)
+        XCTAssertEqual(favs, ["b"], "a cleared, b protected")
+    }
 }

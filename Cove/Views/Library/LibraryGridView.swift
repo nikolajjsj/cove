@@ -453,8 +453,6 @@ struct LibraryGridView: View {
             return
         }
 
-        let provider = authManager.provider
-        let sort = sortOptions
         let played = isPlayedFilter
         let genres = selectedGenres.isEmpty ? nil : Array(selectedGenres)
         let favorite = favoriteOnly ? true : nil
@@ -462,32 +460,10 @@ struct LibraryGridView: View {
         let rating = minRating
         let itemTypes = library.includeItemTypes
 
-        // Read the local catalogue once it holds this library. Until then — first
-        // run, bootstrap still going — the provider answers exactly as before, so
-        // the grid is never empty just because sync is not finished.
-        if let local = await localCatalog(for: library) {
-            await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
-                let filter = FilterOptions(
-                    genres: genres,
-                    years: years,
-                    isFavorite: favorite,
-                    isPlayed: played,
-                    limit: limit,
-                    startIndex: startIndex,
-                    includeItemTypes: itemTypes,
-                    minCommunityRating: rating
-                )
-                let result = try await local.repository.pagedItems(
-                    libraryId: library.id.rawValue, itemTypes: itemTypes,
-                    sort: sort, filter: filter, scope: local.scope
-                )
-                return .init(items: result.items, totalCount: result.totalCount)
-            }
-            return
-        }
-
-        await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
-            let filter = FilterOptions(
+        let fetch = await appState.pageFetcher(
+            library: library, itemTypes: itemTypes, sort: sortOptions
+        ) { limit, startIndex in
+            FilterOptions(
                 genres: genres,
                 years: years,
                 isFavorite: favorite,
@@ -497,36 +473,12 @@ struct LibraryGridView: View {
                 includeItemTypes: itemTypes,
                 minCommunityRating: rating
             )
-            let result = try await provider.pagedItems(
-                in: library, sort: sort, filter: filter
-            )
-            return .init(items: result.items, totalCount: result.totalCount)
         }
-    }
-
-    /// The local catalogue, if it can answer for this library right now.
-    ///
-    /// Three conditions, all required: the flag is on, a signed-in scope exists,
-    /// and the library has finished bootstrapping *or* already holds rows — a
-    /// half-bootstrapped library is still better than a spinner, and the missing
-    /// rows arrive underneath the user as they browse.
-    private func localCatalog(for library: MediaLibrary)
-        async -> (repository: CatalogRepository, scope: CatalogRepository.Scope)?
-    {
-        guard FeatureFlags.localCatalogEnabled,
-            let repository = appState.catalogRepository,
-            let scope = appState.catalogScope,
-            CatalogSyncEngine.itemTypes(for: library.collectionType) != nil
-        else { return nil }
-        let key = "catalog:\(library.id.rawValue)"
-        guard let state = try? await repository.syncState(scope: scope, key: key) else { return nil }
-        if state.bootstrapComplete { return (repository, scope) }
-        let count = (try? await repository.count(libraryId: library.id.rawValue, scope: scope)) ?? 0
-        return count > 0 ? (repository, scope) : nil
+        await loader.loadFirstPage(pageSize: pageSize, fetch)
     }
 
     private func loadGenres(for library: MediaLibrary) async {
-        if let local = await localCatalog(for: library),
+        if let local = await appState.localCatalog(for: library),
             let names = try? await local.repository.genres(
                 libraryId: library.id.rawValue, scope: local.scope)
         {

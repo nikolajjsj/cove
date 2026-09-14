@@ -39,6 +39,7 @@ struct PagedMediaGridView<Card: View>: View {
     @ViewBuilder let card: (MediaItem, URL?) -> Card
 
     @Environment(AuthManager.self) private var authManager
+    @Environment(AppState.self) private var appState
     @State private var loader = PagedCollectionLoader<MediaItem>()
 
     private let pageSize = 40
@@ -94,21 +95,20 @@ struct PagedMediaGridView<Card: View>: View {
             return
         }
 
-        let provider = authManager.provider
-
-        await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
-            let sort = SortOptions(field: sortField, order: sortOrder)
-            let filter = FilterOptions(
-                isFavorite: isFavoriteFilter ? true : Optional<Bool>.none,
+        let favorite: Bool? = isFavoriteFilter ? true : nil
+        let types = [itemType]
+        let fetch = await appState.pageFetcher(
+            library: library, itemTypes: types,
+            sort: SortOptions(field: sortField, order: sortOrder)
+        ) { limit, startIndex in
+            FilterOptions(
+                isFavorite: favorite,
                 limit: limit,
                 startIndex: startIndex,
-                includeItemTypes: [itemType]
+                includeItemTypes: types
             )
-            let result = try await provider.pagedItems(
-                in: library, sort: sort, filter: filter
-            )
-            return .init(items: result.items, totalCount: result.totalCount)
         }
+        await loader.loadFirstPage(pageSize: pageSize, fetch)
     }
 }
 

@@ -88,22 +88,19 @@ struct StudioDetailView: View {
             return
         }
 
-        let provider = authManager.provider
-        let sort = sortOptions
         let itemTypes = studioItemTypes
-
-        await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
-            let filter = FilterOptions(
+        let studio = studioName
+        let fetch = await appState.pageFetcher(
+            library: library, itemTypes: itemTypes, sort: sortOptions
+        ) { limit, startIndex in
+            FilterOptions(
                 limit: limit,
                 startIndex: startIndex,
                 includeItemTypes: itemTypes,
-                studios: [studioName],
+                studios: [studio]
             )
-            let result = try await provider.pagedItems(
-                in: library, sort: sort, filter: filter
-            )
-            return .init(items: result.items, totalCount: result.totalCount)
         }
+        await loader.loadFirstPage(pageSize: pageSize, fetch)
     }
 
     // MARK: - Helpers

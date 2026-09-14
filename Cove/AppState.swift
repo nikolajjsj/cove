@@ -1,4 +1,5 @@
 import CatalogSync
+import DataLoading
 import Defaults
 import DownloadManager
 import Foundation
@@ -164,9 +165,85 @@ final class AppState {
                 ? fetched
                 : fetched.filter { $0.collectionType != .music }
             libraryLoadFailed = false
+            // Persist only on success. An empty list on a 5xx is not "no libraries".
+            if let repository = catalogRepository, let scope = currentCatalogScope {
+                try? await repository.saveLibraries(libraries, scope: scope)
+            }
         } catch {
-            libraries = []
-            libraryLoadFailed = true
+            // Offline or unreachable: the saved list is the library. Without this
+            // there is nothing to open even though every item is cached.
+            if let repository = catalogRepository, let scope = currentCatalogScope,
+                let saved = try? await repository.libraries(scope: scope), !saved.isEmpty
+            {
+                libraries = saved
+                libraryLoadFailed = false
+            } else {
+                libraries = []
+                libraryLoadFailed = true
+            }
+        }
+    }
+
+    /// The scope for the active connection, whether or not the engine exists yet.
+    private var currentCatalogScope: CatalogRepository.Scope? {
+        guard let connection = authManager.activeConnection else { return nil }
+        return CatalogRepository.Scope(serverId: connection.id.uuidString, userId: connection.userId)
+    }
+
+    /// The local catalogue, if it can answer for this library right now.
+    ///
+    /// Three conditions, all required: the flag is on, a signed-in scope exists,
+    /// and the library has finished bootstrapping *or* already holds rows — a
+    /// half-bootstrapped library is still better than a spinner, and the missing
+    /// rows arrive underneath the user as they browse.
+    func localCatalog(for library: MediaLibrary)
+        async -> (repository: CatalogRepository, scope: CatalogRepository.Scope)?
+    {
+        guard FeatureFlags.localCatalogEnabled,
+            let repository = catalogRepository,
+            let scope = catalogScope ?? currentCatalogScope,
+            CatalogSyncEngine.itemTypes(for: library.collectionType) != nil
+        else { return nil }
+        let key = "catalog:\(library.id.rawValue)"
+        guard let state = try? await repository.syncState(scope: scope, key: key) else { return nil }
+        if state.bootstrapComplete { return (repository, scope) }
+        let count = (try? await repository.count(libraryId: library.id.rawValue, scope: scope)) ?? 0
+        return count > 0 ? (repository, scope) : nil
+    }
+
+    /// The local catalogue for scope-wide reads (Home, Search): available once any
+    /// library has rows.
+    func localCatalog() async -> (repository: CatalogRepository, scope: CatalogRepository.Scope)? {
+        guard FeatureFlags.localCatalogEnabled,
+            let repository = catalogRepository,
+            let scope = catalogScope ?? currentCatalogScope
+        else { return nil }
+        let count = (try? await repository.count(scope: scope)) ?? 0
+        return count > 0 ? (repository, scope) : nil
+    }
+
+    /// One page fetcher for every paged view: local catalogue when it can answer,
+    /// the provider otherwise. Views pass what varies — sort and filter — and
+    /// stop knowing which source answered.
+    func pageFetcher(
+        library: MediaLibrary,
+        itemTypes: [String]?,
+        sort: SortOptions,
+        filter: @escaping @Sendable (_ limit: Int, _ startIndex: Int) -> FilterOptions
+    ) async -> PagedCollectionLoader<MediaItem>.PageFetcher {
+        let provider = authManager.provider
+        if let local = await localCatalog(for: library) {
+            let libraryId = library.id.rawValue
+            return { limit, startIndex in
+                let result = try await local.repository.pagedItems(
+                    libraryId: libraryId, itemTypes: itemTypes, sort: sort,
+                    filter: filter(limit, startIndex), scope: local.scope)
+                return .init(items: result.items, totalCount: result.totalCount)
+            }
+        }
+        return { limit, startIndex in
+            let result = try await provider.pagedItems(in: library, sort: sort, filter: filter(limit, startIndex))
+            return .init(items: result.items, totalCount: result.totalCount)
         }
     }
 

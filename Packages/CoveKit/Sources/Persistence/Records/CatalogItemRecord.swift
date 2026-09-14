@@ -179,3 +179,21 @@ public struct UserDataOutboxRecord: Codable, FetchableRecord, PersistableRecord,
     public var lastAttemptAt: Date?
     public var lastError: String?
 }
+
+/// A row of `catalog_libraries`: the user's views, so Home has something to
+/// show when the server cannot be reached.
+public struct CatalogLibraryRecord: Codable, FetchableRecord, PersistableRecord, Sendable {
+    public static let databaseTableName = "catalog_libraries"
+    public var serverId: String
+    public var userId: String
+    public var libraryId: String
+    public var name: String
+    public var collectionType: String?
+    public var sortIndex: Int
+
+    public var asLibrary: MediaLibrary {
+        MediaLibrary(
+            id: ItemID(libraryId), name: name,
+            collectionType: collectionType.flatMap(CollectionType.init(rawValue:)))
+    }
+}

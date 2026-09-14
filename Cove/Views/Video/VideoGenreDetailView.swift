@@ -88,22 +88,19 @@ struct VideoGenreDetailView: View {
             return
         }
 
-        let provider = authManager.provider
-        let sort = sortOptions
         let itemTypes = genreItemTypes
-
-        await loader.loadFirstPage(pageSize: pageSize) { limit, startIndex in
-            let filter = FilterOptions(
-                genres: [genreName],
+        let genre = genreName
+        let fetch = await appState.pageFetcher(
+            library: library, itemTypes: itemTypes, sort: sortOptions
+        ) { limit, startIndex in
+            FilterOptions(
+                genres: [genre],
                 limit: limit,
                 startIndex: startIndex,
                 includeItemTypes: itemTypes
             )
-            let result = try await provider.pagedItems(
-                in: library, sort: sort, filter: filter
-            )
-            return .init(items: result.items, totalCount: result.totalCount)
         }
+        await loader.loadFirstPage(pageSize: pageSize, fetch)
     }
 
     // MARK: - Helpers

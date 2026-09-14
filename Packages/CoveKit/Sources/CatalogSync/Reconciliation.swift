@@ -35,3 +35,13 @@ public enum CursorPolicy {
     /// over the changed set; the engine bootstraps the library instead.
     public static let rebootstrapThreshold = 5_000
 }
+
+/// Pure arithmetic of a user-data sweep.
+public enum UserDataSweep {
+    /// Items the catalogue has in progress that the server's Resume set no longer
+    /// lists. They finished or were reset elsewhere; their current state has to be
+    /// fetched, because absence from a list says nothing about *what* changed.
+    public static func leftResume(local inProgress: Set<String>, server resume: Set<String>) -> [String] {
+        inProgress.subtracting(resume).sorted()
+    }
+}

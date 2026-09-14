@@ -2,6 +2,7 @@ import CoveUI
 import JellyfinProvider
 import MediaServerKit
 import Models
+import Persistence
 import SwiftUI
 
 // MARK: - Search View
@@ -89,6 +90,7 @@ private struct SearchContentView: View {
     let onClearRecents: () -> Void
 
     @Environment(AuthManager.self) private var authManager
+    @Environment(AppState.self) private var appState
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.isSearching) private var isSearching
 
@@ -191,20 +193,37 @@ private struct SearchContentView: View {
         defer { isLoading = false }
 
         do {
-            // Always fetch all types; scope filtering is client-side.
-            let fetched = try await authManager.provider.filteredSearch(
-                query: trimmedQuery,
-                isFavorite: favoriteOnly ? true : nil,
-                isPlayed: {
-                    switch watchedFilter {
-                    case .all: return nil
-                    case .watched: return true
-                    case .unwatched: return false
-                    }
-                }(),
-                years: selectedDecade?.years,
-                minCommunityRating: minRating
-            )
+            let isPlayed: Bool? = {
+                switch watchedFilter {
+                case .all: return nil
+                case .watched: return true
+                case .unwatched: return false
+                }
+            }()
+            let fetched: SearchResults
+            if let local = await appState.localCatalog() {
+                // Instant and offline. Diverges from the server's fuzzy matching
+                // by design — see the spec's open decisions.
+                let items = try await local.repository.search(
+                    term: trimmedQuery,
+                    filter: FilterOptions(
+                        years: selectedDecade?.years,
+                        isFavorite: favoriteOnly ? true : nil,
+                        isPlayed: isPlayed,
+                        limit: 60, startIndex: 0,
+                        minCommunityRating: minRating),
+                    scope: local.scope)
+                fetched = SearchResults(items: items)
+            } else {
+                // Always fetch all types; scope filtering is client-side.
+                fetched = try await authManager.provider.filteredSearch(
+                    query: trimmedQuery,
+                    isFavorite: favoriteOnly ? true : nil,
+                    isPlayed: isPlayed,
+                    years: selectedDecade?.years,
+                    minCommunityRating: minRating
+                )
+            }
             // Search hits the server directly rather than going through the
             // library list, so it needs its own guard.
             let visible = FeatureFlags.musicEnabled
